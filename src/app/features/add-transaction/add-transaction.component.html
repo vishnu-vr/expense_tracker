@@ -1,0 +1,157 @@
+<div class="min-h-screen bg-gray-50 pb-20">
+    <!-- Header -->
+    <header class="bg-white p-4 shadow-sm flex items-center gap-4 sticky top-0 z-10">
+        <button (click)="onCancel()" class="material-icons text-gray-600">arrow_back</button>
+        <h1 class="text-xl font-bold text-gray-800">
+            @if (!isOwner()) {
+            View Transaction
+            } @else {
+            {{ isEdit() ? 'Edit' : 'Add' }} Transaction
+            }
+        </h1>
+        @if (isEdit() && isOwner()) {
+        <button (click)="onDelete()" class="material-icons text-red-600 ml-auto">delete</button>
+        }
+    </header>
+
+    @if (!isOwner()) {
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 mt-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <span class="material-icons text-yellow-400">warning</span>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-yellow-700">
+                    You cannot edit or delete this transaction because it was created by another user.
+                </p>
+            </div>
+        </div>
+    </div>
+    }
+
+    @if (isEdit() && isLoadingTransaction()) {
+    <div class="p-6 text-center text-gray-500">
+        Loading transaction...
+    </div>
+    } @else {
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="p-4 space-y-6">
+
+        <!-- Type Selector -->
+        <div class="flex bg-gray-200 p-1 rounded-xl" [class.opacity-50]="!isOwner()">
+            <label class="flex-1 text-center py-2 rounded-lg cursor-pointer transition-all"
+                [class.bg-white]="form.get('type')?.value === 'income'"
+                [class.shadow-sm]="form.get('type')?.value === 'income'">
+                <input type="radio" formControlName="type" value="income" class="hidden">
+                <span class="font-medium" [class.text-green-600]="form.get('type')?.value === 'income'">Income</span>
+            </label>
+            <label class="flex-1 text-center py-2 rounded-lg cursor-pointer transition-all"
+                [class.bg-white]="form.get('type')?.value === 'expense'"
+                [class.shadow-sm]="form.get('type')?.value === 'expense'">
+                <input type="radio" formControlName="type" value="expense" class="hidden">
+                <span class="font-medium" [class.text-red-600]="form.get('type')?.value === 'expense'">Expense</span>
+            </label>
+        </div>
+
+        <!-- Amount -->
+        <div class="bg-white p-4 rounded-xl shadow-sm" [class.opacity-50]="!isOwner()">
+            <label class="block text-xs text-gray-500 mb-1">Amount</label>
+            <div class="flex items-center gap-2">
+                <span class="text-2xl font-bold text-gray-400">₹</span>
+                <input type="number" formControlName="amount" placeholder="0.00"
+                    class="w-full text-3xl font-bold text-gray-800 outline-none placeholder-gray-300">
+            </div>
+        </div>
+
+        <!-- Category -->
+        <div class="bg-white p-4 rounded-xl shadow-sm" [class.opacity-50]="!isOwner()">
+            <label class="block text-xs text-gray-500 mb-3">Category</label>
+            <div class="grid grid-cols-4 gap-4">
+                @for (cat of categoryService.categories(); track cat.id) {
+                @if (cat.type === form.get('type')?.value) {
+                <label class="flex flex-col items-center gap-2 cursor-pointer group">
+                    <input type="radio" formControlName="categoryId" [value]="cat.id" class="hidden peer">
+                    <div
+                        class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center peer-checked:bg-blue-600 peer-checked:text-white transition-colors">
+                        <span class="material-icons">{{ cat.icon }}</span>
+                    </div>
+                    <span
+                        class="text-xs text-gray-600 text-center truncate w-full peer-checked:font-medium peer-checked:text-blue-600">{{
+                        cat.name }}</span>
+                </label>
+                }
+                }
+            </div>
+        </div>
+
+        @switch (budgetApproachAlert()?.level) {
+        @case ('over') {
+        <div
+            class="flex gap-3 bg-red-50 border border-red-200 border-l-4 border-l-red-500 rounded-xl p-4 shadow-sm">
+            <span class="material-icons text-red-600 flex-shrink-0">error_outline</span>
+            <div class="text-sm text-red-900 space-y-1">
+                <p class="font-semibold">Over monthly budget</p>
+                <p>
+                    With this amount, this category would reach
+                    <span class="font-medium">{{ budgetApproachAlert()?.projected | maskCurrency:'INR' }}</span>
+                    for this calendar month — above the
+                    <span class="font-medium">{{ budgetApproachAlert()?.budget | maskCurrency:'INR' }}</span>
+                    budget.
+                </p>
+            </div>
+        </div>
+        }
+        @case ('approach') {
+        <div
+            class="flex gap-3 bg-amber-50 border border-amber-200 border-l-4 border-l-amber-500 rounded-xl p-4 shadow-sm">
+            <span class="material-icons text-amber-600 flex-shrink-0">warning_amber</span>
+            <div class="text-sm text-amber-950 space-y-1">
+                <p class="font-semibold">Approaching monthly budget</p>
+                <p>
+                    Total for this category this month would be about
+                    <span class="font-medium">{{ budgetApproachAlert()?.projected | maskCurrency:'INR' }}</span>
+                    ({{ budgetApproachAlert()?.projectedPct | number:'1.0-0' }}% of
+                    <span class="font-medium">{{ budgetApproachAlert()?.budget | maskCurrency:'INR' }}</span>).
+                </p>
+            </div>
+        </div>
+        }
+        @default {
+        }
+        }
+
+        <!-- Date, Time & Note -->
+        <div class="bg-white p-4 rounded-xl shadow-sm space-y-4" [class.opacity-50]="!isOwner()">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Date</label>
+                    <input type="date" formControlName="date"
+                        class="w-full p-2 bg-gray-50 rounded-lg outline-none focus:ring-2 focus:ring-blue-100">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Time</label>
+                    <input type="time" formControlName="time"
+                        class="w-full p-2 bg-gray-50 rounded-lg outline-none focus:ring-2 focus:ring-blue-100">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Note</label>
+                <input type="text" formControlName="note" placeholder="What is this for?"
+                    class="w-full p-2 bg-gray-50 rounded-lg outline-none focus:ring-2 focus:ring-blue-100">
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        @if (isOwner()) {
+        <button type="submit" [disabled]="!form.valid || isSaving()"
+            class="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            @if (isSaving()) {
+            Saving...
+            } @else {
+            {{ isEdit() ? 'Update Transaction' : 'Save Transaction' }}
+            }
+        </button>
+        }
+    </form>
+    }
+
+</div>

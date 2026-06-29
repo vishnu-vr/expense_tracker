@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user is owner
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Helper function to check if user is a member of the home
+    function isHomeMember(homeId) {
+       return isAuthenticated() && 
+         exists(/databases/$(database)/documents/homes/$(homeId)) &&
+         (request.auth.uid in get(/databases/$(database)/documents/homes/$(homeId)).data.memberIds);
+    }
+
+    // Helper function to check if the requester shares a home with a given user
+    function sharesHomeWith(targetUserId) {
+      let targetUser = get(/databases/$(database)/documents/users/$(targetUserId));
+      let targetHomeId = targetUser.data.homeId;
+      return isHomeMember(targetHomeId);
+    }
+
+    // Homes:
+    // - Read: Allow if user is a member
+    // - Create: Allow any authenticated user (to create their own home)
+    // - Update: Allow if user is the owner
+    match /homes/{homeId} {
+      allow read: if isHomeMember(homeId);
+      allow create: if isAuthenticated();
+      // Only the home owner should be able to update home
+      allow update: if isAuthenticated() && resource.data.ownerId == request.auth.uid; 
+
+      // Home-scoped custom categories
+      match /categories/{categoryId} {
+        allow read, create, update, delete: if isHomeMember(homeId);
+      }
+
+      // Recurring monthly budget per expense category (doc id = categoryId)
+      match /categoryBudgets/{budgetId} {
+        allow read, create, update, delete: if isHomeMember(homeId);
+      }
+    }
+
+    // Transactions:
+    // - Read/Write: Allow if user is member of the home assigned to the transaction
+    match /transactions/{transactionId} {
+      // Check homeId from the resource (for read/update/delete) or request resource (for create/update)
+      function verifyHomeAccess() {
+        // For read/delete/update (resource exists)
+        let homeId = resource != null ? resource.data.homeId : request.resource.data.homeId;
+        return isHomeMember(homeId);
+      }
+      
+      allow read: if verifyHomeAccess();
+      allow create: if isHomeMember(request.resource.data.homeId);
+      allow update, delete: if verifyHomeAccess() && resource.data.userId == request.auth.uid;
+    }
+
+    // Categories:
+    // - Read: All authenticated users
+    // - Write: Deny all (Admin only)
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if false; 
+    }
+
+    // Notifications:
+    // - Access scoped by user ownership still mostly applies, 
+    //   but we should likely migrate them to be home-aware or keep as user-specific.
+    //   Keeping user-specific for now as they are personal alerts.
+    match /notifications/{notificationId} {
+      // Allow read if user is member of the home
+      allow read: if isAuthenticated() && (resource == null || isHomeMember(resource.data.homeId));
+      
+      // Allow create if user is member of the target home
+      allow create: if isAuthenticated() && isHomeMember(request.resource.data.homeId);
+      
+      // Allow update (marking as read) if user is member of the home
+      allow update: if isAuthenticated() && isHomeMember(resource.data.homeId);
+      
+      // Allow delete? Maybe only creator or simple housekeeping.
+      allow delete: if false; 
+    }
+
+    // Users:
+    // - Read: Allow if user is reading their own profile, or shares a home with the target user
+    // - Write: Owner only
+    match /users/{userId} {
+      allow read: if isOwner(userId) || sharesHomeWith(userId);
+      allow write: if isAuthenticated() && isOwner(userId);
+
+      // Device FCM tokens are private to the user.
+      match /fcmTokens/{tokenId} {
+        allow read, create, update, delete: if isAuthenticated() && isOwner(userId);
+      }
+    }
+  }
+}

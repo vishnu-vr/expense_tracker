@@ -1,0 +1,19 @@
+{
+    "indexes": [],
+    "fieldOverrides": [],
+    "vectorIndexes": [
+      {
+        "collectionGroup": "transactions",
+        "queryScope": "COLLECTION",
+        "fields": [
+          {
+            "fieldPath": "embedding",
+            "vectorConfig": {
+              "dimension": 768,
+              "flat": {}
+            }
+          }
+        ]
+      }
+    ]
+  }

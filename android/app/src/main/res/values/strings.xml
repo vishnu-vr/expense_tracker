@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Track Expense</string>
+    <string name="title_activity_main">Track Expense</string>
+    <string name="package_name">com.vapps.expensetracker</string>
+    <string name="custom_url_scheme">com.vapps.expensetracker</string>
+</resources>

@@ -1,0 +1,142 @@
+<div class="relative">
+    <!-- Bell Button -->
+    <button 
+        (click)="toggleDropdown($event)"
+        class="relative p-2 rounded-full bg-amber-50 hover:bg-amber-100 transition-colors text-amber-600">
+        <span class="material-icons">notifications</span>
+        
+        <!-- Badge -->
+        @if (notificationService.unreadCount() > 0) {
+            <span class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">
+                {{ notificationService.unreadCount() > 9 ? '9+' : notificationService.unreadCount() }}
+            </span>
+        }
+    </button>
+
+    <!-- Dropdown -->
+    @if (notificationService.showDropdown()) {
+        <button
+            type="button"
+            aria-label="Close notifications"
+            class="fixed inset-0 z-40 bg-transparent"
+            (click)="closeDropdown($event)">
+        </button>
+        <div class="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-16 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+            <!-- Header -->
+            <div class="flex justify-between items-center px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+                <h3 class="font-semibold">Notifications</h3>
+                @if (notificationService.unreadCount() > 0) {
+                    <button 
+                        (click)="markAllAsRead($event)"
+                        class="text-xs hover:underline opacity-90 hover:opacity-100 transition-opacity">
+                        Mark all as read
+                    </button>
+                }
+            </div>
+
+            <!-- Push Notification Permission Banner -->
+            @if (notificationService.pushPermission() === 'default') {
+                <div class="px-4 py-3 bg-blue-50 border-b border-blue-100">
+                    <div class="flex items-center gap-3">
+                        <span class="material-icons text-blue-500">notifications_active</span>
+                        <div class="flex-1">
+                            <p class="text-sm text-blue-800 font-medium">Enable push notifications</p>
+                            <p class="text-xs text-blue-600">Get notified when others add transactions</p>
+                        </div>
+                        <button 
+                            (click)="enablePushNotifications($event)"
+                            class="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors">
+                            Enable
+                        </button>
+                    </div>
+                </div>
+            }
+            @if (notificationService.pushPermission() === 'denied') {
+                <div class="px-4 py-2 bg-red-50 border-b border-red-100">
+                    <p class="text-xs text-red-600">
+                        <span class="material-icons text-sm align-middle mr-1">block</span>
+                        Push notifications are blocked. Enable them in browser settings.
+                    </p>
+                </div>
+            }
+
+            <!-- Notification List -->
+            <div class="max-h-80 overflow-y-auto">
+                @if (notificationService.visibleNotifications().length === 0) {
+                    <div class="py-10 text-center text-gray-400">
+                        <span class="material-icons text-4xl mb-2">notifications_none</span>
+                        <p class="text-sm">No notifications yet</p>
+                    </div>
+                } @else {
+                    @for (notification of notificationService.visibleNotifications(); track notification.id) {
+                        <div 
+                            class="px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors"
+                            [class.bg-amber-50]="!isRead(notification)"
+                            [class.cursor-pointer]="notification.type !== 'transaction_deleted'"
+                            [class.cursor-default]="notification.type === 'transaction_deleted'"
+                            (click)="onNotificationClick(notification, $event)">
+                            <div class="flex gap-3">
+                                <!-- Icon -->
+                                <div class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
+                                     [class.bg-green-100]="notification.type === 'transaction_added'"
+                                     [class.bg-blue-100]="notification.type === 'transaction_updated'"
+                                     [class.bg-red-100]="notification.type === 'transaction_deleted'">
+                                    <span class="material-icons text-lg" 
+                                          [ngClass]="getNotificationColor(notification.type)">
+                                        {{ getNotificationIcon(notification.type) }}
+                                    </span>
+                                </div>
+
+                                <!-- Content -->
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm text-gray-800 leading-snug"
+                                       [class.font-medium]="!isRead(notification)">
+                                        {{ notification.message }}
+                                    </p>
+                                    <p class="text-xs text-gray-400 mt-1">
+                                        {{ notificationService.getTimeAgo(notification.createdAt) }}
+                                    </p>
+                                </div>
+
+                                <!-- Navigation arrow or unread indicator -->
+                                <div class="flex-shrink-0 flex items-center gap-1">
+                                    @if (!isRead(notification)) {
+                                        <span class="w-2 h-2 bg-amber-500 rounded-full block"></span>
+                                    }
+                                    @if (notification.type !== 'transaction_deleted' && notification.transactionId) {
+                                        <span class="material-icons text-gray-400 text-base">chevron_right</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Footer -->
+            @if (notificationService.visibleNotifications().length > 0) {
+                <div class="px-4 py-2 bg-gray-50 text-center border-t border-gray-100">
+                    @if (notificationService.hasMoreNotifications()) {
+                        <button 
+                            (click)="loadMore($event)"
+                            [disabled]="notificationService.isLoadingMore()"
+                            class="text-sm text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full py-1">
+                            @if (notificationService.isLoadingMore()) {
+                                <span class="material-icons animate-spin text-base">refresh</span>
+                                <span>Loading...</span>
+                            } @else {
+                                <span class="material-icons text-base">expand_more</span>
+                                <span>Load more</span>
+                            }
+                        </button>
+                    } @else {
+                        <span class="text-xs text-gray-400">
+                            No more notifications
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+

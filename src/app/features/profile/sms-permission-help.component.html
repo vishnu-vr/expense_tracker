@@ -1,0 +1,46 @@
+<div class="min-h-screen bg-gray-50 p-4">
+    <header class="flex items-center gap-4 mb-6">
+        <button routerLink="/profile" class="p-2 -ml-2 rounded-full hover:bg-gray-200 transition-colors">
+            <span class="material-icons text-gray-600">arrow_back</span>
+        </button>
+        <h1 class="text-xl font-bold text-gray-800">SMS Auto-detect Setup</h1>
+    </header>
+
+    <div class="bg-white rounded-2xl shadow-sm p-5 mb-4">
+        <div class="flex items-start gap-3">
+            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                <span class="material-icons">info</span>
+            </div>
+            <div>
+                <h2 class="font-semibold text-gray-800 mb-1">Enable SMS permission manually</h2>
+                <p class="text-sm text-gray-600">
+                    To auto-detect transaction SMS and suggest entries, allow SMS permission for this app.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-5 mb-4">
+        <h3 class="font-semibold text-gray-800 mb-3">Steps</h3>
+        <ol class="space-y-3 text-sm text-gray-700 list-decimal list-inside">
+            <li>Open <span class="font-medium">Phone Settings</span>.</li>
+            <li>Go to <span class="font-medium">Apps</span> and select <span class="font-medium">Track Expense</span>.</li>
+            <li>Tap <span class="font-medium">Permissions</span>.</li>
+            <li>Open <span class="font-medium">SMS</span> permission.</li>
+            <li>Set it to <span class="font-medium">Allow</span>.</li>
+        </ol>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+        <p class="text-sm text-amber-800">
+            After permission is granted, incoming transaction SMS suggestions will work automatically.
+        </p>
+    </div>
+
+    <button type="button" (click)="openAppSettings()"
+        class="w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-medium py-3 px-4 rounded-xl hover:bg-blue-700 transition-colors">
+        <span class="material-icons text-base">settings</span>
+        Open App Settings
+    </button>
+</div>
+

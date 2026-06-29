@@ -1,0 +1,116 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Migrate Praveen Transactions",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/ts-node",
+            "runtimeArgs": [
+                "--project",
+                "${workspaceFolder}/tsconfig.json"
+            ],
+            "args": [
+                "${workspaceFolder}/src/scripts/migrate-praveen-transactions.ts"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "env": {
+                "NODE_ENV": "development"
+            }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Migrate Praveen Transaction user ids",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/ts-node",
+            "runtimeArgs": [
+                "--project",
+                "${workspaceFolder}/tsconfig.json"
+            ],
+            "args": [
+                "${workspaceFolder}/src/scripts/update-praveen-userid.ts"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "env": {
+                "NODE_ENV": "development"
+            }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "update-praveen-email-userid.ts",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/ts-node",
+            "runtimeArgs": [
+                "--project",
+                "${workspaceFolder}/tsconfig.json"
+            ],
+            "args": [
+                "${workspaceFolder}/src/scripts/update-praveen-email-userid.ts"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "env": {
+                "NODE_ENV": "development"
+            }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "update-home-transactions-userid-email.ts",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/ts-node",
+            "runtimeArgs": [
+                "--project",
+                "${workspaceFolder}/tsconfig.json"
+            ],
+            "args": [
+                "${workspaceFolder}/src/scripts/update-home-transactions-userid-email.ts"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "sourceMaps": true,
+            "env": {
+                "NODE_ENV": "development"
+            }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Firebase Emulator",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/firebase",
+            "args": [
+                "emulators:start",
+                "--only",
+                "functions",
+                "--inspect-functions=9229"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "type": "node",
+            "request": "attach",
+            "name": "Attach Firebase Functions (9229)",
+            "port": 9229,
+            "restart": true,
+            // "protocol": "inspector",
+            "cwd": "${workspaceFolder}",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/lib/**/*.js"
+            ],
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        }
+    ]
+}
