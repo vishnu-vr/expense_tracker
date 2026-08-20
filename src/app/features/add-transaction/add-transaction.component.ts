@@ -6,6 +6,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { startWith } from 'rxjs/operators';
 import { TransactionService } from '../../core/services/transaction.service';
 import { CategoryService } from '../../core/services/category.service';
+import { TagService } from '../../core/services/tag.service';
 import { BudgetService } from '../../core/services/budget.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Subscription } from 'rxjs';
@@ -31,11 +32,16 @@ export class AddTransactionComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private budgetService = inject(BudgetService);
   categoryService = inject(CategoryService);
+  tagService = inject(TagService);
 
   isEdit = signal(false);
   isOwner = signal(true);
   isSaving = signal(false);
   isLoadingTransaction = signal(false);
+  isCreatingTag = signal(false);
+  showNewTagInput = signal(false);
+  newTagName = signal('');
+  tagError = signal('');
   transactionId: string | null = null;
   private queryParamSub: Subscription | null = null;
 
@@ -45,7 +51,8 @@ export class AddTransactionComponent implements OnInit, OnDestroy {
     categoryId: ['', Validators.required],
     date: [new Date().toLocaleDateString('en-CA'), Validators.required],
     time: [new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), Validators.required],
-    note: ['']
+    note: [''],
+    tagIds: this.fb.nonNullable.control<string[]>([])
   });
 
   /** Keeps spend projection in sync with the form (including SMS prefill and edit load). */
@@ -113,7 +120,8 @@ export class AddTransactionComponent implements OnInit, OnDestroy {
         categoryId: transaction.categoryId,
         date: transDate.toLocaleDateString('en-CA'),
         time: transDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-        note: transaction.note
+        note: transaction.note,
+        tagIds: transaction.tagIds || []
       });
     } finally {
       this.isLoadingTransaction.set(false);
@@ -156,7 +164,8 @@ export class AddTransactionComponent implements OnInit, OnDestroy {
           categoryId: val.categoryId!,
           date: dateTime,
           note: val.note || '',
-          accountId: 'default' // Placeholder
+          accountId: 'default', // Placeholder
+          tagIds: this.selectedTagIds()
         };
 
         if (this.isEdit() && this.transactionId) {
@@ -187,5 +196,51 @@ export class AddTransactionComponent implements OnInit, OnDestroy {
 
   onCancel() {
     this.router.navigate(['/dashboard']);
+  }
+
+  selectedTagIds(): string[] {
+    return this.form.controls.tagIds.value ?? [];
+  }
+
+  isTagSelected(tagId: string): boolean {
+    return this.selectedTagIds().includes(tagId);
+  }
+
+  toggleTag(tagId: string) {
+    if (!this.isOwner()) {
+      return;
+    }
+    const current = this.selectedTagIds();
+    const next = current.includes(tagId)
+      ? current.filter((id) => id !== tagId)
+      : [...current, tagId];
+    this.form.controls.tagIds.setValue(next);
+  }
+
+  onNewTagNameInput(event: Event) {
+    this.newTagName.set((event.target as HTMLInputElement).value);
+  }
+
+  async createAndSelectTag() {
+    const name = this.newTagName().trim();
+    if (!name || this.isCreatingTag() || !this.isOwner()) {
+      return;
+    }
+
+    this.tagError.set('');
+    this.isCreatingTag.set(true);
+    try {
+      const tag = await this.tagService.addTag({ name });
+      if (!this.isTagSelected(tag.id)) {
+        this.form.controls.tagIds.setValue([...this.selectedTagIds(), tag.id]);
+      }
+      this.newTagName.set('');
+      this.showNewTagInput.set(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create tag';
+      this.tagError.set(message);
+    } finally {
+      this.isCreatingTag.set(false);
+    }
   }
 }

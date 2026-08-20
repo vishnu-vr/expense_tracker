@@ -10,6 +10,16 @@ export interface Transaction {
     type: TransactionType;
     userId?: string; // Added for Firestore ownership
     userEmail?: string; // User's email for display
+    tagIds?: string[];
+}
+
+export interface Tag {
+    id: string;
+    name: string;
+    color?: string;
+    note?: string;
+    createdBy?: string;
+    createdAt?: Date;
 }
 
 export interface Category {
