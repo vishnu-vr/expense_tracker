@@ -45,6 +45,11 @@ service cloud.firestore {
       match /categoryBudgets/{budgetId} {
         allow read, create, update, delete: if isHomeMember(homeId);
       }
+
+      // Home-scoped tags / groups (e.g. a trip)
+      match /tags/{tagId} {
+        allow read, create, update, delete: if isHomeMember(homeId);
+      }
     }
 
     // Transactions:

@@ -11,6 +11,7 @@ import { PwaService } from '../../core/services/pwa.service';
 import { Transaction } from '../../core/models/models';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
 import { ChangelogService } from '../../core/services/changelog.service';
+import { TagService } from '../../core/services/tag.service';
 import { MaskCurrencyPipe } from '../../shared/pipes/mask-currency.pipe';
 
 @Component({
@@ -24,6 +25,7 @@ export class DashboardComponent {
   transactionService = inject(TransactionService);
   budgetService = inject(BudgetService);
   categoryService = inject(CategoryService);
+  tagService = inject(TagService);
   authService = inject(AuthService);
   homeService = inject(HomeService);
   pwaService = inject(PwaService);
@@ -183,6 +185,15 @@ export class DashboardComponent {
 
   getCategory(id: string) {
     return this.categoryService.categories().find(c => c.id === id);
+  }
+
+  getTags(tagIds?: string[]) {
+    return this.tagService.getTagsByIds(tagIds);
+  }
+
+  openTag(event: Event, tagId: string) {
+    event.stopPropagation();
+    this.router.navigate(['/tags', tagId]);
   }
 
   isOwner(transaction: Transaction): boolean {

@@ -31,7 +31,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.joinHome = exports.analyzeTransactions = exports.analyzeTransactionsHandler = exports.onTransactionWritten = exports.onNotificationCreated = void 0;
+exports.exportTransactionsCsv = exports.exportTransactionsCsvHandler = exports.joinHome = exports.analyzeTransactions = exports.analyzeTransactionsHandler = exports.onTransactionWritten = exports.onNotificationCreated = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const logger = __importStar(require("firebase-functions/logger"));
 const genkit_1 = require("genkit");
@@ -555,6 +555,197 @@ exports.joinHome = (0, https_1.onCall)(async (request) => {
         memberIds: [...(homeData.memberIds || []), uid]
     };
 });
+const DEFAULT_EXPORT_CATEGORY_NAMES = new Map([
+    ["salary", "Salary"],
+    ["business", "Business"],
+    ["gifts", "Gifts"],
+    ["baby", "Baby"],
+    ["beauty", "Beauty"],
+    ["bills", "Bills"],
+    ["car", "Car"],
+    ["clothing", "Clothing"],
+    ["education", "Education"],
+    ["electronics", "Electronics"],
+    ["entertainment", "Entertainment"],
+    ["food", "Food"],
+    ["health", "Health"],
+    ["home", "Home"],
+    ["insurance", "Insurance"],
+    ["shopping", "Shopping"],
+    ["social", "Social"],
+    ["sport", "Sport"],
+    ["tax", "Tax"],
+    ["telephone", "Telephone"],
+    ["transportation", "Transportation"],
+    ["fun_activities", "Fun Activities"],
+    ["grocery", "Grocery"],
+    ["gift", "gift"],
+]);
+function csvEscape(value) {
+    const normalized = value == null ? "" : String(value);
+    if (/[",\n\r]/.test(normalized)) {
+        return `"${normalized.replace(/"/g, "\"\"")}"`;
+    }
+    return normalized;
+}
+function formatDateTimeInTimeZone(iso, timeZone) {
+    if (!iso)
+        return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime()))
+        return iso;
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(date);
+    const get = (type) => { var _a, _b; return (_b = (_a = parts.find((p) => p.type === type)) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ""; };
+    return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
+function assertValidDateOnly(value, label) {
+    if (typeof value !== "string") {
+        throw new https_1.HttpsError("invalid-argument", `Missing ${label}. Use YYYY-MM-DD.`);
+    }
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) {
+        throw new https_1.HttpsError("invalid-argument", `Invalid ${label} format. Use YYYY-MM-DD.`);
+    }
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, monthIndex, day));
+    if (Number.isNaN(date.getTime()) ||
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== monthIndex ||
+        date.getUTCDate() !== day) {
+        throw new https_1.HttpsError("invalid-argument", `Invalid ${label} date value: ${value}`);
+    }
+    return value;
+}
+async function loadExportCategoryNameMap(homeId) {
+    const categoryNameMap = new Map(DEFAULT_EXPORT_CATEGORY_NAMES);
+    const firestore = (0, firestore_1.getFirestore)();
+    const homeCategoriesSnapshot = await firestore.collection("homes").doc(homeId).collection("categories").get();
+    homeCategoriesSnapshot.docs.forEach((doc) => {
+        var _a;
+        const name = (_a = doc.data()) === null || _a === void 0 ? void 0 : _a["name"];
+        if (name) {
+            categoryNameMap.set(doc.id, name);
+        }
+    });
+    return categoryNameMap;
+}
+async function loadExportUserNameMap(userIds) {
+    const userNameMap = new Map();
+    const firestore = (0, firestore_1.getFirestore)();
+    await Promise.all(userIds.map(async (userId) => {
+        var _a;
+        const userSnap = await firestore.collection("users").doc(userId).get();
+        const name = (_a = userSnap.data()) === null || _a === void 0 ? void 0 : _a["name"];
+        userNameMap.set(userId, name || userId);
+    }));
+    return userNameMap;
+}
+async function loadExportTagNameMap(homeId) {
+    const tagNameMap = new Map();
+    const firestore = (0, firestore_1.getFirestore)();
+    const snap = await firestore.collection("homes").doc(homeId).collection("tags").get();
+    snap.docs.forEach((doc) => {
+        var _a;
+        const name = (_a = doc.data()) === null || _a === void 0 ? void 0 : _a["name"];
+        if (name) {
+            tagNameMap.set(doc.id, name);
+        }
+    });
+    return tagNameMap;
+}
+const exportTransactionsCsvHandler = async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    let uid = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid;
+    let email = (_c = (_b = request.auth) === null || _b === void 0 ? void 0 : _b.token) === null || _c === void 0 ? void 0 : _c.email;
+    if (!uid) {
+        const authHeader = (_d = request.rawRequest) === null || _d === void 0 ? void 0 : _d.headers["authorization"];
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            const token = authHeader.split("Bearer ")[1];
+            try {
+                const decodedToken = await (0, auth_1.getAuth)().verifyIdToken(token);
+                uid = decodedToken.uid;
+                email = decodedToken.email;
+            }
+            catch (e) {
+                logger.warn("Failed to verify token from header", e);
+            }
+        }
+    }
+    if (!uid) {
+        throw new https_1.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const firestore = (0, firestore_1.getFirestore)();
+    const userDoc = await firestore.collection("users").doc(uid).get();
+    const homeId = (_e = userDoc.data()) === null || _e === void 0 ? void 0 : _e.homeId;
+    if (!homeId) {
+        throw new https_1.HttpsError("failed-precondition", "User does not belong to a home.");
+    }
+    const from = assertValidDateOnly((_f = request.data) === null || _f === void 0 ? void 0 : _f.from, "from");
+    const to = assertValidDateOnly((_g = request.data) === null || _g === void 0 ? void 0 : _g.to, "to");
+    const timeZone = typeof ((_h = request.data) === null || _h === void 0 ? void 0 : _h.timeZone) === "string" && request.data.timeZone
+        ? request.data.timeZone
+        : "UTC";
+    const start = parseDateOnlyToBoundaryInTimeZone(from, false, timeZone);
+    const end = parseDateOnlyToBoundaryInTimeZone(to, true, timeZone);
+    if (!start || !end) {
+        throw new https_1.HttpsError("invalid-argument", "Unable to resolve the requested date range.");
+    }
+    if (start.getTime() > end.getTime()) {
+        throw new https_1.HttpsError("invalid-argument", "from cannot be after to.");
+    }
+    logger.info("ExportTransactionsCsv called", { uid, email, homeId, from, to, timeZone });
+    const txSnapshot = await firestore
+        .collection("transactions")
+        .where("homeId", "==", homeId)
+        .where("date", ">=", start.toISOString())
+        .where("date", "<=", end.toISOString())
+        .orderBy("date", "asc")
+        .get();
+    const transactions = txSnapshot.docs.map((doc) => (Object.assign({ id: doc.id }, doc.data())));
+    const userIds = Array.from(new Set(transactions.map((tx) => tx.userId).filter((id) => !!id)));
+    const [categoryNameMap, userNameMap, tagNameMap] = await Promise.all([
+        loadExportCategoryNameMap(homeId),
+        loadExportUserNameMap(userIds),
+        loadExportTagNameMap(homeId),
+    ]);
+    const csvLines = ["Date,Type,Amount,Category,Note,Tags,User,Email"];
+    for (const tx of transactions) {
+        const categoryName = tx.categoryId ? categoryNameMap.get(tx.categoryId) || tx.categoryId : "";
+        const userName = tx.userId ? userNameMap.get(tx.userId) || tx.userId : "";
+        const tagNames = ((_j = tx.tagIds) !== null && _j !== void 0 ? _j : [])
+            .map((id) => tagNameMap.get(id) || id)
+            .join("; ");
+        csvLines.push([
+            formatDateTimeInTimeZone(tx.date, timeZone),
+            tx.type || "",
+            typeof tx.amount === "number" ? tx.amount.toString() : "",
+            categoryName,
+            tx.note || "",
+            tagNames,
+            userName,
+            tx.userEmail || "",
+        ]
+            .map(csvEscape)
+            .join(","));
+    }
+    return {
+        csv: `${csvLines.join("\n")}\n`,
+        filename: `transactions_${from}_to_${to}.csv`,
+        count: transactions.length,
+    };
+};
+exports.exportTransactionsCsvHandler = exportTransactionsCsvHandler;
+exports.exportTransactionsCsv = (0, https_1.onCall)(exports.exportTransactionsCsvHandler);
 // // Backfill Embeddings for existing transactions
 // // Call via: firebase functions:shell -> backfillEmbeddings({}) or via client SDK
 // export const backfillEmbeddings = onCall(async () => {

@@ -178,16 +178,16 @@
                 @for (t of group.transactions; track t.id) {
                 <div (click)="editTransaction(t.id)"
                     class="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm cursor-pointer active:scale-95 transition-transform">
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
                         <!-- Icon -->
-                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white"
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0"
                             [style.background-color]="getCategory(t.categoryId)?.color || '#9E9E9E'">
                             <span class="material-icons text-lg">{{ getCategory(t.categoryId)?.icon || 'category'
                                 }}</span>
                         </div>
 
                         <!-- Details -->
-                        <div>
+                        <div class="min-w-0">
                             <p class="font-medium text-gray-800">{{ getCategory(t.categoryId)?.name || 'Unknown' }}</p>
                             <div class="flex items-center gap-1 text-xs text-gray-500">
                                 <span>{{ t.date | date:'h:mm a' }}</span>
@@ -195,6 +195,17 @@
                                 <span>• {{ t.note }}</span>
                                 }
                             </div>
+                            @if (getTags(t.tagIds).length) {
+                            <div class="flex flex-wrap gap-1 mt-1.5">
+                                @for (tag of getTags(t.tagIds); track tag.id) {
+                                <button type="button" (click)="openTag($event, tag.id)"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium text-white"
+                                    [style.background-color]="tag.color || '#3B82F6'">
+                                    {{ tag.name }}
+                                </button>
+                                }
+                            </div>
+                            }
                         </div>
                     </div>
 

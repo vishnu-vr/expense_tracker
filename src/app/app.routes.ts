@@ -28,6 +28,16 @@ export const routes: Routes = [
         canActivate: [authGuard]
     },
     {
+        path: 'tags',
+        loadComponent: () => import('./features/tags/tag-list.component').then(m => m.TagListComponent),
+        canActivate: [authGuard]
+    },
+    {
+        path: 'tags/:id',
+        loadComponent: () => import('./features/tags/tag-detail.component').then(m => m.TagDetailComponent),
+        canActivate: [authGuard]
+    },
+    {
         path: 'budgets',
         loadComponent: () => import('./features/budgets/budgets.component').then(m => m.BudgetsComponent),
         canActivate: [authGuard]

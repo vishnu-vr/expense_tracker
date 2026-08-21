@@ -13,7 +13,7 @@
         "local:export-csv": "ts-node src/scripts/export-transactions-csv.ts"
     },
     "engines": {
-        "node": "20"
+        "node": "22"
     },
     "main": "lib/index.js",
     "dependencies": {
