@@ -92,6 +92,77 @@
 
     <!-- Additional Options (Placeholder for future) -->
     <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <button type="button" (click)="toggleExportPanel()"
+            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700">
+                    <span class="material-icons text-sm">file_download</span>
+                </div>
+                <span class="font-medium text-gray-700">Export transactions</span>
+            </div>
+            <span class="material-icons text-gray-400">{{ exportPanelOpen() ? 'expand_less' : 'expand_more' }}</span>
+        </button>
+        @if (exportPanelOpen()) {
+        <div class="px-4 pb-4 border-b border-gray-100 space-y-3">
+            <div class="flex bg-gray-100 p-1 rounded-xl">
+                <button type="button" (click)="setExportMode('month')"
+                    class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all"
+                    [class.bg-white]="exportMode() === 'month'"
+                    [class.shadow-sm]="exportMode() === 'month'"
+                    [class.text-blue-600]="exportMode() === 'month'"
+                    [class.text-gray-500]="exportMode() !== 'month'">
+                    By month
+                </button>
+                <button type="button" (click)="setExportMode('range')"
+                    class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all"
+                    [class.bg-white]="exportMode() === 'range'"
+                    [class.shadow-sm]="exportMode() === 'range'"
+                    [class.text-blue-600]="exportMode() === 'range'"
+                    [class.text-gray-500]="exportMode() !== 'range'">
+                    Date range
+                </button>
+            </div>
+
+            @if (exportMode() === 'month') {
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Month</label>
+                <input type="month" [value]="selectedMonth()" (change)="onMonthChange($event)"
+                    class="w-full p-2 bg-gray-50 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-100">
+            </div>
+            } @else {
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">From</label>
+                    <input type="date" [value]="rangeFrom()" (input)="onRangeFromChange($event)"
+                        class="w-full p-2 bg-gray-50 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-100">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">To</label>
+                    <input type="date" [value]="rangeTo()" (input)="onRangeToChange($event)"
+                        class="w-full p-2 bg-gray-50 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-100">
+                </div>
+            </div>
+            }
+
+            @if (exportError()) {
+            <p class="text-xs text-red-500">{{ exportError() }}</p>
+            }
+            @if (exportSuccess()) {
+            <p class="text-xs text-emerald-600">{{ exportSuccess() }}</p>
+            }
+
+            <button type="button" (click)="exportTransactions()" [disabled]="exportService.isExporting()"
+                class="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white text-sm font-medium py-2.5 hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                @if (exportService.isExporting()) {
+                <span class="material-icons text-lg animate-spin">sync</span>
+                Exporting...
+                } @else {
+                <span class="material-icons text-lg">download</span>
+                Export CSV
+                }
+            </button>
+        </div>
+        }
         <button routerLink="/categories"
             class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left">
             <div class="flex items-center gap-3">

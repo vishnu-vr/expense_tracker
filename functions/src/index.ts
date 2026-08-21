@@ -606,6 +606,234 @@ export const joinHome = onCall(async (request) => {
     };
 });
 
+type ExportTransactionType = "income" | "expense";
+
+interface ExportTransactionDoc {
+    amount?: number;
+    categoryId?: string;
+    date?: string;
+    note?: string;
+    type?: ExportTransactionType;
+    userId?: string;
+    userEmail?: string;
+    homeId?: string;
+    tagIds?: string[];
+}
+
+const DEFAULT_EXPORT_CATEGORY_NAMES = new Map<string, string>([
+    ["salary", "Salary"],
+    ["business", "Business"],
+    ["gifts", "Gifts"],
+    ["baby", "Baby"],
+    ["beauty", "Beauty"],
+    ["bills", "Bills"],
+    ["car", "Car"],
+    ["clothing", "Clothing"],
+    ["education", "Education"],
+    ["electronics", "Electronics"],
+    ["entertainment", "Entertainment"],
+    ["food", "Food"],
+    ["health", "Health"],
+    ["home", "Home"],
+    ["insurance", "Insurance"],
+    ["shopping", "Shopping"],
+    ["social", "Social"],
+    ["sport", "Sport"],
+    ["tax", "Tax"],
+    ["telephone", "Telephone"],
+    ["transportation", "Transportation"],
+    ["fun_activities", "Fun Activities"],
+    ["grocery", "Grocery"],
+    ["gift", "gift"],
+]);
+
+function csvEscape(value: unknown): string {
+    const normalized = value == null ? "" : String(value);
+    if (/[",\n\r]/.test(normalized)) {
+        return `"${normalized.replace(/"/g, "\"\"")}"`;
+    }
+    return normalized;
+}
+
+function formatDateTimeInTimeZone(iso: string | undefined, timeZone: string): string {
+    if (!iso) return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(date);
+    const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+    return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
+function assertValidDateOnly(value: unknown, label: string): string {
+    if (typeof value !== "string") {
+        throw new HttpsError("invalid-argument", `Missing ${label}. Use YYYY-MM-DD.`);
+    }
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) {
+        throw new HttpsError("invalid-argument", `Invalid ${label} format. Use YYYY-MM-DD.`);
+    }
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, monthIndex, day));
+    if (
+        Number.isNaN(date.getTime()) ||
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== monthIndex ||
+        date.getUTCDate() !== day
+    ) {
+        throw new HttpsError("invalid-argument", `Invalid ${label} date value: ${value}`);
+    }
+    return value;
+}
+
+async function loadExportCategoryNameMap(homeId: string): Promise<Map<string, string>> {
+    const categoryNameMap = new Map(DEFAULT_EXPORT_CATEGORY_NAMES);
+    const firestore = getFirestore();
+    const homeCategoriesSnapshot = await firestore.collection("homes").doc(homeId).collection("categories").get();
+    homeCategoriesSnapshot.docs.forEach((doc) => {
+        const name = doc.data()?.["name"] as string | undefined;
+        if (name) {
+            categoryNameMap.set(doc.id, name);
+        }
+    });
+    return categoryNameMap;
+}
+
+async function loadExportUserNameMap(userIds: string[]): Promise<Map<string, string>> {
+    const userNameMap = new Map<string, string>();
+    const firestore = getFirestore();
+    await Promise.all(
+        userIds.map(async (userId) => {
+            const userSnap = await firestore.collection("users").doc(userId).get();
+            const name = userSnap.data()?.["name"] as string | undefined;
+            userNameMap.set(userId, name || userId);
+        })
+    );
+    return userNameMap;
+}
+
+async function loadExportTagNameMap(homeId: string): Promise<Map<string, string>> {
+    const tagNameMap = new Map<string, string>();
+    const firestore = getFirestore();
+    const snap = await firestore.collection("homes").doc(homeId).collection("tags").get();
+    snap.docs.forEach((doc) => {
+        const name = doc.data()?.["name"] as string | undefined;
+        if (name) {
+            tagNameMap.set(doc.id, name);
+        }
+    });
+    return tagNameMap;
+}
+
+export const exportTransactionsCsvHandler = async (request: any) => {
+    let uid = request.auth?.uid;
+    let email = request.auth?.token?.email;
+
+    if (!uid) {
+        const authHeader = request.rawRequest?.headers["authorization"];
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            const token = authHeader.split("Bearer ")[1];
+            try {
+                const decodedToken = await getAuth().verifyIdToken(token);
+                uid = decodedToken.uid;
+                email = decodedToken.email;
+            } catch (e) {
+                logger.warn("Failed to verify token from header", e);
+            }
+        }
+    }
+
+    if (!uid) {
+        throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const firestore = getFirestore();
+    const userDoc = await firestore.collection("users").doc(uid).get();
+    const homeId = userDoc.data()?.homeId as string | undefined;
+    if (!homeId) {
+        throw new HttpsError("failed-precondition", "User does not belong to a home.");
+    }
+
+    const from = assertValidDateOnly(request.data?.from, "from");
+    const to = assertValidDateOnly(request.data?.to, "to");
+    const timeZone = typeof request.data?.timeZone === "string" && request.data.timeZone
+        ? request.data.timeZone
+        : "UTC";
+
+    const start = parseDateOnlyToBoundaryInTimeZone(from, false, timeZone);
+    const end = parseDateOnlyToBoundaryInTimeZone(to, true, timeZone);
+    if (!start || !end) {
+        throw new HttpsError("invalid-argument", "Unable to resolve the requested date range.");
+    }
+    if (start.getTime() > end.getTime()) {
+        throw new HttpsError("invalid-argument", "from cannot be after to.");
+    }
+
+    logger.info("ExportTransactionsCsv called", { uid, email, homeId, from, to, timeZone });
+
+    const txSnapshot = await firestore
+        .collection("transactions")
+        .where("homeId", "==", homeId)
+        .where("date", ">=", start.toISOString())
+        .where("date", "<=", end.toISOString())
+        .orderBy("date", "asc")
+        .get();
+
+    const transactions = txSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as ExportTransactionDoc),
+    }));
+    const userIds = Array.from(
+        new Set(transactions.map((tx) => tx.userId).filter((id): id is string => !!id))
+    );
+
+    const [categoryNameMap, userNameMap, tagNameMap] = await Promise.all([
+        loadExportCategoryNameMap(homeId),
+        loadExportUserNameMap(userIds),
+        loadExportTagNameMap(homeId),
+    ]);
+
+    const csvLines = ["Date,Type,Amount,Category,Note,Tags,User,Email"];
+    for (const tx of transactions) {
+        const categoryName = tx.categoryId ? categoryNameMap.get(tx.categoryId) || tx.categoryId : "";
+        const userName = tx.userId ? userNameMap.get(tx.userId) || tx.userId : "";
+        const tagNames = (tx.tagIds ?? [])
+            .map((id) => tagNameMap.get(id) || id)
+            .join("; ");
+        csvLines.push(
+            [
+                formatDateTimeInTimeZone(tx.date, timeZone),
+                tx.type || "",
+                typeof tx.amount === "number" ? tx.amount.toString() : "",
+                categoryName,
+                tx.note || "",
+                tagNames,
+                userName,
+                tx.userEmail || "",
+            ]
+                .map(csvEscape)
+                .join(",")
+        );
+    }
+
+    return {
+        csv: `${csvLines.join("\n")}\n`,
+        filename: `transactions_${from}_to_${to}.csv`,
+        count: transactions.length,
+    };
+};
+
+export const exportTransactionsCsv = onCall(exportTransactionsCsvHandler);
+
 // // Backfill Embeddings for existing transactions
 // // Call via: firebase functions:shell -> backfillEmbeddings({}) or via client SDK
 // export const backfillEmbeddings = onCall(async () => {

@@ -1,5 +1,14 @@
 {
-    "indexes": [],
+    "indexes": [
+      {
+        "collectionGroup": "transactions",
+        "queryScope": "COLLECTION",
+        "fields": [
+          { "fieldPath": "homeId", "order": "ASCENDING" },
+          { "fieldPath": "date", "order": "ASCENDING" }
+        ]
+      }
+    ],
     "fieldOverrides": [],
     "vectorIndexes": [
       {
