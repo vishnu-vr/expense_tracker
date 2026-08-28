@@ -62,19 +62,19 @@
                 <div>
                     <label class="block text-xs text-muted mb-1">From</label>
                     <input type="date" [value]="rangeStartDraft()" (input)="onRangeStartChange($event)"
-                        class="w-full p-2 bg-inset rounded-lg outline-none text-sm focus:ring-2 focus:ring-accent/20 focus:border-accent">
+                        class="w-full p-2 bg-inset rounded-lg outline-none text-sm text-primary focus:ring-2 focus:ring-accent/20 focus:border-accent">
                 </div>
                 <div>
                     <label class="block text-xs text-muted mb-1">To</label>
                     <input type="date" [value]="rangeEndDraft()" (input)="onRangeEndChange($event)"
-                        class="w-full p-2 bg-inset rounded-lg outline-none text-sm focus:ring-2 focus:ring-accent/20 focus:border-accent">
+                        class="w-full p-2 bg-inset rounded-lg outline-none text-sm text-primary focus:ring-2 focus:ring-accent/20 focus:border-accent">
                 </div>
             </div>
             @if (rangeError()) {
             <p class="text-xs text-red-500">{{ rangeError() }}</p>
             }
             <button type="button" (click)="applyDateRange()"
-                class="w-full rounded-lg bg-blue-600 text-white text-sm font-medium py-2 hover:bg-blue-700 transition-colors">
+                class="w-full rounded-lg gradient-neon text-white text-sm font-medium py-2 hover:opacity-90 transition-opacity">
                 Apply range
             </button>
         </div>

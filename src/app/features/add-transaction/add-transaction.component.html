@@ -71,7 +71,7 @@
                 <label class="flex flex-col items-center gap-2 cursor-pointer group">
                     <input type="radio" formControlName="categoryId" [value]="cat.id" class="hidden peer">
                     <div
-                        class="w-12 h-12 rounded-full bg-inset flex items-center justify-center peer-checked:bg-blue-600 peer-checked:text-white transition-colors">
+                        class="w-12 h-12 rounded-full bg-inset flex items-center justify-center peer-checked:bg-accent peer-checked:text-white transition-colors">
                         <span class="material-icons">{{ cat.icon }}</span>
                     </div>
                     <span
@@ -125,18 +125,18 @@
                 <div>
                     <label class="block text-xs text-muted mb-1">Date</label>
                     <input type="date" formControlName="date"
-                        class="w-full p-2 bg-inset rounded-lg outline-none focus:ring-2 focus:ring-blue-100">
+                        class="w-full p-2 bg-inset rounded-lg outline-none text-primary focus:ring-2 focus:ring-accent/20 focus:border-accent">
                 </div>
                 <div>
                     <label class="block text-xs text-muted mb-1">Time</label>
                     <input type="time" formControlName="time"
-                        class="w-full p-2 bg-inset rounded-lg outline-none focus:ring-2 focus:ring-blue-100">
+                        class="w-full p-2 bg-inset rounded-lg outline-none text-primary focus:ring-2 focus:ring-accent/20 focus:border-accent">
                 </div>
             </div>
             <div>
                 <label class="block text-xs text-muted mb-1">Note</label>
                 <input type="text" formControlName="note" placeholder="What is this for?"
-                    class="w-full p-2 bg-inset rounded-lg outline-none focus:ring-2 focus:ring-blue-100">
+                    class="w-full p-2 bg-inset rounded-lg outline-none text-primary focus:ring-2 focus:ring-accent/20 focus:border-accent">
             </div>
         </div>
 
@@ -170,9 +170,9 @@
             <div class="mt-3 flex gap-2">
                 <input type="text" [value]="newTagName()" (input)="onNewTagNameInput($event)"
                     (keydown.enter)="$event.preventDefault(); createAndSelectTag()" placeholder="Tag name, e.g. Maasai Mara"
-                    class="flex-1 p-2 bg-inset rounded-lg outline-none focus:ring-2 focus:ring-blue-100 text-sm">
+                    class="flex-1 p-2 bg-inset rounded-lg outline-none focus:ring-2 focus:ring-accent/20 text-sm text-primary">
                 <button type="button" (click)="createAndSelectTag()" [disabled]="isCreatingTag() || !newTagName().trim()"
-                    class="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg disabled:opacity-50">
+                    class="px-3 py-2 bg-accent text-white text-sm rounded-lg disabled:opacity-50">
                     Add
                 </button>
                 <button type="button" (click)="showNewTagInput.set(false); newTagName.set(''); tagError.set('')"
@@ -189,7 +189,7 @@
         <!-- Submit Button -->
         @if (isOwner()) {
         <button type="submit" [disabled]="!form.valid || isSaving()"
-            class="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            class="w-full gradient-neon text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
             @if (isSaving()) {
             Saving...
             } @else {

@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+    html {
+        color-scheme: light;
+    }
+
+    html.dark {
+        color-scheme: dark;
+    }
+
+    input,
+    textarea,
+    select {
+        color: rgb(var(--color-primary));
+    }
+}
+
 /* Theme B — Midnight Bento semantic tokens */
 :root {
     --color-canvas: 241 245 249;
