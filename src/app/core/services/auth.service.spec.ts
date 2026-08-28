@@ -80,7 +80,7 @@ describe('AuthService', () => {
         await new Promise((r) => setTimeout(r, 0));
         expect(FA.signInWithEmailAndPassword).toHaveBeenCalled();
         expect(FS.setDoc).toHaveBeenCalled();
-        expect(navigateSpy).toHaveBeenCalledWith(['/dashboard']);
+        expect(navigateSpy).toHaveBeenCalledWith(['/home']);
     });
 
     it('ensureUserDoc skips setDoc when doc exists', async () => {
@@ -101,7 +101,7 @@ describe('AuthService', () => {
         await firstValueFrom(svc.loginWithGoogle());
         await new Promise((r) => setTimeout(r, 0));
         expect(FA.signInWithPopup).toHaveBeenCalled();
-        expect(navigateSpy).toHaveBeenCalledWith(['/dashboard']);
+        expect(navigateSpy).toHaveBeenCalledWith(['/home']);
     });
 
     it('loginWithGoogle uses native path without web popup when native', async () => {
@@ -149,7 +149,7 @@ describe('AuthService', () => {
         await firstValueFrom(svc.loginWithGoogle());
         await new Promise((r) => setTimeout(r, 0));
         expect(FA.signInWithPopup).not.toHaveBeenCalled();
-        expect(navigateSpy).toHaveBeenCalledWith(['/dashboard']);
+        expect(navigateSpy).toHaveBeenCalledWith(['/home']);
     });
 
     it('logout signs out and navigates login', async () => {

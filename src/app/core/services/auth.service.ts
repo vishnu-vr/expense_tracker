@@ -40,7 +40,7 @@ export class AuthService {
         return from(FA.signInWithEmailAndPassword(this.auth, email, password)).pipe(
             tap(async (cred) => {
                 if (cred.user) await this.ensureUserDoc(cred.user);
-                this.router.navigate(['/dashboard']);
+                this.router.navigate(['/home']);
             }),
             catchError(error => {
                 console.error('Login failed', error);
@@ -54,7 +54,7 @@ export class AuthService {
             return from(this.nativeGoogleSignIn()).pipe(
                 tap(async (cred) => {
                     if (cred?.user) await this.ensureUserDoc(cred.user);
-                    this.router.navigate(['/dashboard']);
+                    this.router.navigate(['/home']);
                 }),
                 catchError(error => {
                     console.error('Native Google login failed', error);
@@ -67,7 +67,7 @@ export class AuthService {
         return from(FA.signInWithPopup(this.auth, provider)).pipe(
             tap(async (cred) => {
                 if (cred.user) await this.ensureUserDoc(cred.user);
-                this.router.navigate(['/dashboard']);
+                this.router.navigate(['/home']);
             }),
             catchError(error => {
                 console.error('Login failed', error);

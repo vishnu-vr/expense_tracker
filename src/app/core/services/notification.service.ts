@@ -179,7 +179,7 @@ export class NotificationService implements OnDestroy {
                 return;
             }
 
-            this.router.navigate(['/dashboard']);
+            this.router.navigate(['/transactions']);
         });
 
         if (permStatus.receive === 'granted') {
@@ -236,7 +236,7 @@ export class NotificationService implements OnDestroy {
             vibrate: [200, 100, 200],
             data: {
                 transactionId: notification.transactionId,
-                url: '/dashboard'
+                url: '/transactions'
             }
         };
 

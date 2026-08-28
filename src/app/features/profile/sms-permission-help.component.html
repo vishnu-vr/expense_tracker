@@ -1,33 +1,33 @@
-<div class="min-h-screen bg-gray-50 p-4">
+<div class="min-h-screen bg-canvas p-4">
     <header class="flex items-center gap-4 mb-6">
-        <button routerLink="/profile" class="p-2 -ml-2 rounded-full hover:bg-gray-200 transition-colors">
-            <span class="material-icons text-gray-600">arrow_back</span>
+        <button routerLink="/profile" class="icon-btn -ml-2">
+            <span class="material-icons">arrow_back</span>
         </button>
-        <h1 class="text-xl font-bold text-gray-800">SMS Auto-detect Setup</h1>
+        <h1 class="text-xl font-bold font-sora text-primary">SMS Auto-detect Setup</h1>
     </header>
 
-    <div class="bg-white rounded-2xl shadow-sm p-5 mb-4">
+    <div class="glass-card p-5 mb-4">
         <div class="flex items-start gap-3">
-            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-accent">
                 <span class="material-icons">info</span>
             </div>
             <div>
-                <h2 class="font-semibold text-gray-800 mb-1">Enable SMS permission manually</h2>
-                <p class="text-sm text-gray-600">
+                <h2 class="font-semibold font-sora text-primary mb-1">Enable SMS permission manually</h2>
+                <p class="text-sm text-muted">
                     To auto-detect transaction SMS and suggest entries, allow SMS permission for this app.
                 </p>
             </div>
         </div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-sm p-5 mb-4">
-        <h3 class="font-semibold text-gray-800 mb-3">Steps</h3>
-        <ol class="space-y-3 text-sm text-gray-700 list-decimal list-inside">
-            <li>Open <span class="font-medium">Phone Settings</span>.</li>
-            <li>Go to <span class="font-medium">Apps</span> and select <span class="font-medium">Track Expense</span>.</li>
-            <li>Tap <span class="font-medium">Permissions</span>.</li>
-            <li>Open <span class="font-medium">SMS</span> permission.</li>
-            <li>Set it to <span class="font-medium">Allow</span>.</li>
+    <div class="glass-card p-5 mb-4">
+        <h3 class="font-semibold font-sora text-primary mb-3">Steps</h3>
+        <ol class="space-y-3 text-sm text-muted list-decimal list-inside">
+            <li>Open <span class="font-medium text-primary">Phone Settings</span>.</li>
+            <li>Go to <span class="font-medium text-primary">Apps</span> and select <span class="font-medium text-primary">Track Expense</span>.</li>
+            <li>Tap <span class="font-medium text-primary">Permissions</span>.</li>
+            <li>Open <span class="font-medium text-primary">SMS</span> permission.</li>
+            <li>Set it to <span class="font-medium text-primary">Allow</span>.</li>
         </ol>
     </div>
 
@@ -43,4 +43,3 @@
         Open App Settings
     </button>
 </div>
-

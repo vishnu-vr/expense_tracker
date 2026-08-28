@@ -10,18 +10,18 @@ import { AuthService } from '../../core/services/auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div class="min-h-screen bg-canvas flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div class="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+        <h2 class="mt-6 text-center text-3xl font-extrabold font-sora text-primary">
           Welcome to Expense Tracker
         </h2>
-        <p class="mt-2 text-center text-sm text-gray-600">
+        <p class="mt-2 text-center text-sm text-muted">
           To get started, create a new home or join an existing one.
         </p>
         <!-- Sign out link -->
         <div class="mt-4 flex justify-center">
           <button (click)="logout()"
-            class="flex items-center gap-1.5 text-sm text-gray-400 hover:text-red-500 transition-colors">
+            class="flex items-center gap-1.5 text-sm text-faint hover:text-red-500 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
               <polyline points="16 17 21 12 16 7"/>
@@ -33,19 +33,19 @@ import { AuthService } from '../../core/services/auth.service';
       </div>
 
       <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div class="glass-card py-8 px-4 sm:px-10">
           
           <!-- Toggle Tabs -->
-          <div class="flex border-b border-gray-200 mb-6">
+          <div class="flex border-b border-border-app mb-6">
             <button 
               (click)="activeTab.set('create')"
               [class.border-indigo-500]="activeTab() === 'create'"
               [class.text-indigo-600]="activeTab() === 'create'"
               class="w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm focus:outline-none"
               [class.border-transparent]="activeTab() !== 'create'"
-              [class.text-gray-500]="activeTab() !== 'create'"
-              [class.hover:text-gray-700]="activeTab() !== 'create'"
-              [class.hover:border-gray-300]="activeTab() !== 'create'">
+              [class.text-muted]="activeTab() !== 'create'"
+              [class.hover:text-primary]="activeTab() !== 'create'"
+              [class.hover:border-border-app]="activeTab() !== 'create'">
               Create New Home
             </button>
             <button 
@@ -54,9 +54,9 @@ import { AuthService } from '../../core/services/auth.service';
               [class.text-indigo-600]="activeTab() === 'join'"
               class="w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm focus:outline-none"
               [class.border-transparent]="activeTab() !== 'join'"
-              [class.text-gray-500]="activeTab() !== 'join'"
-              [class.hover:text-gray-700]="activeTab() !== 'join'"
-              [class.hover:border-gray-300]="activeTab() !== 'join'">
+              [class.text-muted]="activeTab() !== 'join'"
+              [class.hover:text-primary]="activeTab() !== 'join'"
+              [class.hover:border-border-app]="activeTab() !== 'join'">
               Join Existing Home
             </button>
           </div>
@@ -65,7 +65,7 @@ import { AuthService } from '../../core/services/auth.service';
           <div *ngIf="activeTab() === 'create'">
             <div class="space-y-6">
               <div>
-                <label for="homeName" class="block text-sm font-medium text-gray-700">
+                <label for="homeName" class="block text-sm font-medium text-muted">
                   Home Name
                 </label>
                 <div class="mt-1">
@@ -75,7 +75,7 @@ import { AuthService } from '../../core/services/auth.service';
                     [(ngModel)]="homeName"
                     name="homeName" 
                     placeholder="e.g. Vishnu's House"
-                    class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                    class="appearance-none block w-full px-3 py-2 border border-border-app bg-inset rounded-md shadow-sm placeholder:text-faint focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
                     required>
                 </div>
               </div>
@@ -99,7 +99,7 @@ import { AuthService } from '../../core/services/auth.service';
           <div *ngIf="activeTab() === 'join'">
             <div class="space-y-6">
               <div>
-                <label for="homeCode" class="block text-sm font-medium text-gray-700">
+                <label for="homeCode" class="block text-sm font-medium text-muted">
                   Home Invite Code
                 </label>
                 <div class="mt-1">
@@ -109,10 +109,10 @@ import { AuthService } from '../../core/services/auth.service';
                     [(ngModel)]="homeCode"
                     name="homeCode" 
                     placeholder="e.g. A1B2C3"
-                    class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm uppercase" 
+                    class="appearance-none block w-full px-3 py-2 border border-border-app bg-inset rounded-md shadow-sm placeholder:text-faint focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm uppercase" 
                     required>
                 </div>
-                <p class="mt-2 text-xs text-gray-500">
+                <p class="mt-2 text-xs text-muted">
                   Ask the home owner for the 6-character invite code.
                 </p>
               </div>
@@ -172,7 +172,7 @@ export class HomeOnboardingComponent {
     this.error.set(null);
     try {
       await this.homeService.createHome(this.homeName);
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/home']);
     } catch (err: any) {
       console.error('Failed to create home', err);
       this.error.set('Failed to create home. Please try again.');
@@ -188,7 +188,7 @@ export class HomeOnboardingComponent {
     this.error.set(null);
     try {
       await this.homeService.joinHome(this.homeCode.toUpperCase());
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/home']);
     } catch (err: any) {
       console.error('Failed to join home', err);
       this.error.set('Could not join home. Please check the code and try again.');

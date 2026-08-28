@@ -5,6 +5,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { HomeService } from '../../core/services/home.service';
 import { ChangelogService } from '../../core/services/changelog.service';
 import { PrivacyModeService } from '../../core/services/privacy-mode.service';
+import { ThemeService, ThemePreference } from '../../core/services/theme.service';
 import { ExportService } from '../../core/services/export.service';
 
 type ExportMode = 'month' | 'range';
@@ -21,6 +22,7 @@ export class ProfileComponent {
     homeService = inject(HomeService);
     changelogService = inject(ChangelogService);
     privacyModeService = inject(PrivacyModeService);
+    themeService = inject(ThemeService);
     exportService = inject(ExportService);
     user = this.authService.currentUser;
     home = this.homeService.currentHome;
@@ -37,6 +39,10 @@ export class ProfileComponent {
 
     logout() {
         this.authService.logout().subscribe();
+    }
+
+    setThemePreference(pref: ThemePreference) {
+        this.themeService.setPreference(pref);
     }
 
     copyInviteCode() {

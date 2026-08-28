@@ -9,10 +9,10 @@ import { AiService } from '../../core/services/ai.service';
     standalone: true,
     imports: [CommonModule, FormsModule, RouterModule],
     template: `
-        <div class="flex flex-col h-screen bg-gradient-to-b from-violet-50 to-white">
+        <div class="flex flex-col h-screen bg-canvas">
             <!-- Header -->
-            <header class="flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm border-b border-violet-100">
-                <button routerLink="/analysis" class="p-2 -ml-2 rounded-full hover:bg-violet-100 transition-colors">
+            <header class="flex items-center gap-4 p-4 bg-surface/80 backdrop-blur-sm border-b border-border-app">
+                <button routerLink="/analysis" class="icon-btn -ml-2">
                     <span class="material-icons text-violet-600">arrow_back</span>
                 </button>
                 <div class="flex items-center gap-3">
@@ -20,8 +20,8 @@ import { AiService } from '../../core/services/ai.service';
                         <span class="material-icons text-white">auto_awesome</span>
                     </div>
                     <div>
-                        <h1 class="text-lg font-bold text-gray-800">Ask AI</h1>
-                        <p class="text-xs text-gray-500">Analyze your expenses</p>
+                        <h1 class="text-lg font-bold font-sora text-primary">Ask AI</h1>
+                        <p class="text-xs text-muted">Analyze your expenses</p>
                     </div>
                 </div>
                 @if (aiService.messages().length > 0) {
@@ -39,15 +39,15 @@ import { AiService } from '../../core/services/ai.service';
                         <div class="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mb-6 shadow-lg shadow-violet-200">
                             <span class="material-icons text-white text-4xl">psychology</span>
                         </div>
-                        <h2 class="text-xl font-bold text-gray-800 mb-2">Ask me anything about your expenses</h2>
-                        <p class="text-gray-500 mb-8">I can analyze your transactions and give you insights</p>
+                        <h2 class="text-xl font-bold font-sora text-primary mb-2">Ask me anything about your expenses</h2>
+                        <p class="text-muted mb-8">I can analyze your transactions and give you insights</p>
                         
                         <!-- Suggested Questions -->
                         <div class="w-full space-y-2">
-                            <p class="text-xs text-gray-400 uppercase tracking-wide mb-3">Try asking</p>
+                            <p class="text-xs text-faint uppercase tracking-wide mb-3">Try asking</p>
                             @for (suggestion of suggestions; track suggestion) {
                                 <button (click)="askSuggestion(suggestion)"
-                                    class="w-full text-left p-4 bg-white rounded-xl border border-violet-100 hover:border-violet-300 hover:shadow-md transition-all text-gray-700">
+                                    class="w-full text-left p-4 glass-card hover:border-violet-300 hover:shadow-md transition-all text-muted">
                                     <span class="material-icons text-violet-500 mr-2 text-sm align-middle">arrow_forward</span>
                                     {{ suggestion }}
                                 </button>
@@ -63,11 +63,11 @@ import { AiService } from '../../core/services/ai.service';
                                 [class.from-violet-500]="message.role === 'user'"
                                 [class.to-purple-600]="message.role === 'user'"
                                 [class.text-white]="message.role === 'user'"
-                                [class.bg-white]="message.role === 'assistant'"
-                                [class.text-gray-800]="message.role === 'assistant'"
+                                [class.bg-surface]="message.role === 'assistant'"
+                                [class.text-primary]="message.role === 'assistant'"
                                 [class.shadow-sm]="message.role === 'assistant'"
                                 [class.border]="message.role === 'assistant'"
-                                [class.border-gray-100]="message.role === 'assistant'">
+                                [class.border-border-app]="message.role === 'assistant'">
                                 @if (message.role === 'assistant') {
                                     <div class="flex items-start gap-2">
                                         <span class="material-icons text-violet-500 text-sm mt-0.5">auto_awesome</span>
@@ -83,7 +83,7 @@ import { AiService } from '../../core/services/ai.service';
                     <!-- Loading indicator -->
                     @if (aiService.isLoading()) {
                         <div class="flex">
-                            <div class="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
+                            <div class="bg-surface rounded-2xl px-4 py-3 shadow-sm border border-border-app">
                                 <div class="flex items-center gap-2">
                                     <span class="material-icons text-violet-500 text-sm animate-pulse">auto_awesome</span>
                                     <div class="flex gap-1">
@@ -99,7 +99,7 @@ import { AiService } from '../../core/services/ai.service';
             </div>
 
             <!-- Input Area -->
-            <div class="p-4 bg-white border-t border-gray-100">
+            <div class="p-4 bg-surface border-t border-border-app">
                 <form (submit)="sendMessage($event)" class="flex gap-2">
                     <input
                         #inputField
@@ -107,7 +107,7 @@ import { AiService } from '../../core/services/ai.service';
                         name="question"
                         type="text"
                         placeholder="Ask about your expenses..."
-                        class="flex-1 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 outline-none transition-all"
+                        class="flex-1 px-4 py-3 bg-inset rounded-xl border border-border-app focus:border-violet-400 focus:ring-2 focus:ring-violet-100 outline-none transition-all"
                         [disabled]="aiService.isLoading()"
                         autocomplete="off"
                     />

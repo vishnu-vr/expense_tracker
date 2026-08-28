@@ -86,11 +86,11 @@ export class NotificationBellComponent {
             case 'transaction_added':
                 return 'text-green-500';
             case 'transaction_updated':
-                return 'text-blue-500';
+                return 'text-accent';
             case 'transaction_deleted':
                 return 'text-red-500';
             default:
-                return 'text-gray-500';
+                return 'text-muted';
         }
     }
 }
