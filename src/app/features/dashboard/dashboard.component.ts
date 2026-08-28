@@ -13,6 +13,7 @@ import { NotificationBellComponent } from '../../shared/components/notification-
 import { ChangelogService } from '../../core/services/changelog.service';
 import { TagService } from '../../core/services/tag.service';
 import { MaskCurrencyPipe } from '../../shared/pipes/mask-currency.pipe';
+import { transactionMatchesQuery } from '../../core/utils/transaction-search';
 
 @Component({
   selector: 'app-dashboard',
@@ -36,6 +37,7 @@ export class DashboardComponent {
 
   /** Collapsed by default; user expands to see category breakdown. */
   budgetAlertsExpanded = signal(false);
+  searchQuery = signal('');
 
   toggleBudgetAlertsExpanded(): void {
     this.budgetAlertsExpanded.update((v) => !v);
@@ -146,7 +148,16 @@ export class DashboardComponent {
   });
 
   groupedTransactions = computed(() => {
-    const transactions = this.transactionService.dashboardFilteredTransactions();
+    const q = this.searchQuery();
+    const cats = this.categoryService.categories();
+    const transactions = this.transactionService.dashboardFilteredTransactions().filter((t) => {
+      const cat = cats.find((c) => c.id === t.categoryId);
+      const tags = this.tagService.getTagsByIds(t.tagIds);
+      return transactionMatchesQuery(t, q, {
+        categoryName: cat?.name,
+        tagNames: tags.map((tag) => tag.name)
+      });
+    });
     const groups: { date: string; total: number; transactions: Transaction[] }[] = [];
 
     transactions.forEach(t => {
@@ -166,6 +177,18 @@ export class DashboardComponent {
 
     return groups;
   });
+
+  filteredTransactionCount = computed(() =>
+    this.groupedTransactions().reduce((sum, group) => sum + group.transactions.length, 0)
+  );
+
+  onSearchInput(event: Event) {
+    this.searchQuery.set((event.target as HTMLInputElement).value);
+  }
+
+  clearSearch() {
+    this.searchQuery.set('');
+  }
 
   setFilter(filter: 'daily' | 'monthly') {
     this.transactionService.setDashboardFilter(filter);

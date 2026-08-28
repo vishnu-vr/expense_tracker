@@ -94,6 +94,24 @@
         </div>
     </div>
 
+    <div class="relative">
+        <span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-faint text-[22px] pointer-events-none">search</span>
+        <input type="search" enterkeyhint="search" autocomplete="off" placeholder="Search category, note, tag…"
+            [value]="searchQuery()" (input)="onSearchInput($event)"
+            class="w-full pl-11 pr-10 py-2.5 bg-surface rounded-xl border border-border-app shadow-sm outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent text-primary placeholder:text-faint">
+        @if (searchQuery()) {
+        <button type="button" (click)="clearSearch()" aria-label="Clear search"
+            class="icon-btn absolute right-2 top-1/2 -translate-y-1/2">
+            <span class="material-icons text-[20px]">close</span>
+        </button>
+        }
+    </div>
+    @if (searchQuery().trim()) {
+    <p class="text-xs text-muted -mt-1">
+        {{ filteredTransactionCount() }} match{{ filteredTransactionCount() === 1 ? '' : 'es' }} in this period
+    </p>
+    }
+
     @if (transactionService.dashboardFilterState() === 'monthly' && monthlyBudgetAlerts().length > 0) {
     <div class="glass-card border-l-4 border-l-blue-500 overflow-hidden">
         <button type="button" (click)="toggleBudgetAlertsExpanded()"
@@ -209,7 +227,11 @@
         </div>
         } @empty {
         <div class="text-center py-10 text-muted">
+            @if (searchQuery().trim()) {
+            <p>No transactions match “{{ searchQuery().trim() }}”</p>
+            } @else {
             <p>No transactions found for this period</p>
+            }
         </div>
         }
         }
