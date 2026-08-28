@@ -7,8 +7,10 @@ import { AuthService } from '../../core/services/auth.service';
 import { HomeService } from '../../core/services/home.service';
 import { TransactionService } from '../../core/services/transaction.service';
 import { PrivacyModeService } from '../../core/services/privacy-mode.service';
+import { ThemeService } from '../../core/services/theme.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
 import { MaskCurrencyPipe } from '../../shared/pipes/mask-currency.pipe';
+import { buildBurnSparkline } from '../../core/utils/burn-sparkline';
 
 @Component({
     selector: 'app-home',
@@ -26,6 +28,7 @@ export class HomeComponent {
     homeService = inject(HomeService);
     transactionService = inject(TransactionService);
     privacyModeService = inject(PrivacyModeService);
+    themeService = inject(ThemeService);
     private router = inject(Router);
 
     isHydrating = computed(
@@ -37,7 +40,7 @@ export class HomeComponent {
         const name = user?.displayName?.split(' ')[0] || 'there';
         const hour = new Date().getHours();
         const prefix = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-        return `${prefix}, ${name}`;
+        return `${prefix}`;
     });
 
     pacingLabel = computed(() => {
@@ -68,6 +71,33 @@ export class HomeComponent {
         return `At your current pace, spending may exceed income.`;
     });
 
+    /** Cumulative spend sparkline + dashed month-end forecast. Display-only; does not change burn math. */
+    burnSparkline = computed(() => {
+        const burn = this.insights.burnRate();
+        const daysElapsed = burn.daysElapsed;
+
+        if (daysElapsed <= 0 || burn.spentMtd <= 0) {
+            return buildBurnSparkline([], burn.totalDays, burn.monthEndForecast);
+        }
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const daily = new Array<number>(daysElapsed).fill(0);
+
+        for (const t of this.transactionService.transactions()) {
+            if (t.type !== 'expense') continue;
+            const d = new Date(t.date);
+            if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+            const day = d.getDate();
+            if (day >= 1 && day <= daysElapsed) {
+                daily[day - 1] += t.amount;
+            }
+        }
+
+        return buildBurnSparkline(daily, burn.totalDays, burn.monthEndForecast);
+    });
+
     insightColorClass = (color: string): string => {
         const map: Record<string, string> = {
             amber: 'insight-amber',
@@ -86,6 +116,10 @@ export class HomeComponent {
 
     togglePrivacy() {
         this.privacyModeService.toggle();
+    }
+
+    toggleTheme() {
+        this.themeService.cycle();
     }
 
     constructor() {

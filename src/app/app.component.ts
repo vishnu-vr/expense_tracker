@@ -1,4 +1,4 @@
-import { Component, inject, NgZone, OnInit } from '@angular/core';
+import { Component, effect, inject, NgZone, OnInit } from '@angular/core';
 import { RouterOutlet, RouterModule, Router } from '@angular/router';
 import { Firestore, disableNetwork, enableNetwork } from '@angular/fire/firestore';
 import { ChangelogDialogComponent } from './shared/components/changelog-dialog/changelog-dialog.component';
@@ -8,6 +8,7 @@ import { App } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { SmsIngestService } from './core/services/sms-ingest.service';
+import { ThemeService } from './core/services/theme.service';
 
 @Component({
   selector: 'app-root',
@@ -22,9 +23,29 @@ export class AppComponent implements OnInit {
   private router = inject(Router);
   private ngZone = inject(NgZone);
   private smsIngestService = inject(SmsIngestService);
+  private themeService = inject(ThemeService);
   private firestore = inject(Firestore);
   private isFirstActivation = true;
   private isResyncing = false;
+
+  constructor() {
+    effect(() => {
+      const theme = this.themeService.effectiveTheme();
+      if (this.platformService.isAndroid) {
+        void this.applyStatusBarTheme(theme);
+      }
+    });
+  }
+
+  private async applyStatusBarTheme(theme: 'light' | 'dark') {
+    if (theme === 'dark') {
+      await StatusBar.setBackgroundColor({ color: '#161b2e' });
+      await StatusBar.setStyle({ style: Style.Light });
+    } else {
+      await StatusBar.setBackgroundColor({ color: '#f1f5f9' });
+      await StatusBar.setStyle({ style: Style.Dark });
+    }
+  }
 
   private handleDeepLink(url: string) {
     try {
@@ -57,8 +78,7 @@ export class AppComponent implements OnInit {
 
     if (this.platformService.isAndroid) {
       await StatusBar.setOverlaysWebView({ overlay: false });
-      await StatusBar.setBackgroundColor({ color: '#2563eb' });
-      await StatusBar.setStyle({ style: Style.Dark });
+      await this.applyStatusBarTheme(this.themeService.effectiveTheme());
       await this.smsIngestService.initialize();
     }
 

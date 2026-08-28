@@ -1,16 +1,16 @@
-<div class="min-h-screen bg-gray-50 p-4">
+<div class="min-h-screen bg-canvas p-4 pb-24">
     <!-- Header -->
     <header class="flex items-center gap-4 mb-8">
-        <a routerLink="/home" class="p-2 -ml-2 rounded-full hover:bg-gray-200 transition-colors">
-            <span class="material-icons text-gray-600">arrow_back</span>
+        <a routerLink="/home" class="icon-btn -ml-2">
+            <span class="material-icons">arrow_back</span>
         </a>
-        <h1 class="text-xl font-bold text-gray-800">Profile</h1>
+        <h1 class="text-xl font-bold font-sora text-primary">Profile</h1>
     </header>
 
-    <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 flex flex-col items-center text-center">
+    <div class="glass-card p-6 mb-6 flex flex-col items-center text-center">
         <!-- Avatar -->
         <div
-            class="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mb-4 overflow-hidden">
+            class="w-24 h-24 rounded-full bg-accent/10 flex items-center justify-center text-accent mb-4 overflow-hidden">
             @if (user()?.photoURL) {
             <img [src]="user()?.photoURL" alt="Profile" referrerpolicy="no-referrer" class="w-full h-full object-cover">
             } @else {
@@ -19,54 +19,53 @@
         </div>
 
         <!-- User Info -->
-        <h2 class="text-xl font-bold text-gray-800 mb-1">{{ user()?.displayName || 'User' }}</h2>
-        <p class="text-gray-500 text-sm mb-6">{{ user()?.email }}</p>
+        <h2 class="text-xl font-bold font-sora text-primary mb-1">{{ user()?.displayName || 'User' }}</h2>
+        <p class="text-muted text-sm mb-6">{{ user()?.email }}</p>
 
         <!-- Home Info -->
         @if (home()) {
-        <div class="w-full bg-indigo-50 rounded-xl p-4 mb-6">
-            <h3 class="text-indigo-900 font-bold text-sm uppercase mb-2">My Home</h3>
+        <div class="w-full bg-accent/5 rounded-xl p-4 mb-6 border border-border-app">
+            <h3 class="text-accent font-bold text-sm uppercase mb-2">My Home</h3>
             <div class="flex items-center justify-between mb-2">
-                <span class="text-gray-700 font-medium">{{ home()?.name }}</span>
+                <span class="text-primary font-medium">{{ home()?.name }}</span>
             </div>
 
             <!-- Invite Code -->
-            <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-indigo-100 mb-4">
+            <div class="flex items-center justify-between bg-surface rounded-lg p-3 border border-border-app mb-4">
                 <div class="flex flex-col">
-                    <span class="text-xs text-indigo-400 font-bold uppercase">Invite Code</span>
-                    <span class="text-gray-800 font-mono font-bold tracking-wider">{{ home()?.displayId }}</span>
+                    <span class="text-xs text-accent font-bold uppercase">Invite Code</span>
+                    <span class="text-primary font-mono font-bold tracking-wider">{{ home()?.displayId }}</span>
                 </div>
-                <button (click)="copyInviteCode()"
-                    class="text-indigo-600 hover:text-indigo-800 p-2 rounded-full hover:bg-indigo-50 transition-colors">
+                <button (click)="copyInviteCode()" class="icon-btn">
                     <span class="material-icons text-xl">content_copy</span>
                 </button>
             </div>
 
             <!-- Members List -->
             <div class="mt-4">
-                <h4 class="text-xs text-indigo-900 font-bold uppercase mb-2">Members ({{ members().length }})</h4>
+                <h4 class="text-xs text-accent font-bold uppercase mb-2">Members ({{ members().length }})</h4>
                 <div class="flex flex-col gap-2">
                     @for (member of members(); track member.id) {
-                    <div class="flex items-center gap-2 bg-white p-2 rounded-lg border border-indigo-50">
+                    <div class="flex items-center gap-2 bg-surface p-2 rounded-lg border border-border-app">
                         <div
-                            class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden text-gray-500">
+                            class="w-8 h-8 rounded-full bg-inset flex items-center justify-center overflow-hidden text-muted">
                             @if (member.photoURL) {
                             <img [src]="member.photoURL" class="w-full h-full object-cover">
                             } @else {
                             <span class="material-icons text-sm">person</span>
                             }
                         </div>
-                        <span class="text-sm text-gray-700">{{ member.name || member.email }}</span>
+                        <span class="text-sm text-primary">{{ member.name || member.email }}</span>
                         @if (member.id === home()?.ownerId) {
                         <span
-                            class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full ml-auto">Owner</span>
+                            class="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full ml-auto">Owner</span>
                         }
                     </div>
                     }
                 </div>
             </div>
 
-            <p class="text-xs text-gray-500 mt-4 text-center">Share the invite code to add members.</p>
+            <p class="text-xs text-muted mt-4 text-center">Share the invite code to add members.</p>
 
             <!-- Leave Home -->
             <button (click)="leaveHome()" [disabled]="isLeavingHome()"
@@ -90,56 +89,85 @@
         </button>
     </div>
 
-    <!-- Additional Options (Placeholder for future) -->
-    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <!-- Settings -->
+    <div class="glass-card overflow-hidden">
+        <!-- Appearance -->
+        <div class="p-4 border-b border-border-app">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent">
+                    <span class="material-icons text-sm">palette</span>
+                </div>
+                <div>
+                    <span class="font-medium text-primary">Appearance</span>
+                    <p class="text-xs text-faint">Theme preference</p>
+                </div>
+            </div>
+            <div class="segmented-control">
+                <button type="button" (click)="setThemePreference('system')"
+                    class="flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all"
+                    [class.segmented-active]="themeService.preference() === 'system'"
+                    [class.segmented-inactive]="themeService.preference() !== 'system'">
+                    System
+                </button>
+                <button type="button" (click)="setThemePreference('light')"
+                    class="flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all"
+                    [class.segmented-active]="themeService.preference() === 'light'"
+                    [class.segmented-inactive]="themeService.preference() !== 'light'">
+                    Light
+                </button>
+                <button type="button" (click)="setThemePreference('dark')"
+                    class="flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all"
+                    [class.segmented-active]="themeService.preference() === 'dark'"
+                    [class.segmented-inactive]="themeService.preference() !== 'dark'">
+                    Dark
+                </button>
+            </div>
+        </div>
+
         <button type="button" (click)="toggleExportPanel()"
-            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left">
+            class="w-full flex items-center justify-between p-4 hover:bg-surface2 transition-colors border-b border-border-app text-left">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700">
+                <div class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent">
                     <span class="material-icons text-sm">file_download</span>
                 </div>
-                <span class="font-medium text-gray-700">Export transactions</span>
+                <span class="font-medium text-primary">Export transactions</span>
             </div>
-            <span class="material-icons text-gray-400">{{ exportPanelOpen() ? 'expand_less' : 'expand_more' }}</span>
+            <span class="material-icons text-faint">{{ exportPanelOpen() ? 'expand_less' : 'expand_more' }}</span>
         </button>
         @if (exportPanelOpen()) {
-        <div class="px-4 pb-4 border-b border-gray-100 space-y-3">
-            <div class="flex bg-gray-100 p-1 rounded-xl">
+        <div class="px-4 pb-4 border-b border-border-app space-y-3">
+            <div class="segmented-control">
                 <button type="button" (click)="setExportMode('month')"
                     class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all"
-                    [class.bg-white]="exportMode() === 'month'"
-                    [class.shadow-sm]="exportMode() === 'month'"
-                    [class.text-blue-600]="exportMode() === 'month'"
-                    [class.text-gray-500]="exportMode() !== 'month'">
+                    [class.segmented-active]="exportMode() === 'month'"
+                    [class.segmented-inactive]="exportMode() !== 'month'">
                     By month
                 </button>
                 <button type="button" (click)="setExportMode('range')"
                     class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all"
-                    [class.bg-white]="exportMode() === 'range'"
-                    [class.shadow-sm]="exportMode() === 'range'"
-                    [class.text-blue-600]="exportMode() === 'range'"
-                    [class.text-gray-500]="exportMode() !== 'range'">
+                    [class.segmented-active]="exportMode() === 'range'"
+                    [class.segmented-inactive]="exportMode() !== 'range'">
                     Date range
                 </button>
             </div>
 
             @if (exportMode() === 'month') {
             <div>
-                <label class="block text-xs text-gray-500 mb-1">Month</label>
+                <label class="block text-xs text-muted mb-1">Month</label>
                 <input type="month" [value]="selectedMonth()" (change)="onMonthChange($event)"
-                    class="w-full p-2 bg-gray-50 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-100">
+                    class="w-full p-2 bg-inset rounded-lg outline-none text-sm text-primary focus:ring-2 focus:ring-accent/20">
             </div>
             } @else {
             <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">From</label>
+                    <label class="block text-xs text-muted mb-1">From</label>
                     <input type="date" [value]="rangeFrom()" (input)="onRangeFromChange($event)"
-                        class="w-full p-2 bg-gray-50 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-100">
+                        class="w-full p-2 bg-inset rounded-lg outline-none text-sm text-primary focus:ring-2 focus:ring-accent/20">
                 </div>
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">To</label>
+                    <label class="block text-xs text-muted mb-1">To</label>
                     <input type="date" [value]="rangeTo()" (input)="onRangeToChange($event)"
-                        class="w-full p-2 bg-gray-50 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-100">
+                        class="w-full p-2 bg-inset rounded-lg outline-none text-sm text-primary focus:ring-2 focus:ring-accent/20">
                 </div>
             </div>
             }
@@ -152,7 +180,7 @@
             }
 
             <button type="button" (click)="exportTransactions()" [disabled]="exportService.isExporting()"
-                class="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white text-sm font-medium py-2.5 hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                class="w-full flex items-center justify-center gap-2 rounded-lg gradient-neon text-white text-sm font-medium py-2.5 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed">
                 @if (exportService.isExporting()) {
                 <span class="material-icons text-lg animate-spin">sync</span>
                 Exporting...
@@ -164,85 +192,84 @@
         </div>
         }
         <button routerLink="/categories"
-            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left">
+            class="w-full flex items-center justify-between p-4 hover:bg-surface2 transition-colors border-b border-border-app text-left">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                <div class="w-8 h-8 rounded-full bg-accent2/10 flex items-center justify-center text-accent2">
                     <span class="material-icons text-sm">category</span>
                 </div>
-                <span class="font-medium text-gray-700">Manage Categories</span>
+                <span class="font-medium text-primary">Manage Categories</span>
             </div>
-            <span class="material-icons text-gray-400">chevron_right</span>
+            <span class="material-icons text-faint">chevron_right</span>
         </button>
         <button routerLink="/tags"
-            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left">
+            class="w-full flex items-center justify-between p-4 hover:bg-surface2 transition-colors border-b border-border-app text-left">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                     <span class="material-icons text-sm">sell</span>
                 </div>
-                <span class="font-medium text-gray-700">Tags & Groups</span>
+                <span class="font-medium text-primary">Tags & Groups</span>
             </div>
-            <span class="material-icons text-gray-400">chevron_right</span>
+            <span class="material-icons text-faint">chevron_right</span>
         </button>
         <button routerLink="/budgets"
-            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left">
+            class="w-full flex items-center justify-between p-4 hover:bg-surface2 transition-colors border-b border-border-app text-left">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
                     <span class="material-icons text-sm">account_balance_wallet</span>
                 </div>
-                <span class="font-medium text-gray-700">Monthly budgets</span>
+                <span class="font-medium text-primary">Monthly budgets</span>
             </div>
-            <span class="material-icons text-gray-400">chevron_right</span>
+            <span class="material-icons text-faint">chevron_right</span>
         </button>
         <button type="button" (click)="changelogService.open()"
-            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left">
+            class="w-full flex items-center justify-between p-4 hover:bg-surface2 transition-colors border-b border-border-app text-left">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700">
+                <div class="w-8 h-8 rounded-full bg-accent2/10 flex items-center justify-center text-accent2">
                     <span class="material-icons text-sm">new_releases</span>
                 </div>
-                <span class="font-medium text-gray-700">What's new</span>
+                <span class="font-medium text-primary">What's new</span>
             </div>
-            <span class="material-icons text-gray-400">chevron_right</span>
+            <span class="material-icons text-faint">chevron_right</span>
         </button>
         <button type="button" (click)="privacyModeService.toggle()"
-            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left">
+            class="w-full flex items-center justify-between p-4 hover:bg-surface2 transition-colors text-left">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full flex items-center justify-center"
-                    [class.bg-gray-800]="privacyModeService.hideAmounts()"
-                    [class.text-white]="privacyModeService.hideAmounts()"
-                    [class.bg-gray-100]="!privacyModeService.hideAmounts()"
-                    [class.text-gray-500]="!privacyModeService.hideAmounts()">
+                    [class.bg-primary]="privacyModeService.hideAmounts()"
+                    [class.text-canvas]="privacyModeService.hideAmounts()"
+                    [class.bg-inset]="!privacyModeService.hideAmounts()"
+                    [class.text-muted]="!privacyModeService.hideAmounts()">
                     <span class="material-icons text-sm">{{ privacyModeService.hideAmounts() ? 'visibility_off' : 'visibility' }}</span>
                 </div>
                 <div>
-                    <span class="font-medium text-gray-700">Hide Amounts</span>
-                    <p class="text-xs text-gray-400">{{ privacyModeService.hideAmounts() ? 'Amounts are hidden' : 'Amounts are visible' }}</p>
+                    <span class="font-medium text-primary">Hide Amounts</span>
+                    <p class="text-xs text-faint">{{ privacyModeService.hideAmounts() ? 'Amounts are hidden' : 'Amounts are visible' }}</p>
                 </div>
             </div>
             <!-- Toggle switch -->
             <div class="w-11 h-6 rounded-full transition-colors flex items-center px-0.5"
-                [class.bg-gray-800]="privacyModeService.hideAmounts()"
-                [class.bg-gray-200]="!privacyModeService.hideAmounts()">
-                <div class="w-5 h-5 bg-white rounded-full shadow transition-transform"
+                [class.bg-primary]="privacyModeService.hideAmounts()"
+                [class.bg-inset]="!privacyModeService.hideAmounts()">
+                <div class="w-5 h-5 bg-surface rounded-full shadow transition-transform"
                     [class.translate-x-5]="privacyModeService.hideAmounts()"
                     [class.translate-x-0]="!privacyModeService.hideAmounts()">
                 </div>
             </div>
         </button>
         <button type="button" routerLink="/sms-permission-help"
-            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left border-t border-gray-100">
+            class="w-full flex items-center justify-between p-4 hover:bg-surface2 transition-colors text-left border-t border-border-app">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full flex items-center justify-center"
-                    class="bg-gray-100 text-gray-500">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center bg-inset text-muted">
                     <span class="material-icons text-sm">sms</span>
                 </div>
                 <div>
-                    <span class="font-medium text-gray-700">SMS Auto-detect</span>
-                    <p class="text-xs text-gray-400">
+                    <span class="font-medium text-primary">SMS Auto-detect</span>
+                    <p class="text-xs text-faint">
                         Tap to see how to grant SMS permission manually
                     </p>
                 </div>
             </div>
-            <span class="material-icons text-gray-400">chevron_right</span>
+            <span class="material-icons text-faint">chevron_right</span>
         </button>
     </div>
 </div>

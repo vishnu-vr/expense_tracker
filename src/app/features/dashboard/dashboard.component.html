@@ -1,9 +1,9 @@
-<div class="min-h-screen bg-slate-50/60 pb-24">
+<div class="min-h-screen bg-canvas pb-24">
     <!-- Header -->
-    <header class="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-md px-4 pt-4 pb-3 flex justify-between items-center">
+    <header class="page-header">
         <div>
-            <h1 class="text-xl font-bold text-slate-800">Transactions</h1>
-            <p class="text-slate-500 text-xs">Your spending ledger</p>
+            <h1 class="text-xl font-bold font-sora text-primary">Transactions</h1>
+            <p class="text-muted text-xs">Your spending ledger</p>
         </div>
         <div class="flex gap-1.5 items-center">
             @if (pwaService.showInstallButton()) {
@@ -14,8 +14,7 @@
             </button>
             }
             <app-notification-bell></app-notification-bell>
-            <a routerLink="/profile"
-                class="p-2 rounded-full bg-white/80 backdrop-blur ring-1 ring-slate-900/5 text-slate-600 hover:bg-white transition-colors">
+            <a routerLink="/profile" class="icon-btn">
                 <span class="material-icons text-[20px]">person</span>
             </a>
         </div>
@@ -25,7 +24,7 @@
     <!-- Balance Card -->
     <div class="glass-card gradient-positive p-5 text-white">
         <p class="text-white/80 text-xs font-medium mb-1">Total Balance</p>
-        <h2 class="text-3xl font-bold mb-5 tabular-nums">{{ transactionService.balance() | maskCurrency:'INR' }}</h2>
+        <h2 class="text-3xl font-bold font-sora mb-5 tabular-nums">{{ transactionService.balance() | maskCurrency:'INR' }}</h2>
 
         <div class="flex justify-between pt-4 border-t border-white/20">
             <div>
@@ -33,14 +32,14 @@
                     <span class="material-icons text-sm">arrow_downward</span>
                     Income
                 </div>
-                <p class="font-semibold tabular-nums">{{ transactionService.totalIncome() | maskCurrency:'INR' }}</p>
+                <p class="font-semibold font-sora tabular-nums">{{ transactionService.totalIncome() | maskCurrency:'INR' }}</p>
             </div>
             <div class="text-right">
                 <div class="flex items-center justify-end gap-1 text-white/70 text-xs mb-1">
                     <span class="material-icons text-sm">arrow_upward</span>
                     Expense
                 </div>
-                <p class="font-semibold tabular-nums">{{ transactionService.totalExpense() | maskCurrency:'INR' }}</p>
+                <p class="font-semibold font-sora tabular-nums">{{ transactionService.totalExpense() | maskCurrency:'INR' }}</p>
             </div>
         </div>
     </div>
@@ -49,10 +48,10 @@
     <div class="flex flex-col gap-3">
         <!-- Date Nav -->
         <div class="flex justify-between items-center glass-card p-2">
-            <button (click)="prevPeriod()" class="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                <span class="material-icons text-slate-600">chevron_left</span>
+            <button (click)="prevPeriod()" class="icon-btn">
+                <span class="material-icons">chevron_left</span>
             </button>
-            <div class="text-base font-bold text-slate-800">
+            <div class="text-base font-bold font-sora text-primary">
                 @switch (transactionService.dashboardFilterState()) {
                 @case ('daily') {
                 <div class="relative cursor-pointer inline-block" (click)="datePicker.showPicker()">
@@ -73,25 +72,23 @@
                 }
                 }
             </div>
-            <button (click)="nextPeriod()" class="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                <span class="material-icons text-slate-600">chevron_right</span>
+            <button (click)="nextPeriod()" class="icon-btn">
+                <span class="material-icons">chevron_right</span>
             </button>
         </div>
 
         <!-- Filter Controls -->
-        <div class="flex bg-slate-100/80 p-1 rounded-xl">
-            <button (click)="setFilter('daily')" [class.bg-white]="transactionService.dashboardFilterState() === 'daily'"
-                [class.shadow-sm]="transactionService.dashboardFilterState() === 'daily'"
+        <div class="segmented-control">
+            <button (click)="setFilter('daily')"
                 class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all"
-                [class.text-slate-500]="transactionService.dashboardFilterState() !== 'daily'"
-                [class.text-blue-600]="transactionService.dashboardFilterState() === 'daily'">
+                [class.segmented-active]="transactionService.dashboardFilterState() === 'daily'"
+                [class.segmented-inactive]="transactionService.dashboardFilterState() !== 'daily'">
                 Daily
             </button>
-            <button (click)="setFilter('monthly')" [class.bg-white]="transactionService.dashboardFilterState() === 'monthly'"
-                [class.shadow-sm]="transactionService.dashboardFilterState() === 'monthly'"
+            <button (click)="setFilter('monthly')"
                 class="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all"
-                [class.text-slate-500]="transactionService.dashboardFilterState() !== 'monthly'"
-                [class.text-blue-600]="transactionService.dashboardFilterState() === 'monthly'">
+                [class.segmented-active]="transactionService.dashboardFilterState() === 'monthly'"
+                [class.segmented-inactive]="transactionService.dashboardFilterState() !== 'monthly'">
                 Monthly
             </button>
         </div>
@@ -100,44 +97,44 @@
     @if (transactionService.dashboardFilterState() === 'monthly' && monthlyBudgetAlerts().length > 0) {
     <div class="glass-card border-l-4 border-l-blue-500 overflow-hidden">
         <button type="button" (click)="toggleBudgetAlertsExpanded()"
-            class="w-full flex items-start gap-3 text-left p-4 hover:bg-slate-50/80 active:bg-slate-50 transition-colors"
+            class="w-full flex items-start gap-3 text-left p-4 hover:bg-surface2 active:bg-surface2 transition-colors"
             [attr.aria-expanded]="budgetAlertsExpanded()">
-            <span class="material-icons text-blue-600 shrink-0 mt-0.5">notifications_active</span>
+            <span class="material-icons text-accent shrink-0 mt-0.5">notifications_active</span>
             <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold text-slate-800">Budget heads-up</p>
-                <p class="text-xs text-slate-600 mt-1 leading-relaxed">{{ budgetAlertsSummaryLine() }}</p>
-                <p class="text-xs text-blue-600 font-medium mt-2">
+                <p class="text-sm font-semibold text-primary">Budget heads-up</p>
+                <p class="text-xs text-muted mt-1 leading-relaxed">{{ budgetAlertsSummaryLine() }}</p>
+                <p class="text-xs text-accent font-medium mt-2">
                     {{ budgetAlertsExpanded() ? 'Hide details' : 'Show details' }}
                 </p>
             </div>
-            <span class="material-icons text-slate-500 shrink-0">{{ budgetAlertsExpanded() ? 'expand_less' : 'expand_more' }}</span>
+            <span class="material-icons text-muted shrink-0">{{ budgetAlertsExpanded() ? 'expand_less' : 'expand_more' }}</span>
         </button>
         @if (budgetAlertsExpanded()) {
-        <div class="px-4 pb-4 pt-0 space-y-3 border-t border-slate-100">
+        <div class="px-4 pb-4 pt-0 space-y-3 border-t border-border-app">
             <div class="flex justify-end pt-3">
                 <a routerLink="/budgets"
-                    class="text-xs font-medium text-blue-600 hover:text-blue-800 underline shrink-0">View budgets</a>
+                    class="text-xs font-medium text-accent hover:text-accent underline shrink-0">View budgets</a>
             </div>
             <ul class="space-y-2 text-sm">
                 @for (row of monthlyBudgetAlerts(); track row.categoryId) {
-                <li class="rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-slate-900/5 space-y-2">
+                <li class="rounded-xl bg-canvas px-3 py-3 ring-1 ring-border-app/50 space-y-2">
                     <div class="flex items-start justify-between gap-2">
-                        <span class="font-medium text-slate-900">{{ row.name }}</span>
+                        <span class="font-medium text-primary">{{ row.name }}</span>
                         <span class="text-right shrink-0">
                             @if (row.level === 'over') {
                             <span class="text-red-600 font-medium text-sm">Over</span>
                             } @else {
-                            <span class="text-blue-700 font-medium text-sm">Near limit</span>
+                            <span class="text-accent font-medium text-sm">Near limit</span>
                             }
                         </span>
                     </div>
-                    <div class="h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                    <div class="h-2 bg-inset rounded-full overflow-hidden">
                         <div class="h-full rounded-full transition-all"
                             [class.bg-blue-500]="row.level === 'approach'"
                             [class.bg-red-500]="row.level === 'over'"
                             [style.width.%]="row.barWidthPct"></div>
                     </div>
-                    <div class="flex items-center justify-between gap-2 text-xs text-slate-500">
+                    <div class="flex items-center justify-between gap-2 text-xs text-muted">
                         <span class="tabular-nums">{{ row.spent | maskCurrency:'INR' }} / {{ row.budget | maskCurrency:'INR' }}</span>
                         <span class="tabular-nums shrink-0">{{ row.spentPct }}% of budget</span>
                     </div>
@@ -152,7 +149,7 @@
     <!-- Transaction List (Grouped) -->
     <div class="space-y-5">
         @if (isHydrating()) {
-        <div class="text-center py-10 text-slate-500">
+        <div class="text-center py-10 text-muted">
             <p>Loading transactions...</p>
         </div>
         } @else {
@@ -160,8 +157,8 @@
         <div>
             <!-- Date Header -->
             <div class="flex justify-between items-center mb-2 px-1">
-                <h3 class="text-slate-500 font-medium text-sm">{{ group.date | date:'MMM d, EEEE' }}</h3>
-                <span class="text-slate-800 text-sm font-bold tabular-nums">{{ group.total | maskCurrency:'INR' }}</span>
+                <h3 class="text-muted font-medium text-sm">{{ group.date | date:'MMM d, EEEE' }}</h3>
+                <span class="text-primary text-sm font-bold font-sora tabular-nums">{{ group.total | maskCurrency:'INR' }}</span>
             </div>
 
             <!-- Transactions -->
@@ -176,8 +173,8 @@
                         </div>
 
                         <div class="min-w-0">
-                            <p class="font-medium text-slate-800">{{ getCategory(t.categoryId)?.name || 'Unknown' }}</p>
-                            <div class="flex items-center gap-1 text-xs text-slate-500">
+                            <p class="font-medium text-primary">{{ getCategory(t.categoryId)?.name || 'Unknown' }}</p>
+                            <div class="flex items-center gap-1 text-xs text-muted">
                                 <span>{{ t.date | date:'h:mm a' }}</span>
                                 @if (t.note) {
                                 <span>• {{ t.note }}</span>
@@ -198,12 +195,12 @@
                     </div>
 
                     <div class="text-right shrink-0">
-                        <p class="font-bold tabular-nums" [class.text-emerald-600]="t.type === 'income'"
+                        <p class="font-bold font-sora tabular-nums" [class.text-emerald-600]="t.type === 'income'"
                             [class.text-red-500]="t.type === 'expense'">
                             {{ t.type === 'income' ? '+' : '-' }}{{ t.amount | maskCurrency:'INR' }}
                         </p>
                         @if (!isOwner(t)) {
-                        <span class="material-icons text-xs text-slate-400" title="Read-only">lock</span>
+                        <span class="material-icons text-xs text-faint" title="Read-only">lock</span>
                         }
                     </div>
                 </div>
@@ -211,7 +208,7 @@
             </div>
         </div>
         } @empty {
-        <div class="text-center py-10 text-slate-500">
+        <div class="text-center py-10 text-muted">
             <p>No transactions found for this period</p>
         </div>
         }

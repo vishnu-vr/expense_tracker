@@ -45,10 +45,10 @@ import { filter } from 'rxjs/operators';
                 justify-content: space-around;
                 padding: 0.5rem 0.75rem;
                 padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
-                background: rgba(255, 255, 255, 0.92);
+                background: rgb(var(--color-surface) / 0.92);
                 backdrop-filter: blur(12px);
-                border-top: 1px solid rgba(15, 23, 42, 0.06);
-                box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.06);
+                border-top: 1px solid rgb(var(--color-border) / 0.6);
+                box-shadow: 0 -4px 24px rgb(0 0 0 / 0.06);
             }
 
             .bottom-nav-item {
@@ -57,7 +57,7 @@ import { filter } from 'rxjs/operators';
                 align-items: center;
                 gap: 0.125rem;
                 padding: 0.375rem 0.5rem;
-                color: #64748b;
+                color: rgb(var(--color-muted));
                 text-decoration: none;
                 border-radius: 0.75rem;
                 transition: color 0.15s, background 0.15s;
@@ -75,7 +75,7 @@ import { filter } from 'rxjs/operators';
             }
 
             .bottom-nav-active {
-                color: #2563eb;
+                color: rgb(var(--color-accent));
             }
 
             .bottom-nav-fab {
@@ -86,10 +86,10 @@ import { filter } from 'rxjs/operators';
                 height: 3.25rem;
                 margin-bottom: 0.25rem;
                 border-radius: 9999px;
-                background: linear-gradient(135deg, #2563eb, #4f46e5);
+                background: var(--gradient-neon);
                 color: white;
                 text-decoration: none;
-                box-shadow: 0 4px 14px rgba(37, 99, 235, 0.45);
+                box-shadow: 0 4px 14px rgb(34 211 238 / 0.35);
                 transition: transform 0.15s, box-shadow 0.15s;
             }
 

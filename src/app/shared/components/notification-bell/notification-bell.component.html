@@ -21,10 +21,10 @@
             class="fixed inset-0 z-40 bg-transparent"
             (click)="closeDropdown($event)">
         </button>
-        <div class="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-16 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+        <div class="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-16 sm:top-full sm:mt-2 sm:w-80 bg-surface rounded-xl shadow-2xl border border-border-app z-50 overflow-hidden">
             <!-- Header -->
             <div class="flex justify-between items-center px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
-                <h3 class="font-semibold">Notifications</h3>
+                <h3 class="font-semibold font-sora">Notifications</h3>
                 @if (notificationService.unreadCount() > 0) {
                     <button 
                         (click)="markAllAsRead($event)"
@@ -36,16 +36,16 @@
 
             <!-- Push Notification Permission Banner -->
             @if (notificationService.pushPermission() === 'default') {
-                <div class="px-4 py-3 bg-blue-50 border-b border-blue-100">
+                <div class="px-4 py-3 bg-accent/10 border-b border-border-app">
                     <div class="flex items-center gap-3">
-                        <span class="material-icons text-blue-500">notifications_active</span>
+                        <span class="material-icons text-accent">notifications_active</span>
                         <div class="flex-1">
-                            <p class="text-sm text-blue-800 font-medium">Enable push notifications</p>
-                            <p class="text-xs text-blue-600">Get notified when others add transactions</p>
+                            <p class="text-sm text-primary font-medium">Enable push notifications</p>
+                            <p class="text-xs text-accent">Get notified when others add transactions</p>
                         </div>
                         <button 
                             (click)="enablePushNotifications($event)"
-                            class="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors">
+                            class="px-3 py-1.5 gradient-neon text-white text-xs font-medium rounded-lg transition-opacity hover:opacity-90">
                             Enable
                         </button>
                     </div>
@@ -63,14 +63,14 @@
             <!-- Notification List -->
             <div class="max-h-80 overflow-y-auto">
                 @if (notificationService.visibleNotifications().length === 0) {
-                    <div class="py-10 text-center text-gray-400">
+                    <div class="py-10 text-center text-faint">
                         <span class="material-icons text-4xl mb-2">notifications_none</span>
                         <p class="text-sm">No notifications yet</p>
                     </div>
                 } @else {
                     @for (notification of notificationService.visibleNotifications(); track notification.id) {
                         <div 
-                            class="px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors"
+                            class="px-4 py-3 border-b border-border-app hover:bg-surface2 transition-colors"
                             [class.bg-amber-50]="!isRead(notification)"
                             [class.cursor-pointer]="notification.type !== 'transaction_deleted'"
                             [class.cursor-default]="notification.type === 'transaction_deleted'"
@@ -89,11 +89,11 @@
 
                                 <!-- Content -->
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-sm text-gray-800 leading-snug"
+                                    <p class="text-sm text-primary leading-snug"
                                        [class.font-medium]="!isRead(notification)">
                                         {{ notification.message }}
                                     </p>
-                                    <p class="text-xs text-gray-400 mt-1">
+                                    <p class="text-xs text-faint mt-1">
                                         {{ notificationService.getTimeAgo(notification.createdAt) }}
                                     </p>
                                 </div>
@@ -104,7 +104,7 @@
                                         <span class="w-2 h-2 bg-amber-500 rounded-full block"></span>
                                     }
                                     @if (notification.type !== 'transaction_deleted' && notification.transactionId) {
-                                        <span class="material-icons text-gray-400 text-base">chevron_right</span>
+                                        <span class="material-icons text-faint text-base">chevron_right</span>
                                     }
                                 </div>
                             </div>
@@ -115,7 +115,7 @@
 
             <!-- Footer -->
             @if (notificationService.visibleNotifications().length > 0) {
-                <div class="px-4 py-2 bg-gray-50 text-center border-t border-gray-100">
+                <div class="px-4 py-2 bg-inset text-center border-t border-border-app">
                     @if (notificationService.hasMoreNotifications()) {
                         <button 
                             (click)="loadMore($event)"
@@ -130,7 +130,7 @@
                             }
                         </button>
                     } @else {
-                        <span class="text-xs text-gray-400">
+                        <span class="text-xs text-faint">
                             No more notifications
                         </span>
                     }
@@ -139,4 +139,3 @@
         </div>
     }
 </div>
-

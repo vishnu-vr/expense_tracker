@@ -6,8 +6,11 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    background: rgba(248, 250, 252, 0.85);
-    backdrop-filter: blur(8px);
+}
+
+.burn-spark {
+    display: block;
+    height: 3rem;
 }
 
 .pacing-bar.pacing-ok {
@@ -23,8 +26,8 @@
 }
 
 .insight-card.insight-amber .material-icons { color: #f59e0b; }
-.insight-card.insight-blue .material-icons { color: #3b82f6; }
+.insight-card.insight-blue .material-icons { color: rgb(var(--color-accent)); }
 .insight-card.insight-red .material-icons { color: #ef4444; }
 .insight-card.insight-emerald .material-icons { color: #10b981; }
-.insight-card.insight-purple .material-icons { color: #a855f7; }
+.insight-card.insight-purple .material-icons { color: rgb(var(--color-accent2)); }
 .insight-card.insight-indigo .material-icons { color: #6366f1; }
