@@ -1,0 +1,203 @@
+<div class="home-page min-h-screen bg-slate-50/60 pb-24">
+    <!-- Header -->
+    <header class="home-header px-4 pt-4 pb-3 flex justify-between items-center">
+        <div class="min-w-0">
+            <h1 class="text-lg font-bold text-slate-800 truncate">{{ greeting() }}</h1>
+            <p class="text-xs text-slate-500 truncate">{{ homeService.currentHome()?.name ?? 'Your household' }}</p>
+        </div>
+        <div class="flex gap-1.5 items-center shrink-0">
+            <button type="button" (click)="togglePrivacy()"
+                class="p-2 rounded-full bg-white/80 backdrop-blur ring-1 ring-slate-900/5 text-slate-600 hover:bg-white transition-colors"
+                [attr.aria-label]="privacyModeService.hideAmounts() ? 'Show amounts' : 'Hide amounts'">
+                <span class="material-icons text-[20px]">
+                    {{ privacyModeService.hideAmounts() ? 'visibility_off' : 'visibility' }}
+                </span>
+            </button>
+            <app-notification-bell></app-notification-bell>
+            <a routerLink="/profile"
+                class="p-2 rounded-full bg-white/80 backdrop-blur ring-1 ring-slate-900/5 text-slate-600 hover:bg-white transition-colors">
+                <span class="material-icons text-[20px]">person</span>
+            </a>
+        </div>
+    </header>
+
+    @if (isHydrating()) {
+    <div class="text-center py-16 text-slate-500">
+        <p>Loading insights...</p>
+    </div>
+    } @else {
+    <div class="px-4 space-y-4">
+        <!-- Financial Health Pulse -->
+        <section class="glass-card gradient-positive p-5 text-white">
+            <p class="text-white/80 text-xs font-medium mb-1">Net Cash Flow · This Month</p>
+            <h2 class="text-3xl font-bold tabular-nums tracking-tight">
+                {{ insights.financialHealth().netCashFlow | maskCurrency:'INR' }}
+            </h2>
+            @if (deltaLabel(); as delta) {
+            <p class="text-sm text-white/90 mt-1 font-medium">{{ delta }}</p>
+            }
+            <div class="flex justify-between mt-5 pt-4 border-t border-white/20">
+                <div>
+                    <p class="text-white/70 text-xs flex items-center gap-1">
+                        <span class="material-icons text-sm">arrow_downward</span> Income
+                    </p>
+                    <p class="font-semibold tabular-nums">{{ insights.financialHealth().income | maskCurrency:'INR' }}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-white/70 text-xs flex items-center justify-end gap-1">
+                        <span class="material-icons text-sm">arrow_upward</span> Expense
+                    </p>
+                    <p class="font-semibold tabular-nums">{{ insights.financialHealth().expense | maskCurrency:'INR' }}</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bento row: Burn Rate + Budget Pacing -->
+        <div class="grid grid-cols-2 gap-3">
+            <!-- Burn Rate -->
+            <section class="glass-card p-4 col-span-2 sm:col-span-1">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="material-icons text-indigo-500 text-lg">speed</span>
+                    <h3 class="text-sm font-semibold text-slate-800">Burn Rate</h3>
+                </div>
+                <p class="text-2xl font-bold text-slate-900 tabular-nums">
+                    {{ insights.burnRate().dailyBurnRate | maskCurrency:'INR' }}<span class="text-sm font-normal text-slate-500">/day</span>
+                </p>
+                <p class="text-xs text-slate-500 mt-1 leading-relaxed">{{ burnNarrative() }}</p>
+                <p class="text-xs text-slate-600 mt-2">
+                    Forecast: <span class="font-semibold tabular-nums">{{ insights.burnRate().monthEndForecast | maskCurrency:'INR' }}</span> by month end
+                </p>
+            </section>
+
+            <!-- Budget Pacing -->
+            <section class="glass-card p-4 col-span-2 sm:col-span-1">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="material-icons text-amber-500 text-lg">donut_large</span>
+                    <h3 class="text-sm font-semibold text-slate-800">Budget Pacing</h3>
+                </div>
+                @if (insights.budgetPacing().totalBudget > 0) {
+                <p class="text-xs text-slate-500 mb-2">
+                    Day {{ insights.budgetPacing().daysElapsed }} of {{ insights.budgetPacing().totalDays }}:
+                    {{ Math.round(insights.budgetPacing().budgetUsedPct) }}% budget used
+                </p>
+                <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden mb-2">
+                    <div class="h-full rounded-full transition-all pacing-bar"
+                        [style.width.%]="Math.min(100, insights.budgetPacing().budgetUsedPct)"
+                        [class.pacing-warning]="insights.budgetPacing().status === 'warning'"
+                        [class.pacing-ok]="insights.budgetPacing().status === 'on_track'"
+                        [class.pacing-ahead]="insights.budgetPacing().status === 'ahead'"></div>
+                </div>
+                <p class="text-sm font-medium"
+                    [class.text-amber-600]="insights.budgetPacing().status === 'warning'"
+                    [class.text-emerald-600]="insights.budgetPacing().status === 'on_track'"
+                    [class.text-orange-500]="insights.budgetPacing().status === 'ahead'">
+                    {{ pacingLabel() }}
+                </p>
+                } @else {
+                <p class="text-sm text-slate-500">Set budgets to track pacing.</p>
+                <a routerLink="/budgets" class="text-xs text-blue-600 font-medium mt-2 inline-block">Add budgets →</a>
+                }
+            </section>
+        </div>
+
+        <!-- Category pacing warnings -->
+        @if (insights.budgetPacing().categoryWarnings.length > 0) {
+        <section class="glass-card p-4 border-l-4 border-l-amber-400">
+            <h3 class="text-sm font-semibold text-slate-800 mb-2">Categories at risk</h3>
+            <ul class="space-y-2">
+                @for (w of insights.budgetPacing().categoryWarnings.slice(0, 3); track w.categoryId) {
+                <li class="flex justify-between items-center text-sm">
+                    <span class="text-slate-700">{{ w.name }}</span>
+                    <span class="text-amber-600 font-medium tabular-nums text-xs">
+                        {{ w.spent | maskCurrency:'INR' }} / {{ w.budget | maskCurrency:'INR' }}
+                    </span>
+                </li>
+                }
+            </ul>
+        </section>
+        }
+
+        <!-- Smart Insights -->
+        @if (insights.smartInsights().length > 0) {
+        <section>
+            <h3 class="text-sm font-semibold text-slate-800 mb-3 px-0.5">Smart Insights</h3>
+            <div class="space-y-2">
+                @for (card of insights.smartInsights(); track card.title) {
+                <div class="glass-card p-3 flex gap-3 items-start insight-card {{ insightColorClass(card.color) }}">
+                    <span class="material-icons text-lg shrink-0">{{ card.icon }}</span>
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold text-slate-800">{{ card.title }}</p>
+                        <p class="text-xs text-slate-600 mt-0.5 leading-relaxed">{{ card.narrative }}</p>
+                    </div>
+                </div>
+                }
+            </div>
+        </section>
+        }
+
+        <!-- Recurring Bills -->
+        @if (insights.recurringExpenses().length > 0) {
+        <section>
+            <h3 class="text-sm font-semibold text-slate-800 mb-3 px-0.5">Recurring Bills</h3>
+            <div class="grid grid-cols-2 gap-2">
+                @for (bill of insights.recurringExpenses(); track bill.key) {
+                <div class="glass-card p-3">
+                    <p class="text-sm font-medium text-slate-800 truncate">{{ bill.label }}</p>
+                    <p class="text-xs text-slate-500">{{ bill.cadenceLabel }} · {{ bill.categoryName }}</p>
+                    <p class="text-sm font-bold text-slate-900 tabular-nums mt-1">
+                        {{ bill.averageAmount | maskCurrency:'INR' }}
+                    </p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">
+                        Last: {{ bill.lastPaidDate | date:'MMM d' }}
+                    </p>
+                </div>
+                }
+            </div>
+        </section>
+        }
+
+        <!-- Ask AI Banner -->
+        <a routerLink="/ask-ai" class="glass-card gradient-ai p-4 flex items-center gap-3 block no-underline">
+            <span class="material-icons text-white text-2xl">auto_awesome</span>
+            <div class="flex-1 min-w-0">
+                <p class="text-white font-semibold text-sm">Ask AI</p>
+                <p class="text-white/80 text-xs">Why did my grocery spend increase?</p>
+            </div>
+            <span class="material-icons text-white/80">chevron_right</span>
+        </a>
+
+        <!-- Recent Activity -->
+        <section>
+            <div class="flex justify-between items-center mb-3 px-0.5">
+                <h3 class="text-sm font-semibold text-slate-800">Recent Activity</h3>
+                <a routerLink="/transactions" class="text-xs text-blue-600 font-medium">View all →</a>
+            </div>
+            <div class="glass-card divide-y divide-slate-100">
+                @for (t of insights.recentTransactions(); track t.id) {
+                <div class="flex items-center justify-between p-3 gap-3">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
+                            [style.background-color]="getCategory(t.categoryId)?.color || '#94a3b8'">
+                            <span class="material-icons text-sm">{{ getCategory(t.categoryId)?.icon || 'category' }}</span>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-slate-800 truncate">
+                                {{ getCategory(t.categoryId)?.name || 'Unknown' }}
+                            </p>
+                            <p class="text-[10px] text-slate-400">{{ t.date | date:'MMM d, h:mm a' }}</p>
+                        </div>
+                    </div>
+                    <p class="text-sm font-bold tabular-nums shrink-0"
+                        [class.text-emerald-600]="t.type === 'income'"
+                        [class.text-red-500]="t.type === 'expense'">
+                        {{ t.type === 'income' ? '+' : '-' }}{{ t.amount | maskCurrency:'INR' }}
+                    </p>
+                </div>
+                } @empty {
+                <p class="text-sm text-slate-500 text-center py-6">No transactions yet</p>
+                }
+            </div>
+        </section>
+    </div>
+    }
+</div>

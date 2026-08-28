@@ -1,16 +1,16 @@
-<div class="p-4 space-y-6 pb-20">
+<div class="min-h-screen bg-slate-50/60 pb-24">
     <!-- Header -->
-    <header class="flex items-center gap-4">
-        <button routerLink="/dashboard" class="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors">
-            <span class="material-icons text-gray-600">arrow_back</span>
-        </button>
-        <h1 class="text-xl font-bold text-gray-800">Analysis</h1>
+    <header class="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-md px-4 pt-4 pb-3 flex items-center gap-4">
+        <a routerLink="/home" class="p-2 -ml-2 rounded-full hover:bg-white/80 transition-colors">
+            <span class="material-icons text-slate-600">arrow_back</span>
+        </a>
+        <h1 class="text-xl font-bold text-slate-800">Analysis</h1>
     </header>
 
-    <!-- Date Navigator & Filters (Reused) -->
+    <div class="px-4 space-y-5">
     <div class="flex flex-col gap-4">
         <!-- Date Nav -->
-        <div class="flex justify-between items-center bg-white p-2 rounded-xl shadow-sm">
+        <div class="flex justify-between items-center glass-card p-2">
             <button (click)="prevPeriod()"
                 [disabled]="transactionService.analysisFilterState() === 'range'"
                 class="p-2 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
@@ -250,6 +250,7 @@
             <p>No expenses found for this period</p>
         </div>
         }
+    </div>
     </div>
 </div>
 

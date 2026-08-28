@@ -102,7 +102,7 @@ export class AddTransactionComponent implements OnInit, OnDestroy {
     try {
       const transaction = await this.transactionService.getTransactionById(id);
       if (!transaction) {
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/transactions']);
         return;
       }
 
@@ -176,7 +176,7 @@ export class AddTransactionComponent implements OnInit, OnDestroy {
         } else {
           await this.transactionService.addTransaction(transactionData);
         }
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/transactions']);
       } catch (error) {
         console.error('Error saving transaction:', error);
         this.isSaving.set(false);
@@ -189,13 +189,13 @@ export class AddTransactionComponent implements OnInit, OnDestroy {
     if (this.isEdit() && this.transactionId && this.isOwner()) {
       if (confirm('Are you sure you want to delete this transaction?')) {
         await this.transactionService.deleteTransaction(this.transactionId);
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/transactions']);
       }
     }
   }
 
   onCancel() {
-    this.router.navigate(['/dashboard']);
+    this.router.navigate(['/transactions']);
   }
 
   selectedTagIds(): string[] {

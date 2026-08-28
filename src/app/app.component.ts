@@ -2,6 +2,7 @@ import { Component, inject, NgZone, OnInit } from '@angular/core';
 import { RouterOutlet, RouterModule, Router } from '@angular/router';
 import { Firestore, disableNetwork, enableNetwork } from '@angular/fire/firestore';
 import { ChangelogDialogComponent } from './shared/components/changelog-dialog/changelog-dialog.component';
+import { BottomNavComponent } from './shared/components/bottom-nav/bottom-nav.component';
 import { PlatformService } from './core/services/platform.service';
 import { App } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -11,7 +12,7 @@ import { SmsIngestService } from './core/services/sms-ingest.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterModule, ChangelogDialogComponent],
+  imports: [RouterOutlet, RouterModule, ChangelogDialogComponent, BottomNavComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
@@ -64,7 +65,7 @@ export class AppComponent implements OnInit {
     App.addListener('backButton', ({ canGoBack }) => {
       this.ngZone.run(() => {
         const currentUrl = this.router.url.split('?')[0];
-        const isRootScreen = currentUrl === '/' || currentUrl === '/dashboard' || currentUrl === '/login';
+        const isRootScreen = currentUrl === '/' || currentUrl === '/home' || currentUrl === '/transactions' || currentUrl === '/dashboard' || currentUrl === '/login';
 
         if (isRootScreen) {
           App.minimizeApp();

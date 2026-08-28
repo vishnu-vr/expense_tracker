@@ -40,16 +40,7 @@ interface InsightCard {
     narrative: string;
 }
 
-interface RecurringExpenseInsight {
-    key: string;
-    label: string;
-    categoryName: string;
-    cadenceLabel: string;
-    averageAmount: number;
-    occurrences: number;
-    lastPaidDate: Date;
-    narrative: string;
-}
+import { detectRecurringExpenses } from '../../core/utils/recurring-expenses';
 
 @Component({
     selector: 'app-trends',
@@ -375,103 +366,26 @@ export class TrendsComponent {
         return cards;
     });
 
-    recurringExpenseInsights = computed<RecurringExpenseInsight[]>(() => {
+    recurringExpenseInsights = computed(() => {
         const range = this.getActiveRange();
-        if (!range) {
-            return [];
-        }
+        if (!range) return [];
 
         const userId = this.selectedUserId();
-        const expenses = this.transactionService.transactions()
-            .filter(t => t.type === 'expense')
-            .filter(t => !userId || t.userId === userId)
-            .filter(t => {
-                const date = new Date(t.date);
-                return date >= range.start && date <= range.end;
-            });
-
-        if (expenses.length < 3) {
-            return [];
-        }
-
-        type Candidate = {
-            txDate: Date;
-            amount: number;
-            categoryId: string;
-            noteKey: string;
-        };
-
-        const groups = new Map<string, Candidate[]>();
-        expenses.forEach(expense => {
-            const txDate = new Date(expense.date);
-            const noteKey = this.normalizeNote(expense.note);
-            const key = `${expense.categoryId}::${noteKey || 'no-note'}`;
-            if (!groups.has(key)) {
-                groups.set(key, []);
-            }
-            groups.get(key)!.push({
-                txDate,
-                amount: expense.amount,
-                categoryId: expense.categoryId,
-                noteKey
-            });
+        const inRange = this.transactionService.transactions().filter((t) => {
+            const date = new Date(t.date);
+            return date >= range.start && date <= range.end;
         });
 
-        const recurring: RecurringExpenseInsight[] = [];
-        groups.forEach((txns, key) => {
-            if (txns.length < 3) {
-                return;
-            }
+        const detected = detectRecurringExpenses(
+            inRange,
+            (id) => this.categoryService.categories().find((c) => c.id === id)?.name ?? 'Uncategorized',
+            { maxResults: 4, userId }
+        );
 
-            const sorted = [...txns].sort((a, b) => a.txDate.getTime() - b.txDate.getTime());
-            const intervals: number[] = [];
-            for (let i = 1; i < sorted.length; i++) {
-                const diffDays = Math.round((sorted[i].txDate.getTime() - sorted[i - 1].txDate.getTime()) / 86400000);
-                intervals.push(diffDays);
-            }
-
-            const avgInterval = this.average(intervals);
-            const intervalStdDev = this.standardDeviation(intervals, avgInterval);
-            const cadence = this.detectCadence(avgInterval, intervalStdDev);
-            if (!cadence) {
-                return;
-            }
-
-            const amounts = sorted.map(t => t.amount);
-            const avgAmount = this.average(amounts);
-            if (avgAmount <= 0) {
-                return;
-            }
-            const amountStdDev = this.standardDeviation(amounts, avgAmount);
-            const amountVariation = amountStdDev / avgAmount;
-            const hasNoNote = sorted[0].noteKey.length === 0;
-            const maxVariation = hasNoNote ? 0.2 : 0.35;
-            if (amountVariation > maxVariation) {
-                return;
-            }
-
-            const category = this.categoryService.categories().find(c => c.id === sorted[0].categoryId);
-            const categoryName = category?.name || 'Uncategorized';
-            const label = sorted[0].noteKey
-                ? this.toTitleCase(sorted[0].noteKey)
-                : categoryName;
-            const lastPaidDate = sorted[sorted.length - 1].txDate;
-
-            recurring.push({
-                key,
-                label,
-                categoryName,
-                cadenceLabel: cadence,
-                averageAmount: avgAmount,
-                occurrences: sorted.length,
-                lastPaidDate,
-                narrative: `${label} looks recurring: about ${this.formatCurrency(avgAmount)} ${cadence} (${sorted.length} payments, latest on ${lastPaidDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}).`
-            });
-        });
-
-        return recurring
-            .sort((a, b) => b.averageAmount - a.averageAmount)
-            .slice(0, 4);
+        return detected.map((item) => ({
+            ...item,
+            narrative: `${item.label} looks recurring: about ${this.formatCurrency(item.averageAmount)} ${item.cadenceLabel} (${item.occurrences} payments, latest on ${item.lastPaidDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}).`
+        }));
     });
 
     private formatCurrency(amount: number): string {
@@ -488,60 +402,6 @@ export class TrendsComponent {
     private formatPercent(percent: number): string {
         const rounded = Math.round(percent);
         return `${rounded}%`;
-    }
-
-    private normalizeNote(note?: string): string {
-        if (!note) {
-            return '';
-        }
-        return note
-            .toLowerCase()
-            .replace(/\d+/g, ' ')
-            .replace(/[^\w\s]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
-
-    private toTitleCase(text: string): string {
-        return text
-            .split(' ')
-            .filter(Boolean)
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-    }
-
-    private average(values: number[]): number {
-        if (values.length === 0) {
-            return 0;
-        }
-        return values.reduce((sum, value) => sum + value, 0) / values.length;
-    }
-
-    private standardDeviation(values: number[], mean: number): number {
-        if (values.length === 0) {
-            return 0;
-        }
-        const variance = values.reduce((sum, value) => {
-            const delta = value - mean;
-            return sum + (delta * delta);
-        }, 0) / values.length;
-        return Math.sqrt(variance);
-    }
-
-    private detectCadence(avgInterval: number, stdDev: number): string | null {
-        if (avgInterval >= 5 && avgInterval <= 9 && stdDev <= 2) {
-            return 'weekly';
-        }
-        if (avgInterval >= 10 && avgInterval <= 18 && stdDev <= 3) {
-            return 'every 2 weeks';
-        }
-        if (avgInterval >= 24 && avgInterval <= 40 && stdDev <= 7) {
-            return 'monthly';
-        }
-        if (avgInterval >= 75 && avgInterval <= 105 && stdDev <= 12) {
-            return 'quarterly';
-        }
-        return null;
     }
 
     private getActiveRange(): { start: Date; end: Date } | null {

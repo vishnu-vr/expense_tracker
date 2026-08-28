@@ -1,0 +1,30 @@
+.home-page {
+    min-height: 100dvh;
+}
+
+.home-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(248, 250, 252, 0.85);
+    backdrop-filter: blur(8px);
+}
+
+.pacing-bar.pacing-ok {
+    background: linear-gradient(90deg, #10b981, #14b8a6);
+}
+
+.pacing-bar.pacing-ahead {
+    background: linear-gradient(90deg, #f59e0b, #f97316);
+}
+
+.pacing-bar.pacing-warning {
+    background: linear-gradient(90deg, #ef4444, #f97316);
+}
+
+.insight-card.insight-amber .material-icons { color: #f59e0b; }
+.insight-card.insight-blue .material-icons { color: #3b82f6; }
+.insight-card.insight-red .material-icons { color: #ef4444; }
+.insight-card.insight-emerald .material-icons { color: #10b981; }
+.insight-card.insight-purple .material-icons { color: #a855f7; }
+.insight-card.insight-indigo .material-icons { color: #6366f1; }

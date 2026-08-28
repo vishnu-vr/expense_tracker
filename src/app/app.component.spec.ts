@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { AppComponent } from './app.component';
 import { ChangelogService } from './core/services/changelog.service';
 import { provideFirestoreMock } from '../testing/firebase-mocks';
@@ -11,14 +11,7 @@ describe('AppComponent', () => {
       imports: [AppComponent],
       providers: [
         provideFirestoreMock(),
-        {
-          provide: Router,
-          useValue: {
-            navigateByUrl: jasmine.createSpy('navigateByUrl'),
-            navigate: jasmine.createSpy('navigate'),
-            url: '/',
-          },
-        },
+        provideRouter([]),
         {
           provide: ChangelogService,
           useValue: {

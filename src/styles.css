@@ -2,6 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design system tokens */
+:root {
+    --canvas-bg: rgb(248 250 252 / 0.6);
+    --card-bg: rgb(255 255 255 / 0.8);
+    --card-ring: rgb(15 23 42 / 0.05);
+    --gradient-positive: linear-gradient(135deg, #059669, #0d9488);
+    --gradient-ai: linear-gradient(135deg, #4f46e5, #7c3aed);
+    --gradient-warning: linear-gradient(135deg, #f59e0b, #f97316);
+}
+
+@layer components {
+    .glass-card {
+        @apply bg-white/80 backdrop-blur-md ring-1 ring-slate-900/5 shadow-sm rounded-2xl;
+    }
+
+    .gradient-positive {
+        background: var(--gradient-positive);
+    }
+
+    .gradient-ai {
+        background: var(--gradient-ai);
+    }
+
+    .gradient-warning {
+        background: var(--gradient-warning);
+    }
+}
+
+/* Tabular nums for currency */
+.tabular-nums {
+    font-variant-numeric: tabular-nums;
+}
+
 /* Slide up animation for modals/panels */
 @keyframes slide-up {
     from {

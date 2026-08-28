@@ -172,7 +172,7 @@ export class HomeOnboardingComponent {
     this.error.set(null);
     try {
       await this.homeService.createHome(this.homeName);
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/home']);
     } catch (err: any) {
       console.error('Failed to create home', err);
       this.error.set('Failed to create home. Please try again.');
@@ -188,7 +188,7 @@ export class HomeOnboardingComponent {
     this.error.set(null);
     try {
       await this.homeService.joinHome(this.homeCode.toUpperCase());
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/home']);
     } catch (err: any) {
       console.error('Failed to join home', err);
       this.error.set('Could not join home. Please check the code and try again.');
