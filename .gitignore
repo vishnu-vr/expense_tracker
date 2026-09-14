@@ -51,3 +51,8 @@ android/local.properties
 *service-account*.json
 firebase-service-account.json
 google-services.json
+
+# Local design mockups (not part of the app)
+/mockup.html
+/mockup-theme-b.html
+/mockup-mobile-themes.html
