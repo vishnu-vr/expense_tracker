@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker · Mobile Design Samples</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; background: #0b1120; }
+        .material-icons-round { font-family: 'Material Icons Round'; }
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        .font-sora { font-family: 'Sora', sans-serif; }
+
+        /* ---- Phone frame ---- */
+        .phone {
+            width: 300px;
+            height: 640px;
+            border-radius: 40px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 50px -12px rgba(0,0,0,0.6), 0 0 0 10px #1e293b, 0 0 0 11px #334155;
+            flex-shrink: 0;
+        }
+        .phone-screen { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; }
+        .phone-screen::-webkit-scrollbar { width: 0; display: none; }
+        .notch {
+            position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+            width: 110px; height: 24px; background: #0f172a;
+            border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; z-index: 60;
+        }
+        .status-bar {
+            position: sticky; top: 0; z-index: 55;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 20px 2px; font-size: 10px; font-weight: 700;
+        }
+
+        /* Utility gradients / surfaces per theme */
+        .g-emerald { background: linear-gradient(135deg,#10b981,#059669); }
+        .g-violet  { background: linear-gradient(135deg,#8b5cf6,#6d28d9); }
+        .g-sunset  { background: linear-gradient(135deg,#fb7185,#f59e0b); }
+        .g-ocean   { background: linear-gradient(135deg,#3b82f6,#6366f1); }
+        .g-neon    { background: linear-gradient(135deg,#22d3ee,#a855f7); }
+        .g-lime    { background: linear-gradient(140deg,#84cc16,#16a34a); }
+
+        .glass { background: rgba(255,255,255,.75); backdrop-filter: blur(14px); border:1px solid rgba(226,232,240,.9); }
+        .darkcard { background:#161b2e; border:1px solid rgba(148,163,184,.12); }
+        .darkcard2 { background:#1c2337; border:1px solid rgba(148,163,184,.1); }
+        .neucard { background:#f1f5f9; box-shadow: 6px 6px 12px #d9dee6, -6px -6px 12px #ffffff; }
+
+        .chip { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; }
+
+        .bottom-bar {
+            position: sticky; bottom: 0; z-index: 55;
+            display:flex; align-items:center; justify-content:space-around;
+            padding: 8px 14px 12px;
+        }
+        .fab { width:44px; height:44px; margin-top:-22px; border-radius:999px; display:flex; align-items:center; justify-content:center; }
+
+        .theme-label {
+            text-align:center; margin-bottom:14px;
+        }
+        .divchip { width:26px; height:26px; border-radius:8px; display:flex;align-items:center;justify-content:center; }
+        .scroll-x { scrollbar-width:none; }
+        .scroll-x::-webkit-scrollbar { display:none; }
+    </style>
+</head>
+<body class="text-slate-100 py-10 px-6">
+
+    <!-- Page header -->
+    <div class="max-w-7xl mx-auto mb-10">
+        <div class="flex items-center gap-3 mb-2">
+            <div class="w-11 h-11 rounded-2xl g-ocean flex items-center justify-center shadow-lg">
+                <span class="material-icons-round text-white">smartphone</span>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold font-sora text-white">Mobile Design Samples</h1>
+                <p class="text-sm text-slate-400">Four directions for the Insights Home — optimized for one-hand mobile use. Same data, different feel.</p>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-4">
+            <button onclick="setScreen('home')" id="s-home" class="chip px-4 py-2 rounded-xl bg-blue-600 text-white">Insights Home</button>
+            <button onclick="setScreen('tx')" id="s-tx" class="chip px-4 py-2 rounded-xl bg-slate-800 text-slate-300">Transactions</button>
+            <button onclick="setScreen('budget')" id="s-budget" class="chip px-4 py-2 rounded-xl bg-slate-800 text-slate-300">Budgets</button>
+            <span class="ml-auto"></span>
+            <button onclick="togglePrivacy()" id="privBtn" class="chip px-4 py-2 rounded-xl bg-slate-800 text-slate-300 flex items-center gap-1.5">
+                <span class="material-icons-round text-[13px]">visibility</span> Privacy Off
+            </button>
+        </div>
+    </div>
+
+    <!-- Gallery of phones -->
+    <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-y-12 gap-x-6 justify-items-center">
+
+        <!-- THEME A -->
+        <div>
+            <div class="theme-label">
+                <p class="font-sora font-bold text-white text-lg">A · Glass Slate</p>
+                <p class="text-xs text-slate-400">Light, airy, glassmorphic — the current direction</p>
+            </div>
+            <div class="phone" style="background:#f8fafc;">
+                <div class="notch"></div>
+                <div class="phone-screen" id="A"></div>
+            </div>
+        </div>
+
+        <!-- THEME B -->
+        <div>
+            <div class="theme-label">
+                <p class="font-sora font-bold text-white text-lg">B · Midnight Bento</p>
+                <p class="text-xs text-slate-400">Dark OLED surfaces, neon metric accents</p>
+            </div>
+            <div class="phone" style="background:#0d1120;">
+                <div class="notch" style="background:#000;"></div>
+                <div class="phone-screen" id="B"></div>
+            </div>
+        </div>
+
+        <!-- THEME C -->
+        <div>
+            <div class="theme-label">
+                <p class="font-sora font-bold text-white text-lg">C · Editorial Mono</p>
+                <p class="text-xs text-slate-400">High density, crisp borders, minimal color</p>
+            </div>
+            <div class="phone" style="background:#ffffff;">
+                <div class="notch"></div>
+                <div class="phone-screen" id="C"></div>
+            </div>
+        </div>
+
+        <!-- THEME D -->
+        <div>
+            <div class="theme-label">
+                <p class="font-sora font-bold text-white text-lg">D · Vibrant Cards</p>
+                <p class="text-xs text-slate-400">Playful full-bleed color, big friendly numbers</p>
+            </div>
+            <div class="phone" style="background:#faf5ff;">
+                <div class="notch" style="background:#3b0764;"></div>
+                <div class="phone-screen" id="D"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 border border-slate-700 text-white text-xs px-4 py-3 rounded-xl shadow-2xl opacity-0 translate-y-3 transition-all pointer-events-none z-50 flex items-center gap-2">
+        <span class="material-icons-round text-emerald-400 text-base">check_circle</span>
+        <span id="toastMsg"></span>
+    </div>
+
+<script>
+let privacy = false;
+let screen = 'home';
+
+function fmt(n, dec=0){ if(privacy) return '••••'; return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
+function toast(m){ const t=document.getElementById('toast'); document.getElementById('toastMsg').innerText=m; t.classList.remove('opacity-0','translate-y-3'); setTimeout(()=>t.classList.add('opacity-0','translate-y-3'),1800); }
+
+function togglePrivacy(){
+    privacy=!privacy;
+    const b=document.getElementById('privBtn');
+    b.innerHTML = privacy
+      ? '<span class="material-icons-round text-[13px]">visibility_off</span> Privacy On'
+      : '<span class="material-icons-round text-[13px]">visibility</span> Privacy Off';
+    b.classList.toggle('bg-blue-600', privacy); b.classList.toggle('text-white', privacy);
+    b.classList.toggle('bg-slate-800', !privacy); b.classList.toggle('text-slate-300', !privacy);
+    render();
+}
+function setScreen(s){
+    screen=s;
+    ['home','tx','budget'].forEach(k=>{
+        const el=document.getElementById('s-'+k);
+        const on = k===s;
+        el.classList.toggle('bg-blue-600',on); el.classList.toggle('text-white',on);
+        el.classList.toggle('bg-slate-800',!on); el.classList.toggle('text-slate-300',!on);
+    });
+    render();
+}
+
+function statusBar(color){ return `<div class="status-bar" style="color:${color}"><span>9:41</span><span class="flex gap-1"><span class="material-icons-round text-[11px]">signal_cellular_alt</span><span class="material-icons-round text-[11px]">wifi</span><span class="material-icons-round text-[11px]">battery_full</span></span></div>`; }
+
+/* =================== THEME A: GLASS SLATE =================== */
+function A_home(){ return `
+${statusBar('#0f172a')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-800">
+  <div class="flex justify-between items-center">
+    <div><p class="text-[15px] font-bold">Hi, Vishnu</p><p class="text-[10px] text-slate-500">Bangalore Home</p></div>
+    <div class="flex gap-1.5">
+      <div class="w-8 h-8 rounded-full glass flex items-center justify-center"><span class="material-icons-round text-[16px] text-slate-600">notifications</span></div>
+      <div class="w-8 h-8 rounded-full g-ocean flex items-center justify-center text-white text-xs font-bold">V</div>
+    </div>
+  </div>
+
+  <div class="rounded-3xl g-emerald p-4 text-white shadow-lg">
+    <p class="text-[10px] text-white/80 font-semibold uppercase tracking-wide">Net Cash Flow · Aug</p>
+    <p class="text-3xl font-bold tabular-nums mt-1 font-sora">${fmt(-45054.88,2)}</p>
+    <p class="text-[10px] mt-1 flex items-center gap-1"><span class="material-icons-round text-[12px]">trending_up</span> +14.2% vs last month</p>
+    <div class="flex justify-between mt-3 pt-3 border-t border-white/20 text-[11px]">
+      <div><p class="text-white/70">Income</p><p class="font-bold tabular-nums">${fmt(280189)}</p></div>
+      <div class="text-right"><p class="text-white/70">Expense</p><p class="font-bold tabular-nums">${fmt(325244)}</p></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-2.5">
+    <div class="rounded-2xl glass p-3">
+      <div class="flex items-center gap-1 text-indigo-600 mb-1"><span class="material-icons-round text-[15px]">speed</span><span class="text-[10px] font-bold uppercase">Burn</span></div>
+      <p class="text-base font-bold tabular-nums">${fmt(11616)}<span class="text-[9px] text-slate-400">/day</span></p>
+      <p class="text-[9px] text-slate-500 mt-1">Forecast ${fmt(360091)}</p>
+    </div>
+    <div class="rounded-2xl glass p-3">
+      <div class="flex items-center gap-1 text-amber-600 mb-1"><span class="material-icons-round text-[15px]">donut_large</span><span class="text-[10px] font-bold uppercase">Pacing</span></div>
+      <p class="text-base font-bold text-amber-600 tabular-nums">119%</p>
+      <div class="h-1.5 bg-slate-200 rounded-full mt-1.5 overflow-hidden"><div class="h-full bg-amber-500" style="width:100%"></div></div>
+    </div>
+  </div>
+
+  <div class="rounded-2xl glass p-3 flex items-start gap-2.5">
+    <div class="w-7 h-7 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><span class="material-icons-round text-[15px]">auto_awesome</span></div>
+    <div><p class="text-[9px] font-bold text-slate-400 uppercase">Peak Spike</p><p class="text-[11px] leading-snug">Entertainment surged to 54% of total spend this month.</p></div>
+  </div>
+  <div class="rounded-2xl glass p-3 flex items-start gap-2.5">
+    <div class="w-7 h-7 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0"><span class="material-icons-round text-[15px]">weekend</span></div>
+    <div><p class="text-[9px] font-bold text-slate-400 uppercase">Weekend Habit</p><p class="text-[11px] leading-snug">68% of food spend happens Fri–Sun.</p></div>
+  </div>
+
+  <div onclick="toast('Ask AI opened')" class="rounded-2xl g-violet p-3 text-white flex items-center justify-between">
+    <div class="flex items-center gap-2"><span class="material-icons-round text-[18px]">psychology</span><div><p class="text-[11px] font-bold">Ask AI Advisor</p><p class="text-[9px] text-white/80">"Where can I save ₹10k?"</p></div></div>
+    <span class="material-icons-round text-[15px] text-white/80">chevron_right</span>
+  </div>
+
+  <div class="flex justify-between items-center pt-1"><p class="text-[11px] font-bold">Recent</p><span class="text-[10px] text-blue-600 font-semibold">View all</span></div>
+  ${A_txrow('card_giftcard','Gifts','2:12 AM','+'+fmt(9000),'text-emerald-600','bg-emerald-100 text-emerald-600')}
+  ${A_txrow('restaurant','Food','Lunch','-'+fmt(364),'text-red-600','bg-amber-100 text-amber-600')}
+</div>
+${A_nav()}`; }
+
+function A_txrow(icon,name,sub,amt,ac,ic){ return `<div class="rounded-2xl glass p-2.5 flex items-center justify-between">
+  <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full ${ic} flex items-center justify-center"><span class="material-icons-round text-[14px]">${icon}</span></div><div><p class="text-[11px] font-semibold">${name}</p><p class="text-[9px] text-slate-400">${sub}</p></div></div>
+  <span class="text-[11px] font-bold tabular-nums ${ac}">${amt}</span></div>`; }
+
+function A_nav(){ return `<div class="bottom-bar glass">
+  ${navItem('insights','Home',true,'text-blue-600','text-slate-400')}
+  ${navItem('receipt_long','Activity',false,'text-blue-600','text-slate-400')}
+  <div onclick="toast('Add transaction')" class="fab g-ocean text-white shadow-lg"><span class="material-icons-round text-[22px]">add</span></div>
+  ${navItem('account_balance_wallet','Budgets',false,'text-blue-600','text-slate-400')}
+  ${navItem('pie_chart','Stats',false,'text-blue-600','text-slate-400')}
+</div>`; }
+function navItem(icon,label,active,onC,offC){ return `<div class="flex flex-col items-center gap-0.5 ${active?onC:offC}"><span class="material-icons-round text-[20px]">${icon}</span><span class="text-[8px] font-semibold">${label}</span></div>`; }
+
+function A_tx(){ return `${statusBar('#0f172a')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-800">
+  <p class="text-[15px] font-bold">Transactions</p>
+  <div class="flex bg-slate-200/70 p-0.5 rounded-xl text-[10px] font-semibold"><div class="flex-1 py-1.5 text-center text-slate-500">Daily</div><div class="flex-1 py-1.5 text-center bg-white rounded-lg text-blue-600 shadow-sm">Monthly</div></div>
+  <div class="rounded-2xl glass px-3 py-2 flex justify-between items-center text-[11px] font-bold"><span class="material-icons-round text-[14px]">chevron_left</span><span>August 2026</span><span class="material-icons-round text-[14px]">chevron_right</span></div>
+  <div class="rounded-2xl glass border-l-4 border-l-blue-600 p-2.5"><p class="text-[11px] font-bold">Budget heads-up</p><p class="text-[9px] text-slate-500">2 categories over budget</p></div>
+  <p class="text-[10px] font-semibold text-slate-500 flex justify-between"><span>Aug 28, Fri</span><span class="tabular-nums text-slate-800">+${fmt(9000)}</span></p>
+  ${A_txrow('card_giftcard','Gifts','2:12 AM · Gift','+'+fmt(9000),'text-emerald-600','bg-emerald-500 text-white')}
+  <p class="text-[10px] font-semibold text-slate-500 flex justify-between pt-1"><span>Aug 27, Thu</span><span class="tabular-nums text-slate-800">-${fmt(682)}</span></p>
+  ${A_txrow('restaurant','Food','2:06 PM · Lunch','-'+fmt(364),'text-red-600','bg-amber-500 text-white')}
+  ${A_txrow('home','Home','10:24 AM · Security','-'+fmt(50),'text-red-600','bg-yellow-700 text-white')}
+  ${A_txrow('directions_bus','Transport','2:14 AM · Uber','-'+fmt(198),'text-red-600','bg-blue-500 text-white')}
+</div>${A_nav()}`; }
+
+function A_budget(){ return `${statusBar('#0f172a')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-800">
+  <div class="flex justify-between items-center"><p class="text-[15px] font-bold">Budgets</p><span class="chip bg-emerald-50 text-emerald-700 flex items-center gap-1"><span class="material-icons-round text-[12px]">add</span>Add</span></div>
+  <div class="rounded-2xl glass px-3 py-2 flex justify-between items-center text-[11px] font-bold"><span class="material-icons-round text-[14px]">chevron_left</span><span>August 2026</span><span class="material-icons-round text-[14px]">chevron_right</span></div>
+  ${A_budrow('volunteer_activism','Donation',2450,1500,163,'red')}
+  ${A_budrow('card_giftcard','Gift',47572,40000,119,'red')}
+  ${A_budrow('restaurant','Food',13363,15000,89,'amber')}
+  ${A_budrow('shopping_cart','Grocery',10186,12000,85,'emerald')}
+</div>${A_nav()}`; }
+function A_budrow(icon,name,spent,cap,pct,color){ const cmap={red:'bg-red-500',amber:'bg-amber-500',emerald:'bg-emerald-500'}; const tmap={red:'text-red-600',amber:'text-amber-600',emerald:'text-emerald-600'};
+ return `<div class="rounded-2xl glass p-3 space-y-1.5 border-l-4 border-l-${color==='emerald'?'emerald':color}-500">
+  <div class="flex justify-between items-center"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full ${cmap[color]} text-white flex items-center justify-center"><span class="material-icons-round text-[14px]">${icon}</span></div><div><p class="text-[11px] font-bold">${name}</p><p class="text-[9px] text-slate-500">${fmt(spent)} · <span class="${tmap[color]} font-bold">${pct}%</span></p></div></div><span class="material-icons-round text-[15px] text-slate-400">delete_outline</span></div>
+  <div class="h-1.5 bg-slate-200 rounded-full overflow-hidden"><div class="h-full ${cmap[color]}" style="width:${Math.min(100,pct)}%"></div></div>
+  <p class="text-[9px] text-slate-400 text-right">Cap ${fmt(cap)}</p></div>`; }
+
+/* =================== THEME B: MIDNIGHT BENTO =================== */
+function B_home(){ return `
+${statusBar('#e2e8f0')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-100">
+  <div class="flex justify-between items-center">
+    <div><p class="text-[15px] font-bold font-sora">Hi, Vishnu</p><p class="text-[10px] text-slate-500">Bangalore Home</p></div>
+    <div class="flex gap-1.5">
+      <div class="w-8 h-8 rounded-full darkcard flex items-center justify-center"><span class="material-icons-round text-[16px] text-slate-300">notifications</span></div>
+      <div class="w-8 h-8 rounded-full g-neon flex items-center justify-center text-white text-xs font-bold">V</div>
+    </div>
+  </div>
+
+  <div class="rounded-3xl darkcard p-4 relative overflow-hidden">
+    <div class="absolute -right-6 -top-6 w-24 h-24 rounded-full g-neon opacity-20 blur-2xl"></div>
+    <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Net Cash Flow · Aug</p>
+    <p class="text-3xl font-bold tabular-nums mt-1 font-sora" style="color:#22d3ee">${fmt(-45054.88,2)}</p>
+    <p class="text-[10px] mt-1 text-emerald-400 flex items-center gap-1"><span class="material-icons-round text-[12px]">trending_up</span> +14.2% vs last month</p>
+    <div class="flex justify-between mt-3 pt-3 border-t border-white/10 text-[11px]">
+      <div><p class="text-slate-500">Income</p><p class="font-bold tabular-nums text-emerald-400">${fmt(280189)}</p></div>
+      <div class="text-right"><p class="text-slate-500">Expense</p><p class="font-bold tabular-nums text-rose-400">${fmt(325244)}</p></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-2.5">
+    <div class="rounded-2xl darkcard2 p-3">
+      <div class="flex items-center gap-1 mb-1" style="color:#818cf8"><span class="material-icons-round text-[15px]">speed</span><span class="text-[10px] font-bold uppercase">Burn</span></div>
+      <p class="text-base font-bold tabular-nums font-sora">${fmt(11616)}<span class="text-[9px] text-slate-500">/day</span></p>
+      <p class="text-[9px] text-slate-500 mt-1">Forecast ${fmt(360091)}</p>
+    </div>
+    <div class="rounded-2xl darkcard2 p-3">
+      <div class="flex items-center gap-1 mb-1" style="color:#fbbf24"><span class="material-icons-round text-[15px]">donut_large</span><span class="text-[10px] font-bold uppercase">Pacing</span></div>
+      <p class="text-base font-bold tabular-nums font-sora" style="color:#fbbf24">119%</p>
+      <div class="h-1.5 rounded-full mt-1.5 overflow-hidden" style="background:#0f172a"><div class="h-full" style="width:100%;background:linear-gradient(90deg,#f59e0b,#ef4444)"></div></div>
+    </div>
+  </div>
+
+  <p class="text-[10px] font-bold uppercase text-slate-500 tracking-wide pt-1">Smart Insights</p>
+  <div class="rounded-2xl darkcard2 p-3 flex items-start gap-2.5">
+    <div class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(251,191,36,.15);color:#fbbf24"><span class="material-icons-round text-[15px]">auto_awesome</span></div>
+    <div><p class="text-[9px] font-bold text-slate-500 uppercase">Peak Spike</p><p class="text-[11px] leading-snug text-slate-200">Entertainment surged to 54% of total spend.</p></div>
+  </div>
+  <div class="rounded-2xl darkcard2 p-3 flex items-start gap-2.5">
+    <div class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(168,85,247,.15);color:#c084fc"><span class="material-icons-round text-[15px]">weekend</span></div>
+    <div><p class="text-[9px] font-bold text-slate-500 uppercase">Weekend Habit</p><p class="text-[11px] leading-snug text-slate-200">68% of food spend happens Fri–Sun.</p></div>
+  </div>
+
+  <div onclick="toast('Ask AI opened')" class="rounded-2xl p-3 flex items-center justify-between" style="background:linear-gradient(135deg,rgba(34,211,238,.15),rgba(168,85,247,.15));border:1px solid rgba(168,85,247,.3)">
+    <div class="flex items-center gap-2" style="color:#e0f2fe"><span class="material-icons-round text-[18px]" style="color:#22d3ee">psychology</span><div><p class="text-[11px] font-bold">Ask AI Advisor</p><p class="text-[9px] text-slate-400">"Where can I save ₹10k?"</p></div></div>
+    <span class="material-icons-round text-[15px] text-slate-400">chevron_right</span>
+  </div>
+
+  <div class="flex justify-between items-center pt-1"><p class="text-[11px] font-bold">Recent</p><span class="text-[10px] font-semibold" style="color:#22d3ee">View all</span></div>
+  ${B_txrow('card_giftcard','Gifts','2:12 AM','+'+fmt(9000),'#34d399')}
+  ${B_txrow('restaurant','Food','Lunch','-'+fmt(364),'#fb7185')}
+</div>
+${B_nav()}`; }
+function B_txrow(icon,name,sub,amt,ac){ return `<div class="rounded-2xl darkcard2 p-2.5 flex items-center justify-between">
+  <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full flex items-center justify-center" style="background:#0f172a;color:#94a3b8"><span class="material-icons-round text-[14px]">${icon}</span></div><div><p class="text-[11px] font-semibold text-slate-200">${name}</p><p class="text-[9px] text-slate-500">${sub}</p></div></div>
+  <span class="text-[11px] font-bold tabular-nums" style="color:${ac}">${amt}</span></div>`; }
+function B_nav(){ return `<div class="bottom-bar" style="background:rgba(13,17,32,.92);backdrop-filter:blur(14px);border-top:1px solid rgba(148,163,184,.12)">
+  ${navItem('insights','Home',true,'text-cyan-400','text-slate-600')}
+  ${navItem('receipt_long','Activity',false,'text-cyan-400','text-slate-600')}
+  <div onclick="toast('Add transaction')" class="fab g-neon text-white shadow-lg"><span class="material-icons-round text-[22px]">add</span></div>
+  ${navItem('account_balance_wallet','Budgets',false,'text-cyan-400','text-slate-600')}
+  ${navItem('pie_chart','Stats',false,'text-cyan-400','text-slate-600')}
+</div>`; }
+function B_tx(){ return `${statusBar('#e2e8f0')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-100">
+  <p class="text-[15px] font-bold font-sora">Transactions</p>
+  <div class="flex p-0.5 rounded-xl text-[10px] font-semibold" style="background:#161b2e"><div class="flex-1 py-1.5 text-center text-slate-500">Daily</div><div class="flex-1 py-1.5 text-center rounded-lg text-cyan-400" style="background:#0d1120">Monthly</div></div>
+  <div class="rounded-2xl darkcard px-3 py-2 flex justify-between items-center text-[11px] font-bold"><span class="material-icons-round text-[14px]">chevron_left</span><span>August 2026</span><span class="material-icons-round text-[14px]">chevron_right</span></div>
+  <div class="rounded-2xl darkcard2 p-2.5" style="border-left:3px solid #22d3ee"><p class="text-[11px] font-bold">Budget heads-up</p><p class="text-[9px] text-slate-500">2 categories over budget</p></div>
+  <p class="text-[10px] font-semibold text-slate-500 flex justify-between"><span>Aug 28, Fri</span><span class="tabular-nums text-slate-200">+${fmt(9000)}</span></p>
+  ${B_txrow('card_giftcard','Gifts','2:12 AM · Gift','+'+fmt(9000),'#34d399')}
+  <p class="text-[10px] font-semibold text-slate-500 flex justify-between pt-1"><span>Aug 27, Thu</span><span class="tabular-nums text-slate-200">-${fmt(682)}</span></p>
+  ${B_txrow('restaurant','Food','2:06 PM · Lunch','-'+fmt(364),'#fb7185')}
+  ${B_txrow('home','Home','10:24 AM · Security','-'+fmt(50),'#fb7185')}
+  ${B_txrow('directions_bus','Transport','2:14 AM · Uber','-'+fmt(198),'#fb7185')}
+</div>${B_nav()}`; }
+function B_budget(){ return `${statusBar('#e2e8f0')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-100">
+  <div class="flex justify-between items-center"><p class="text-[15px] font-bold font-sora">Budgets</p><span class="chip flex items-center gap-1" style="background:rgba(52,211,153,.15);color:#34d399"><span class="material-icons-round text-[12px]">add</span>Add</span></div>
+  <div class="rounded-2xl darkcard px-3 py-2 flex justify-between items-center text-[11px] font-bold"><span class="material-icons-round text-[14px]">chevron_left</span><span>August 2026</span><span class="material-icons-round text-[14px]">chevron_right</span></div>
+  ${B_budrow('volunteer_activism','Donation',2450,1500,163,'#ef4444')}
+  ${B_budrow('card_giftcard','Gift',47572,40000,119,'#ef4444')}
+  ${B_budrow('restaurant','Food',13363,15000,89,'#f59e0b')}
+  ${B_budrow('shopping_cart','Grocery',10186,12000,85,'#34d399')}
+</div>${B_nav()}`; }
+function B_budrow(icon,name,spent,cap,pct,color){ return `<div class="rounded-2xl darkcard2 p-3 space-y-1.5">
+  <div class="flex justify-between items-center"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full flex items-center justify-center text-white" style="background:${color}"><span class="material-icons-round text-[14px]">${icon}</span></div><div><p class="text-[11px] font-bold">${name}</p><p class="text-[9px] text-slate-500">${fmt(spent)} · <span style="color:${color}" class="font-bold">${pct}%</span></p></div></div><span class="material-icons-round text-[15px] text-slate-600">delete_outline</span></div>
+  <div class="h-1.5 rounded-full overflow-hidden" style="background:#0f172a"><div class="h-full" style="width:${Math.min(100,pct)}%;background:${color}"></div></div>
+  <p class="text-[9px] text-slate-500 text-right">Cap ${fmt(cap)}</p></div>`; }
+
+/* =================== THEME C: EDITORIAL MONO =================== */
+function C_home(){ return `${statusBar('#0f172a')}
+<div class="px-4 pb-24 pt-1 text-slate-900">
+  <div class="flex justify-between items-center py-2 border-b border-slate-200">
+    <div><p class="text-[15px] font-bold tracking-tight">VISHNU</p><p class="text-[9px] text-slate-500 uppercase tracking-widest">Bangalore Home</p></div>
+    <span class="material-icons-round text-[18px] text-slate-700">notifications_none</span>
+  </div>
+
+  <div class="py-4 border-b border-slate-200">
+    <p class="text-[9px] text-slate-500 uppercase tracking-widest">Net Cash Flow — August</p>
+    <p class="text-4xl font-bold tabular-nums tracking-tighter mt-1">${fmt(-45054.88,2)}</p>
+    <p class="text-[10px] mt-1 text-slate-600">+14.2% vs last month</p>
+    <div class="grid grid-cols-2 gap-2 mt-3 text-[11px]">
+      <div class="border border-slate-200 rounded-lg p-2"><p class="text-slate-500 text-[9px] uppercase">Income</p><p class="font-bold tabular-nums">${fmt(280189)}</p></div>
+      <div class="border border-slate-200 rounded-lg p-2"><p class="text-slate-500 text-[9px] uppercase">Expense</p><p class="font-bold tabular-nums">${fmt(325244)}</p></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 divide-x divide-slate-200 border-b border-slate-200">
+    <div class="py-3 pr-3"><p class="text-[9px] text-slate-500 uppercase tracking-widest">Burn / day</p><p class="text-lg font-bold tabular-nums">${fmt(11616)}</p><p class="text-[9px] text-slate-500">→ ${fmt(360091)} forecast</p></div>
+    <div class="py-3 pl-3"><p class="text-[9px] text-slate-500 uppercase tracking-widest">Pacing</p><p class="text-lg font-bold tabular-nums">119%</p><div class="h-0.5 bg-slate-200 mt-1"><div class="h-full bg-slate-900" style="width:100%"></div></div></div>
+  </div>
+
+  <div class="py-3 border-b border-slate-200">
+    <p class="text-[9px] text-slate-500 uppercase tracking-widest mb-2">Insights</p>
+    <div class="flex gap-2 mb-2"><span class="material-icons-round text-[14px] text-slate-900 mt-0.5">arrow_outward</span><p class="text-[11px] leading-snug"><b>Peak spike.</b> Entertainment reached 54% of total spend.</p></div>
+    <div class="flex gap-2"><span class="material-icons-round text-[14px] text-slate-900 mt-0.5">arrow_outward</span><p class="text-[11px] leading-snug"><b>Weekend habit.</b> 68% of food spend is Fri–Sun.</p></div>
+  </div>
+
+  <div onclick="toast('Ask AI opened')" class="py-3 border-b border-slate-200 flex justify-between items-center">
+    <div><p class="text-[11px] font-bold">Ask AI Advisor</p><p class="text-[9px] text-slate-500">"Where can I save ₹10k?"</p></div>
+    <span class="material-icons-round text-[16px]">arrow_forward</span>
+  </div>
+
+  <p class="text-[9px] text-slate-500 uppercase tracking-widest pt-3 pb-1">Recent</p>
+  ${C_txrow('Gifts','2:12 AM','+'+fmt(9000))}
+  ${C_txrow('Food','Lunch','-'+fmt(364))}
+  ${C_txrow('Transport','Uber','-'+fmt(198))}
+</div>
+${C_nav()}`; }
+function C_txrow(name,sub,amt){ return `<div class="flex justify-between items-center py-2 border-b border-slate-100"><div><p class="text-[11px] font-semibold">${name}</p><p class="text-[9px] text-slate-400">${sub}</p></div><span class="text-[11px] font-bold tabular-nums">${amt}</span></div>`; }
+function C_nav(){ return `<div class="bottom-bar" style="background:#fff;border-top:1px solid #e2e8f0">
+  ${navItem('insights','Home',true,'text-slate-900','text-slate-400')}
+  ${navItem('receipt_long','Activity',false,'text-slate-900','text-slate-400')}
+  <div onclick="toast('Add transaction')" class="fab text-white" style="background:#0f172a"><span class="material-icons-round text-[22px]">add</span></div>
+  ${navItem('account_balance_wallet','Budgets',false,'text-slate-900','text-slate-400')}
+  ${navItem('pie_chart','Stats',false,'text-slate-900','text-slate-400')}
+</div>`; }
+function C_tx(){ return `${statusBar('#0f172a')}
+<div class="px-4 pb-24 pt-1 text-slate-900">
+  <p class="text-[15px] font-bold py-2 border-b border-slate-200">Transactions</p>
+  <div class="flex text-[10px] font-semibold border-b border-slate-200"><div class="flex-1 py-2 text-center text-slate-400">DAILY</div><div class="flex-1 py-2 text-center border-b-2 border-slate-900">MONTHLY</div></div>
+  <div class="flex justify-between items-center py-2 border-b border-slate-200 text-[11px] font-bold"><span class="material-icons-round text-[14px]">chevron_left</span><span>AUGUST 2026</span><span class="material-icons-round text-[14px]">chevron_right</span></div>
+  <div class="py-2 border-b border-slate-200 flex gap-2"><span class="material-icons-round text-[14px]">warning_amber</span><p class="text-[11px]"><b>2 categories</b> over budget</p></div>
+  <p class="text-[9px] text-slate-500 uppercase tracking-widest pt-2 pb-1 flex justify-between"><span>Aug 28</span><span>+${fmt(9000)}</span></p>
+  ${C_txrow('Gifts','2:12 AM · Gift','+'+fmt(9000))}
+  <p class="text-[9px] text-slate-500 uppercase tracking-widest pt-2 pb-1 flex justify-between"><span>Aug 27</span><span>-${fmt(682)}</span></p>
+  ${C_txrow('Food','2:06 PM · Lunch','-'+fmt(364))}
+  ${C_txrow('Home','10:24 AM · Security','-'+fmt(50))}
+  ${C_txrow('Transport','2:14 AM · Uber','-'+fmt(198))}
+</div>${C_nav()}`; }
+function C_budget(){ return `${statusBar('#0f172a')}
+<div class="px-4 pb-24 pt-1 text-slate-900">
+  <div class="flex justify-between items-center py-2 border-b border-slate-200"><p class="text-[15px] font-bold">Budgets</p><span class="text-[10px] font-bold flex items-center gap-1"><span class="material-icons-round text-[13px]">add</span>ADD</span></div>
+  <div class="flex justify-between items-center py-2 border-b border-slate-200 text-[11px] font-bold"><span class="material-icons-round text-[14px]">chevron_left</span><span>AUGUST 2026</span><span class="material-icons-round text-[14px]">chevron_right</span></div>
+  ${C_budrow('Donation',2450,1500,163)}
+  ${C_budrow('Gift',47572,40000,119)}
+  ${C_budrow('Food',13363,15000,89)}
+  ${C_budrow('Grocery',10186,12000,85)}
+</div>${C_nav()}`; }
+function C_budrow(name,spent,cap,pct){ return `<div class="py-3 border-b border-slate-200 space-y-1.5">
+  <div class="flex justify-between items-center"><p class="text-[11px] font-bold">${name}</p><p class="text-[10px] tabular-nums text-slate-600">${fmt(spent)} / ${fmt(cap)} · <b>${pct}%</b></p></div>
+  <div class="h-1 bg-slate-200"><div class="h-full bg-slate-900" style="width:${Math.min(100,pct)}%"></div></div></div>`; }
+
+/* =================== THEME D: VIBRANT CARDS =================== */
+function D_home(){ return `${statusBar('#3b0764')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-800">
+  <div class="flex justify-between items-center">
+    <div><p class="text-[16px] font-extrabold font-sora text-purple-950">Hey Vishnu!</p><p class="text-[10px] text-purple-400 font-medium">Bangalore Home</p></div>
+    <div class="w-9 h-9 rounded-2xl g-violet flex items-center justify-center text-white text-sm font-bold shadow-lg">V</div>
+  </div>
+
+  <div class="rounded-[26px] g-violet p-5 text-white shadow-xl">
+    <p class="text-[11px] text-white/80 font-semibold">Net Cash Flow this month</p>
+    <p class="text-[34px] font-extrabold tabular-nums font-sora leading-none mt-1">${fmt(-45054.88,2)}</p>
+    <span class="chip bg-white/25 text-white mt-2 inline-flex items-center gap-1"><span class="material-icons-round text-[12px]">trending_up</span>+14.2% saved</span>
+    <div class="flex gap-2 mt-4">
+      <div class="flex-1 bg-white/15 rounded-2xl p-2.5"><p class="text-[9px] text-white/70">Income</p><p class="font-bold tabular-nums text-[13px]">${fmt(280189)}</p></div>
+      <div class="flex-1 bg-white/15 rounded-2xl p-2.5"><p class="text-[9px] text-white/70">Expense</p><p class="font-bold tabular-nums text-[13px]">${fmt(325244)}</p></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3">
+    <div class="rounded-[22px] g-ocean p-3.5 text-white shadow-lg">
+      <span class="material-icons-round text-[18px]">speed</span>
+      <p class="text-[10px] text-white/80 mt-1">Burn / day</p>
+      <p class="text-lg font-extrabold tabular-nums font-sora">${fmt(11616)}</p>
+      <p class="text-[9px] text-white/70">→ ${fmt(360091)}</p>
+    </div>
+    <div class="rounded-[22px] g-sunset p-3.5 text-white shadow-lg">
+      <span class="material-icons-round text-[18px]">donut_large</span>
+      <p class="text-[10px] text-white/80 mt-1">Pacing</p>
+      <p class="text-lg font-extrabold tabular-nums font-sora">119%</p>
+      <div class="h-1.5 bg-white/25 rounded-full mt-1 overflow-hidden"><div class="h-full bg-white" style="width:100%"></div></div>
+    </div>
+  </div>
+
+  <div class="rounded-[22px] bg-amber-50 border border-amber-200 p-3.5 flex items-start gap-2.5">
+    <div class="w-8 h-8 rounded-2xl g-sunset flex items-center justify-center text-white shrink-0"><span class="material-icons-round text-[16px]">auto_awesome</span></div>
+    <div><p class="text-[10px] font-extrabold text-amber-700 uppercase">Peak Spike</p><p class="text-[11px] leading-snug text-amber-950">Entertainment surged to 54% of total spend!</p></div>
+  </div>
+  <div class="rounded-[22px] bg-purple-50 border border-purple-200 p-3.5 flex items-start gap-2.5">
+    <div class="w-8 h-8 rounded-2xl g-violet flex items-center justify-center text-white shrink-0"><span class="material-icons-round text-[16px]">weekend</span></div>
+    <div><p class="text-[10px] font-extrabold text-purple-700 uppercase">Weekend Habit</p><p class="text-[11px] leading-snug text-purple-950">68% of food spend is Fri–Sun.</p></div>
+  </div>
+
+  <div onclick="toast('Ask AI opened')" class="rounded-[22px] g-neon p-4 text-white flex items-center justify-between shadow-lg">
+    <div class="flex items-center gap-2.5"><div class="w-9 h-9 rounded-2xl bg-white/25 flex items-center justify-center"><span class="material-icons-round text-[18px]">psychology</span></div><div><p class="text-[12px] font-extrabold">Ask AI Advisor</p><p class="text-[9px] text-white/85">"Where can I save ₹10k?"</p></div></div>
+    <span class="material-icons-round text-[16px]">chevron_right</span>
+  </div>
+
+  <div class="flex justify-between items-center pt-1"><p class="text-[12px] font-extrabold text-purple-950">Recent</p><span class="text-[10px] text-purple-600 font-bold">View all</span></div>
+  ${D_txrow('card_giftcard','Gifts','2:12 AM','+'+fmt(9000),'text-emerald-600','g-lime')}
+  ${D_txrow('restaurant','Food','Lunch','-'+fmt(364),'text-rose-600','g-sunset')}
+</div>
+${D_nav()}`; }
+function D_txrow(icon,name,sub,amt,ac,g){ return `<div class="rounded-[20px] bg-white border border-purple-100 p-2.5 flex items-center justify-between shadow-sm">
+  <div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-2xl ${g} flex items-center justify-center text-white"><span class="material-icons-round text-[15px]">${icon}</span></div><div><p class="text-[11px] font-bold">${name}</p><p class="text-[9px] text-slate-400">${sub}</p></div></div>
+  <span class="text-[12px] font-extrabold tabular-nums ${ac}">${amt}</span></div>`; }
+function D_nav(){ return `<div class="bottom-bar" style="background:rgba(255,255,255,.9);backdrop-filter:blur(14px);border-top:1px solid #f3e8ff">
+  ${navItem('insights','Home',true,'text-purple-600','text-slate-300')}
+  ${navItem('receipt_long','Activity',false,'text-purple-600','text-slate-300')}
+  <div onclick="toast('Add transaction')" class="fab g-violet text-white shadow-lg"><span class="material-icons-round text-[22px]">add</span></div>
+  ${navItem('account_balance_wallet','Budgets',false,'text-purple-600','text-slate-300')}
+  ${navItem('pie_chart','Stats',false,'text-purple-600','text-slate-300')}
+</div>`; }
+function D_tx(){ return `${statusBar('#3b0764')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-800">
+  <p class="text-[16px] font-extrabold font-sora text-purple-950">Transactions</p>
+  <div class="flex bg-purple-100 p-0.5 rounded-2xl text-[10px] font-bold"><div class="flex-1 py-1.5 text-center text-purple-400">Daily</div><div class="flex-1 py-1.5 text-center bg-white rounded-xl text-purple-600 shadow-sm">Monthly</div></div>
+  <div class="rounded-[20px] bg-white border border-purple-100 px-3 py-2 flex justify-between items-center text-[11px] font-bold text-purple-950"><span class="material-icons-round text-[14px]">chevron_left</span><span>August 2026</span><span class="material-icons-round text-[14px]">chevron_right</span></div>
+  <div class="rounded-[20px] g-sunset p-2.5 text-white"><p class="text-[11px] font-bold">Budget heads-up</p><p class="text-[9px] text-white/85">2 categories over budget</p></div>
+  <p class="text-[10px] font-bold text-purple-400 flex justify-between"><span>Aug 28, Fri</span><span class="tabular-nums text-purple-950">+${fmt(9000)}</span></p>
+  ${D_txrow('card_giftcard','Gifts','2:12 AM · Gift','+'+fmt(9000),'text-emerald-600','g-lime')}
+  <p class="text-[10px] font-bold text-purple-400 flex justify-between pt-1"><span>Aug 27, Thu</span><span class="tabular-nums text-purple-950">-${fmt(682)}</span></p>
+  ${D_txrow('restaurant','Food','2:06 PM · Lunch','-'+fmt(364),'text-rose-600','g-sunset')}
+  ${D_txrow('home','Home','10:24 AM · Security','-'+fmt(50),'text-rose-600','g-ocean')}
+  ${D_txrow('directions_bus','Transport','2:14 AM · Uber','-'+fmt(198),'text-rose-600','g-violet')}
+</div>${D_nav()}`; }
+function D_budget(){ return `${statusBar('#3b0764')}
+<div class="px-4 pb-24 pt-1 space-y-3 text-slate-800">
+  <div class="flex justify-between items-center"><p class="text-[16px] font-extrabold font-sora text-purple-950">Budgets</p><span class="chip g-violet text-white flex items-center gap-1"><span class="material-icons-round text-[12px]">add</span>Add</span></div>
+  <div class="rounded-[20px] bg-white border border-purple-100 px-3 py-2 flex justify-between items-center text-[11px] font-bold text-purple-950"><span class="material-icons-round text-[14px]">chevron_left</span><span>August 2026</span><span class="material-icons-round text-[14px]">chevron_right</span></div>
+  ${D_budrow('volunteer_activism','Donation',2450,1500,163,'g-sunset','text-rose-600')}
+  ${D_budrow('card_giftcard','Gift',47572,40000,119,'g-sunset','text-rose-600')}
+  ${D_budrow('restaurant','Food',13363,15000,89,'g-ocean','text-amber-600')}
+  ${D_budrow('shopping_cart','Grocery',10186,12000,85,'g-lime','text-emerald-600')}
+</div>${D_nav()}`; }
+function D_budrow(icon,name,spent,cap,pct,g,tc){ return `<div class="rounded-[22px] bg-white border border-purple-100 p-3.5 space-y-2 shadow-sm">
+  <div class="flex justify-between items-center"><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-2xl ${g} flex items-center justify-center text-white"><span class="material-icons-round text-[15px]">${icon}</span></div><div><p class="text-[11px] font-bold">${name}</p><p class="text-[9px] text-slate-400">${fmt(spent)} · <span class="${tc} font-bold">${pct}%</span></p></div></div><span class="material-icons-round text-[15px] text-slate-300">delete_outline</span></div>
+  <div class="h-2 bg-purple-100 rounded-full overflow-hidden"><div class="h-full ${g}" style="width:${Math.min(100,pct)}%"></div></div>
+  <p class="text-[9px] text-slate-400 text-right">Cap ${fmt(cap)}</p></div>`; }
+
+/* =================== RENDER =================== */
+const M = {
+  A:{home:A_home,tx:A_tx,budget:A_budget},
+  B:{home:B_home,tx:B_tx,budget:B_budget},
+  C:{home:C_home,tx:C_tx,budget:C_budget},
+  D:{home:D_home,tx:D_tx,budget:D_budget},
+};
+function render(){
+  ['A','B','C','D'].forEach(t=>{ document.getElementById(t).innerHTML = M[t][screen](); });
+}
+render();
+</script>
+</body>
+</html>
