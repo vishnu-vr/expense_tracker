@@ -176,8 +176,16 @@ describe('InsightsService', () => {
     ];
 
     let service: InsightsService;
+    let getHouseholdDisplayName: jasmine.Spy;
 
     beforeEach(() => {
+        jasmine.clock().install();
+        jasmine.clock().mockDate(new Date(2026, 7, 18, 12, 0, 0));
+
+        getHouseholdDisplayName = jasmine
+            .createSpy('getHouseholdDisplayName')
+            .and.callFake((id: string) => (id === 'u1' ? 'Alice' : 'Bob'));
+
         TestBed.configureTestingModule({
             providers: [
                 InsightsService,
@@ -200,14 +208,17 @@ describe('InsightsService', () => {
                     useValue: {
                         categories: signal([
                             { id: 'food', name: 'Food', icon: 'restaurant', color: '#f00', type: 'expense' },
-                            { id: 'salary', name: 'Salary', icon: 'payments', color: '#0f0', type: 'income' }
+                            { id: 'salary', name: 'Salary', icon: 'payments', color: '#0f0', type: 'income' },
+                            { id: 'home', name: 'Home', icon: 'home', color: '#00f', type: 'expense' }
                         ])
                     }
                 },
                 {
                     provide: UserService,
                     useValue: {
-                        getUserName: (id: string) => (id === 'u1' ? 'Alice' : 'Bob')
+                        getUserName: (id: string) => (id === 'u1' ? 'Alice' : 'Bob'),
+                        getHouseholdDisplayName,
+                        hasResolvedName: (id: string) => id === 'u1' || id === 'u2'
                     }
                 },
                 {
@@ -220,6 +231,10 @@ describe('InsightsService', () => {
         });
 
         service = TestBed.inject(InsightsService);
+    });
+
+    afterEach(() => {
+        jasmine.clock().uninstall();
     });
 
     it('computes financial health for current month', () => {
@@ -251,17 +266,216 @@ describe('InsightsService', () => {
         const split = service.householdSplit();
         expect(split.length).toBe(2);
         expect(split[0].amount + split[1].amount).toBe(5000);
+        expect(getHouseholdDisplayName).toHaveBeenCalled();
+        expect(split.map((m) => m.name).sort()).toEqual(['Alice', 'Bob']);
+    });
+
+    it('uses friendly household label when member name is unresolved', () => {
+        TestBed.resetTestingModule();
+        jasmine.clock().mockDate(new Date(2026, 7, 18, 12, 0, 0));
+
+        TestBed.configureTestingModule({
+            providers: [
+                InsightsService,
+                {
+                    provide: TransactionService,
+                    useValue: {
+                        transactions: signal([
+                            {
+                                id: 'a',
+                                amount: 3000,
+                                categoryId: 'food',
+                                date: new Date(2026, 7, 10),
+                                type: 'expense' as const,
+                                userId: 'known'
+                            },
+                            {
+                                id: 'b',
+                                amount: 2000,
+                                categoryId: 'food',
+                                date: new Date(2026, 7, 12),
+                                type: 'expense' as const,
+                                userId: 'unknown-uid-xxxxxxxx'
+                            }
+                        ])
+                    }
+                },
+                { provide: BudgetService, useValue: { categoryBudgets: signal([]) } },
+                {
+                    provide: CategoryService,
+                    useValue: {
+                        categories: signal([
+                            { id: 'food', name: 'Food', icon: 'restaurant', color: '#f00', type: 'expense' }
+                        ])
+                    }
+                },
+                {
+                    provide: UserService,
+                    useValue: {
+                        getUserName: (id: string) =>
+                            id === 'known' ? 'Alice' : id.substring(0, 6) + '...' + id.slice(-4),
+                        getHouseholdDisplayName: (id: string) =>
+                            id === 'known' ? 'Alice' : 'A household member',
+                        hasResolvedName: (id: string) => id === 'known'
+                    }
+                },
+                {
+                    provide: HomeService,
+                    useValue: {
+                        currentHome: signal({
+                            id: 'h1',
+                            memberIds: ['known', 'unknown-uid-xxxxxxxx']
+                        })
+                    }
+                }
+            ]
+        });
+
+        const splitService = TestBed.inject(InsightsService);
+        const split = splitService.householdSplit();
+        expect(split.length).toBe(2);
+        expect(split.find((m) => m.userId === 'unknown-uid-xxxxxxxx')?.name).toBe(
+            'A household member'
+        );
+
+        const householdCard = splitService
+            .smartInsights()
+            .find((c) => c.title === 'Household Split');
+        expect(householdCard?.narrative).toContain('Alice');
+        expect(householdCard?.narrative).not.toContain('...');
+    });
+
+    it('skips Rising Category when prior period spend is a near-zero base', () => {
+        TestBed.resetTestingModule();
+        jasmine.clock().mockDate(new Date(2026, 7, 18, 12, 0, 0));
+
+        // now = Aug 18 → recent: Aug 4–18, prior: Jul 21–Aug 3.
+        // Tiny prior vs large recent would be ~64,300% without the floor — must not surface.
+        TestBed.configureTestingModule({
+            providers: [
+                InsightsService,
+                {
+                    provide: TransactionService,
+                    useValue: {
+                        transactions: signal([
+                            {
+                                id: 'tiny-prior',
+                                amount: 50,
+                                categoryId: 'home',
+                                date: new Date(2026, 6, 25),
+                                type: 'expense' as const
+                            },
+                            {
+                                id: 'big-recent',
+                                amount: 32200,
+                                categoryId: 'home',
+                                date: new Date(2026, 7, 16),
+                                type: 'expense' as const
+                            }
+                        ])
+                    }
+                },
+                { provide: BudgetService, useValue: { categoryBudgets: signal([]) } },
+                {
+                    provide: CategoryService,
+                    useValue: {
+                        categories: signal([
+                            { id: 'home', name: 'Home', icon: 'home', color: '#00f', type: 'expense' }
+                        ])
+                    }
+                },
+                {
+                    provide: UserService,
+                    useValue: {
+                        getUserName: () => 'User',
+                        getHouseholdDisplayName: () => 'A household member',
+                        hasResolvedName: () => false
+                    }
+                },
+                { provide: HomeService, useValue: { currentHome: signal(null) } }
+            ]
+        });
+
+        const risingService = TestBed.inject(InsightsService);
+        const rising = risingService.smartInsights().find((c) => c.title === 'Rising Category');
+        expect(rising).toBeUndefined();
+    });
+
+    it('emits Rising Category with capped percentage for a large but valid base', () => {
+        TestBed.resetTestingModule();
+        jasmine.clock().mockDate(new Date(2026, 7, 18, 12, 0, 0));
+
+        // Prior (Jul 25): ₹5,000 above floor. Recent (Aug 16): ₹40,000 → 700%, capped to 500%+.
+        TestBed.configureTestingModule({
+            providers: [
+                InsightsService,
+                {
+                    provide: TransactionService,
+                    useValue: {
+                        transactions: signal([
+                            {
+                                id: 'prior',
+                                amount: 5000,
+                                categoryId: 'home',
+                                date: new Date(2026, 6, 25),
+                                type: 'expense' as const
+                            },
+                            {
+                                id: 'recent',
+                                amount: 40000,
+                                categoryId: 'home',
+                                date: new Date(2026, 7, 16),
+                                type: 'expense' as const
+                            }
+                        ])
+                    }
+                },
+                { provide: BudgetService, useValue: { categoryBudgets: signal([]) } },
+                {
+                    provide: CategoryService,
+                    useValue: {
+                        categories: signal([
+                            { id: 'home', name: 'Home', icon: 'home', color: '#00f', type: 'expense' }
+                        ])
+                    }
+                },
+                {
+                    provide: UserService,
+                    useValue: {
+                        getUserName: () => 'User',
+                        getHouseholdDisplayName: () => 'A household member',
+                        hasResolvedName: () => false
+                    }
+                },
+                { provide: HomeService, useValue: { currentHome: signal(null) } }
+            ]
+        });
+
+        const risingService = TestBed.inject(InsightsService);
+        const rising = risingService.smartInsights().find((c) => c.title === 'Rising Category');
+        expect(rising).toBeDefined();
+        expect(rising!.narrative).toContain('Home spending rose 500%+');
+        expect(rising!.narrative).not.toContain('700%');
     });
 
     it('handles zero spend edge case', () => {
         TestBed.resetTestingModule();
+        jasmine.clock().mockDate(new Date(2026, 7, 18, 12, 0, 0));
+
         TestBed.configureTestingModule({
             providers: [
                 InsightsService,
                 { provide: TransactionService, useValue: { transactions: signal([]) } },
                 { provide: BudgetService, useValue: { categoryBudgets: signal([]) } },
                 { provide: CategoryService, useValue: { categories: signal([]) } },
-                { provide: UserService, useValue: { getUserName: () => 'User' } },
+                {
+                    provide: UserService,
+                    useValue: {
+                        getUserName: () => 'User',
+                        getHouseholdDisplayName: () => 'A household member',
+                        hasResolvedName: () => false
+                    }
+                },
                 { provide: HomeService, useValue: { currentHome: signal(null) } }
             ]
         });
@@ -275,6 +489,8 @@ describe('InsightsService', () => {
 
     it('handles single transaction month', () => {
         TestBed.resetTestingModule();
+        jasmine.clock().mockDate(new Date(2026, 7, 18, 12, 0, 0));
+
         TestBed.configureTestingModule({
             providers: [
                 InsightsService,
@@ -294,7 +510,14 @@ describe('InsightsService', () => {
                 },
                 { provide: BudgetService, useValue: { categoryBudgets: signal([]) } },
                 { provide: CategoryService, useValue: { categories: signal([]) } },
-                { provide: UserService, useValue: { getUserName: () => 'User' } },
+                {
+                    provide: UserService,
+                    useValue: {
+                        getUserName: () => 'User',
+                        getHouseholdDisplayName: () => 'A household member',
+                        hasResolvedName: () => false
+                    }
+                },
                 { provide: HomeService, useValue: { currentHome: signal(null) } }
             ]
         });

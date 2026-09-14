@@ -80,4 +80,22 @@ describe('UserService', () => {
         expect(name).toContain('...');
         expect(name.startsWith('abcdef')).toBeTrue();
     });
+
+    it('hasResolvedName is false when user is unknown', () => {
+        const svc = TestBed.inject(UserService);
+        expect(svc.hasResolvedName('unknown-user')).toBeFalse();
+    });
+
+    it('getHouseholdDisplayName returns friendly label when name is unresolved', () => {
+        const svc = TestBed.inject(UserService);
+        expect(svc.getHouseholdDisplayName('unknown-user-id-xxxx')).toBe('A household member');
+    });
+
+    it('getHouseholdDisplayName returns real name when resolved', async () => {
+        const svc = TestBed.inject(UserService);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(svc.hasResolvedName('u2')).toBeTrue();
+        expect(svc.getHouseholdDisplayName('u2')).toBe('Bob');
+    });
 });

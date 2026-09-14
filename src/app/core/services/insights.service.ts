@@ -1,4 +1,4 @@
-import { Injectable, computed, inject } from '@angular/core';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { TransactionService } from './transaction.service';
 import { BudgetService } from './budget.service';
 import { CategoryService } from './category.service';
@@ -17,6 +17,13 @@ import {
     totalDaysInMonth
 } from '../utils/insights-math';
 import { detectRecurringExpenses, RecurringExpenseInsight } from '../utils/recurring-expenses';
+
+/** Skip rising-category noise when prior 14-day spend is below this absolute floor. */
+const RISING_CATEGORY_MIN_PRIOR = 1000;
+/** Also require prior spend to be at least this fraction of current-month expenses. */
+const RISING_CATEGORY_MIN_PRIOR_FRACTION = 0.05;
+/** Cap displayed rising-category percentage (e.g. 500 → "500%+"). */
+const RISING_CATEGORY_MAX_PCT = 500;
 
 export interface FinancialHealth {
     income: number;
@@ -97,8 +104,16 @@ export class InsightsService {
     private categoryService = inject(CategoryService);
     private userService = inject(UserService);
     private homeService = inject(HomeService);
+    private destroyRef = inject(DestroyRef);
 
-    private now = computed(() => new Date());
+    /** Ticking clock so month/week windows advance while the app stays open. */
+    private nowSignal = signal(new Date());
+    private now = this.nowSignal.asReadonly();
+
+    constructor() {
+        const intervalId = setInterval(() => this.nowSignal.set(new Date()), 60_000);
+        this.destroyRef.onDestroy(() => clearInterval(intervalId));
+    }
 
     private currentYear = computed(() => this.now().getFullYear());
     private currentMonth = computed(() => this.now().getMonth());
@@ -313,23 +328,33 @@ export class InsightsService {
                 }
             });
 
+        const monthExpenseTotal = monthExpense(txs, year, month);
+        const minPriorSpend = Math.max(
+            RISING_CATEGORY_MIN_PRIOR,
+            monthExpenseTotal * RISING_CATEGORY_MIN_PRIOR_FRACTION
+        );
+
         let bestRise: { name: string; pct: number } | null = null;
         for (const [catId, recent] of recentByCat.entries()) {
             const prior = priorByCat.get(catId) ?? 0;
-            if (prior > 0 && recent > prior) {
-                const pct = periodOverPeriodDelta(recent, prior);
-                if (pct !== null && (!bestRise || pct > bestRise.pct)) {
-                    const cat = this.categoryService.categories().find((c) => c.id === catId);
-                    bestRise = { name: cat?.name ?? 'Category', pct };
-                }
+            // Ignore near-zero bases that inflate percentages into noise (e.g. 2041%).
+            if (prior < minPriorSpend || recent <= prior) continue;
+            const pct = periodOverPeriodDelta(recent, prior);
+            if (pct !== null && pct >= 20 && (!bestRise || pct > bestRise.pct)) {
+                const cat = this.categoryService.categories().find((c) => c.id === catId);
+                bestRise = { name: cat?.name ?? 'Category', pct };
             }
         }
-        if (bestRise && bestRise.pct >= 20) {
+        if (bestRise) {
+            const capped = bestRise.pct > RISING_CATEGORY_MAX_PCT;
+            const pctLabel = capped
+                ? `${RISING_CATEGORY_MAX_PCT}%+`
+                : `${Math.round(bestRise.pct)}%`;
             cards.push({
                 icon: 'insights',
                 color: 'amber',
                 title: 'Rising Category',
-                narrative: `${bestRise.name} spending rose ${Math.round(bestRise.pct)}% in the last 14 days vs the prior 14 days.`
+                narrative: `${bestRise.name} spending rose ${pctLabel} in the last 14 days vs the prior 14 days.`
             });
         }
 
@@ -373,7 +398,7 @@ export class InsightsService {
         return Array.from(byUser.entries())
             .map(([userId, amount]) => ({
                 userId,
-                name: this.userService.getUserName(userId),
+                name: this.userService.getHouseholdDisplayName(userId),
                 amount,
                 percentage: (amount / total) * 100
             }))

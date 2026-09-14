@@ -98,6 +98,23 @@ export class UserService {
         return user?.name || this.formatUserId(userId);
     }
 
+    /** True when a real display name is loaded for this user (not a UID fallback). */
+    hasResolvedName(userId: string): boolean {
+        const name = this.userMap.get(userId)?.name;
+        return typeof name === 'string' && name.trim().length > 0;
+    }
+
+    /**
+     * Name for household-facing copy. Uses the profile name when available;
+     * otherwise a friendly label instead of a raw/truncated UID.
+     */
+    getHouseholdDisplayName(userId: string): string {
+        if (this.hasResolvedName(userId)) {
+            return this.userMap.get(userId)!.name.trim();
+        }
+        return 'A household member';
+    }
+
     private formatUserId(userId: string): string {
         if (userId.length > 12) {
             return userId.substring(0, 6) + '...' + userId.substring(userId.length - 4);

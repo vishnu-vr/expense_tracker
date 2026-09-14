@@ -177,10 +177,11 @@
                     <p class="text-sm font-medium text-primary truncate">{{ bill.label }}</p>
                     <p class="text-xs text-muted">{{ bill.cadenceLabel }} · {{ bill.categoryName }}</p>
                     <p class="text-sm font-bold font-sora text-primary tabular-nums mt-1">
-                        {{ bill.averageAmount | maskCurrency:'INR' }}
+                        ~{{ bill.averageAmount | maskCurrency:'INR' }}
+                        <span class="text-[10px] font-normal text-muted">avg</span>
                     </p>
                     <p class="text-[10px] text-faint mt-0.5">
-                        Last: {{ bill.lastPaidDate | date:'MMM d' }}
+                        Last: {{ bill.lastPaidDate | date:'MMM d' }} · {{ bill.occurrences }} payments
                     </p>
                 </div>
                 }
