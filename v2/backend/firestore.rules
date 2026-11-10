@@ -1,0 +1,188 @@
+rules_version = '2';
+
+// Track Expense v2 security rules. See SCHEMA.md for the data model.
+// Server code (Cloud Functions, Admin SDK) bypasses these rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function homeData(homeId) {
+      return get(/databases/$(database)/documents/homes/$(homeId)).data;
+    }
+
+    function isHomeMember(homeId) {
+      return isAuthenticated()
+        && homeId is string
+        && exists(/databases/$(database)/documents/homes/$(homeId))
+        && request.auth.uid in homeData(homeId).memberIds;
+    }
+
+    // Same as isHomeMember but evaluated against the state AFTER the current
+    // batch/transaction, so "create home + point my user doc at it" can be one batch.
+    function isHomeMemberAfter(homeId) {
+      return isAuthenticated()
+        && homeId is string
+        && existsAfter(/databases/$(database)/documents/homes/$(homeId))
+        && request.auth.uid in getAfter(/databases/$(database)/documents/homes/$(homeId)).data.memberIds;
+    }
+
+    // The write only adds the caller's uid to, or only removes it from, a list field.
+    function onlyAddsOwnUid(field) {
+      let before = resource.data.get(field, []).toSet();
+      let after = request.resource.data[field].toSet();
+      return after.difference(before).size() == 1
+        && after.difference(before).hasOnly([request.auth.uid])
+        && before.difference(after).size() == 0;
+    }
+
+    function onlyRemovesOwnUid(field) {
+      let before = resource.data.get(field, []).toSet();
+      let after = request.resource.data[field].toSet();
+      return before.difference(after).size() == 1
+        && before.difference(after).hasOnly([request.auth.uid])
+        && after.difference(before).size() == 0;
+    }
+
+    function unchanged(field) {
+      return request.resource.data.get(field, null) == resource.data.get(field, null);
+    }
+
+    // ---------------------------------------------------------------- users
+    match /users/{userId} {
+      // Own profile, or the profile of someone in a home the caller belongs to
+      // (works for single gets and for `where homeId == <my home>` queries).
+      allow read: if isSelf(userId) || isHomeMember(resource.data.get('homeId', null));
+
+      // A user may only point `homeId` at a home that lists them as a member.
+      // (Joining someone else's home goes through the `joinHome` callable.)
+      allow create: if isSelf(userId)
+        && (request.resource.data.get('homeId', null) == null
+            || isHomeMemberAfter(request.resource.data.homeId));
+      allow update: if isSelf(userId)
+        && (request.resource.data.get('homeId', null) == null
+            || unchanged('homeId')
+            || isHomeMemberAfter(request.resource.data.homeId));
+      allow delete: if false;
+
+      match /fcmTokens/{tokenId} {
+        allow read, write: if isSelf(userId);
+      }
+    }
+
+    // ---------------------------------------------------------------- homes
+    match /homes/{homeId} {
+      allow read: if isHomeMember(homeId);
+
+      // A user creates a home for themselves: they are the owner and sole member.
+      // Joining an existing home goes through the `joinHome` callable.
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.memberIds == [request.auth.uid];
+
+      // Only the owner may edit, and ownership cannot be reassigned from the client.
+      allow update: if isAuthenticated()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.displayId == resource.data.displayId;
+
+      allow delete: if false;
+
+      match /categories/{categoryId} {
+        allow read, write: if isHomeMember(homeId);
+      }
+
+      match /categoryBudgets/{categoryId} {
+        allow read, write: if isHomeMember(homeId);
+      }
+
+      match /tags/{tagId} {
+        allow read, write: if isHomeMember(homeId);
+      }
+
+      // AI chat threads: written only by the server (askAgent / confirmProposal).
+      match /aiThreads/{threadId} {
+        allow read: if isHomeMember(homeId);
+        allow write: if false;
+
+        match /messages/{messageId} {
+          allow read: if isHomeMember(homeId);
+          allow write: if false;
+        }
+
+        match /proposals/{proposalId} {
+          allow read: if isHomeMember(homeId);
+          allow write: if false;
+        }
+      }
+
+      // Proactive insight cards: written by the scheduled function. A member may
+      // only add or remove THEIR OWN uid in `dismissedBy`.
+      match /insights/{insightId} {
+        allow read: if isHomeMember(homeId);
+        allow create, delete: if false;
+        allow update: if isHomeMember(homeId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dismissedBy'])
+          && request.resource.data.dismissedBy is list
+          && (onlyAddsOwnUid('dismissedBy') || onlyRemovesOwnUid('dismissedBy'));
+      }
+    }
+
+    // --------------------------------------------------------- transactions
+    match /transactions/{transactionId} {
+      function validTransaction(data) {
+        return data.amount is number
+          && data.amount >= 0
+          && data.categoryId is string
+          && data.date is timestamp
+          && data.type in ['income', 'expense']
+          && data.userId is string
+          && data.homeId is string
+          && data.tagIds is list
+          && !('accountId' in data)
+          && !('embedding' in data);
+      }
+
+      allow read: if isHomeMember(resource.data.homeId);
+
+      allow create: if isHomeMember(request.resource.data.homeId)
+        && request.resource.data.userId == request.auth.uid
+        && validTransaction(request.resource.data);
+
+      // Only the owner may edit, and a transaction can never move to another
+      // home or change owner.
+      allow update: if isHomeMember(resource.data.homeId)
+        && resource.data.userId == request.auth.uid
+        && unchanged('homeId')
+        && unchanged('userId')
+        && validTransaction(request.resource.data);
+
+      allow delete: if isHomeMember(resource.data.homeId)
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // ------------------------------------------------- transactionEmbeddings
+    // Server-only. Clients never read or write vectors.
+    match /transactionEmbeddings/{transactionId} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------- notifications
+    // Created by the onTransactionWritten trigger. A member may only add
+    // their own uid to `readBy`.
+    match /notifications/{notificationId} {
+      allow read: if isHomeMember(resource.data.homeId);
+      allow create, delete: if false;
+      allow update: if isHomeMember(resource.data.homeId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+        && request.resource.data.readBy is list
+        && onlyAddsOwnUid('readBy');
+    }
+  }
+}

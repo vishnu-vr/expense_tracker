@@ -1,0 +1,8 @@
+node_modules/
+functions/lib/
+*.log
+.env
+.env.*
+!.env.example
+functions/eval/results/
+*service-account*.json
