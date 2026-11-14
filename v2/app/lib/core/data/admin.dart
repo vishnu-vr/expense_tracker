@@ -250,12 +250,78 @@ class AssistantUsageSummary {
       );
 }
 
+class HouseholdActivity {
+  const HouseholdActivity({
+    required this.homeId,
+    required this.homeName,
+    required this.members,
+    required this.entries,
+    required this.entriesInMonth,
+    this.lastEntryAt,
+  });
+
+  final String homeId;
+  final String homeName;
+  final int members;
+
+  /// All entries ever recorded.
+  final int entries;
+
+  /// Entries dated in the selected month.
+  final int entriesInMonth;
+  final DateTime? lastEntryAt;
+}
+
+/// Entry counts per household for the month (D-026). Counts and dates only;
+/// no amounts or notes.
+class HouseholdActivitySummary {
+  const HouseholdActivitySummary({
+    this.available = false,
+    this.households = 0,
+    this.entries = 0,
+    this.entriesInMonth = 0,
+    this.activeInMonth = 0,
+    this.byHousehold = const [],
+  });
+
+  /// False when it could not be read (or an older backend sent none).
+  final bool available;
+  final int households;
+  final int entries;
+  final int entriesInMonth;
+  final int activeInMonth;
+
+  /// Busiest this month first.
+  final List<HouseholdActivity> byHousehold;
+
+  factory HouseholdActivitySummary.fromJson(Map<String, dynamic> json) => HouseholdActivitySummary(
+        available: json['available'] == true,
+        households: _int(json['households']),
+        entries: _int(json['entries']),
+        entriesInMonth: _int(json['entriesInMonth']),
+        activeInMonth: _int(json['activeInMonth']),
+        byHousehold: _list(json['byHousehold'], (m) {
+          final id = _str(m['homeId']);
+          if (id.isEmpty) return null;
+          return HouseholdActivity(
+            homeId: id,
+            homeName: _str(m['homeName'], 'Household'),
+            members: _int(m['members']),
+            entries: _int(m['entries']),
+            entriesInMonth: _int(m['entriesInMonth']),
+            lastEntryAt: DateTime.tryParse(_str(m['lastEntryAt']))?.toLocal(),
+          );
+        }),
+      );
+}
+
 class AdminDashboard {
   const AdminDashboard({
     required this.month,
     required this.billing,
     required this.usage,
     this.assistant = const AssistantUsageSummary(),
+    this.households = const HouseholdActivitySummary(),
     this.isSample = false,
   });
 
@@ -264,6 +330,7 @@ class AdminDashboard {
   final BillingSummary billing;
   final UsageSummary usage;
   final AssistantUsageSummary assistant;
+  final HouseholdActivitySummary households;
 
   /// Demo data, labelled "Sample data" on screen.
   final bool isSample;
@@ -276,6 +343,7 @@ class AdminDashboard {
         billing: BillingSummary.fromJson(_map(json['billing'])),
         usage: UsageSummary.fromJson(_map(json['usage'])),
         assistant: AssistantUsageSummary.fromJson(_map(json['assistant'])),
+        households: HouseholdActivitySummary.fromJson(_map(json['households'])),
       );
 }
 
@@ -351,12 +419,34 @@ class DemoAdminRepository implements AdminRepository {
             ],
           )
         : const AssistantUsageSummary(available: true);
+    final households = HouseholdActivitySummary(
+      available: true,
+      households: 4,
+      entries: 2801,
+      entriesInMonth: isCurrent ? 63 : 118,
+      activeInMonth: isCurrent ? 3 : 3,
+      byHousehold: [
+        HouseholdActivity(
+            homeId: 'demo', homeName: 'Sharma household', members: 2, entries: 2424,
+            entriesInMonth: isCurrent ? 41 : 86, lastEntryAt: now.subtract(const Duration(hours: 3))),
+        HouseholdActivity(
+            homeId: 'h2', homeName: 'Iyer family', members: 3, entries: 266,
+            entriesInMonth: isCurrent ? 17 : 26, lastEntryAt: now.subtract(const Duration(days: 1))),
+        HouseholdActivity(
+            homeId: 'h3', homeName: 'Flat 4B, Koramangala', members: 2, entries: 104,
+            entriesInMonth: isCurrent ? 5 : 6, lastEntryAt: now.subtract(const Duration(days: 4))),
+        HouseholdActivity(
+            homeId: 'h4', homeName: 'Test household', members: 1, entries: 7, entriesInMonth: 0,
+            lastEntryAt: now.subtract(const Duration(days: 40))),
+      ],
+    );
     if (month != current && month != previous) {
       return AdminDashboard(
         month: month,
         billing: const BillingSummary.missing(BillingGap.notSetUp),
         usage: usage,
         assistant: assistant,
+        households: households,
         isSample: true,
       );
     }
@@ -379,6 +469,7 @@ class DemoAdminRepository implements AdminRepository {
       isSample: true,
       usage: usage,
       assistant: assistant,
+      households: households,
       billing: BillingSummary(
         currency: 'INR',
         dataAsOf: isCurrent ? DateTime(now.year, now.month, now.day, 6, 30) : DateTime(now.year, now.month, 2, 9),

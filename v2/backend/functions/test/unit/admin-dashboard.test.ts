@@ -165,6 +165,49 @@ describe("getAdminDashboard", () => {
     expect(b.assistant).toMatchObject({ available: true, questions: 0, byHousehold: [] });
   });
 
+  it("adds per-household entry counts for the month window, busiest first", async () => {
+    const { api } = fakeApi("ok");
+    const windows: string[] = [];
+    const r = await adminDashboardHandler(
+      deps(api, {
+        readHouseholdActivity: async (start, end) => {
+          windows.push(`${start.toISOString()}..${end.toISOString()}`);
+          return [
+            { homeId: "h1", homeName: "Sharma", members: 2, entries: 2424, entriesInMonth: 40, lastEntryAt: "2026-11-09T10:00:00.000Z" },
+            { homeId: "h2", homeName: "Iyer", members: 1, entries: 97, entriesInMonth: 0, lastEntryAt: "2026-09-01T10:00:00.000Z" },
+            { homeId: "h3", homeName: "New", members: 1, entries: 0, entriesInMonth: 0, lastEntryAt: null },
+          ];
+        },
+      }),
+      admin,
+      { month: "2026-11" },
+    );
+    // November in India time: 31 Oct 18:30 UTC to 30 Nov 18:30 UTC.
+    expect(windows).toEqual(["2026-10-31T18:30:00.000Z..2026-11-30T18:30:00.000Z"]);
+    expect(r.households).toMatchObject({ available: true, households: 3, entries: 2521, entriesInMonth: 40, activeInMonth: 1 });
+    expect(r.households.byHousehold.map((h) => h.homeId)).toEqual(["h1", "h2", "h3"]);
+  });
+
+  it("a household read failure leaves the rest, and is not cached", async () => {
+    const { api } = fakeApi("ok");
+    const errors: string[] = [];
+    let fail = true;
+    const d = deps(api, {
+      onError: (p) => errors.push(p),
+      readHouseholdActivity: async () => {
+        if (fail) throw new Error("boom");
+        return [];
+      },
+    });
+    const a = await adminDashboardHandler(d, admin, { month: "2026-11" });
+    expect(a.households.available).toBe(false);
+    expect(a.billing.configured).toBe(true);
+    expect(errors).toEqual(["households"]);
+    fail = false;
+    const b = await adminDashboardHandler(d, admin, { month: "2026-11" });
+    expect(b.households).toMatchObject({ available: true, households: 0, byHousehold: [] });
+  });
+
   it("without a rollup reader the assistant section is unavailable", async () => {
     const r = await adminDashboardHandler(deps(fakeApi("ok").api), admin, { month: "2026-11" });
     expect(r.assistant).toMatchObject({ available: false, questions: 0, byHousehold: [] });

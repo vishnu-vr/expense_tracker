@@ -102,8 +102,8 @@ void main() {
     expect(find.text('2,78,400'), findsOneWidget);
     expect(find.text('97 model calls'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Flat 4B, Koramangala'), 200, scrollable: find.byType(Scrollable).first);
-    final sharma = find.text('Sharma household');
-    final iyer = find.text('Iyer family');
+    final sharma = find.text('Sharma household').first;
+    final iyer = find.text('Iyer family').first;
     expect(tester.getTopLeft(sharma).dy, lessThan(tester.getTopLeft(iyer).dy));
     expect(find.text('187k\u00a0tokens'), findsOneWidget);
     expect(find.text('27\u00a0questions · in\u00a01,81,000 · out\u00a05,700'), findsOneWidget);
@@ -220,6 +220,40 @@ void main() {
     await tester.tap(find.byTooltip('Previous'));
     await tester.pumpAndSettle();
     await shot(tester, 'billing_not_set_up_390');
+  });
+
+  testWidgets('households section: totals and per-household entry counts', (tester) async {
+    await pumpApp(tester);
+    await _openBilling(tester);
+    await tester.scrollUntilVisible(find.text('Entries in total'), 300, scrollable: find.byType(Scrollable).first);
+    expect(find.text('Households'), findsWidgets);
+    expect(find.text('Active this month'), findsOneWidget);
+    expect(find.text('2,801'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Test household'), 200, scrollable: find.byType(Scrollable).first);
+    expect(find.text('41 this month'), findsOneWidget);
+    expect(find.text('2,424\u00a0entries in total · 2\u00a0members · last entry\u00a0today'), findsOneWidget);
+    expect(find.text('266\u00a0entries in total · 3\u00a0members · last entry\u00a0yesterday'), findsOneWidget);
+    expect(find.text('104\u00a0entries in total · 2\u00a0members · last entry\u00a06\u00a0Nov'), findsOneWidget);
+    expect(find.text('7\u00a0entries in total · 1\u00a0member · last entry\u00a01\u00a0Oct'), findsOneWidget);
+    expect(find.text('0 this month'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('screenshot of the households section', (tester) async {
+    await pumpApp(tester, size: const Size(390, 844));
+    await _openBilling(tester);
+    await tester.scrollUntilVisible(find.text('Test household'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await shot(tester, 'billing_households_390');
+  });
+
+  testWidgets('households section at 320px with 1.3x text', (tester) async {
+    await pumpApp(tester, size: const Size(320, 900), textScale: 1.3);
+    await _openBilling(tester);
+    await tester.scrollUntilVisible(find.text('Test household'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await shot(tester, 'billing_households_320_1.3x');
   });
 
   testWidgets('screenshots of the assistant usage section', (tester) async {

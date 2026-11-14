@@ -128,6 +128,33 @@ void main() {
     expect(AdminDashboard.fromJson(const {}).assistant.byHousehold, isEmpty);
   });
 
+  test('parses the households section and tolerates a missing one', () {
+    final d = AdminDashboard.fromJson({
+      'households': {
+        'available': true,
+        'households': 3,
+        'entries': 2521,
+        'entriesInMonth': 40,
+        'activeInMonth': 1,
+        'byHousehold': [
+          {'homeId': 'h1', 'homeName': 'Sharma', 'members': 2, 'entries': 2424, 'entriesInMonth': 40,
+           'lastEntryAt': '2026-11-09T10:00:00.000Z'},
+          {'homeId': 'h3', 'members': '1', 'entries': 0, 'entriesInMonth': 0, 'lastEntryAt': null},
+          {'homeName': 'no id'},
+          'junk',
+        ],
+      },
+    });
+    final h = d.households;
+    expect(h.available, isTrue);
+    expect([h.households, h.entries, h.entriesInMonth, h.activeInMonth], [3, 2521, 40, 1]);
+    expect(h.byHousehold.map((r) => r.homeName), ['Sharma', 'Household']);
+    expect(h.byHousehold.first.lastEntryAt, DateTime.utc(2026, 11, 9, 10).toLocal());
+    expect(h.byHousehold.last.lastEntryAt, isNull);
+    expect(h.byHousehold.last.members, 1);
+    expect(AdminDashboard.fromJson(const {}).households.available, isFalse);
+  });
+
   test('monthKey pads the month', () {
     expect(monthKey(DateTime(2026, 3, 9)), '2026-03');
   });

@@ -24,6 +24,7 @@ import {
   REGION,
 } from "./config";
 import { readAssistantUsage } from "./data/ai-usage";
+import { readHouseholdActivity } from "./data/households";
 import { defaultRestClient } from "./data/billing";
 import { AdminDashboard, adminDashboardHandler } from "./handlers/admin-dashboard";
 import { askAgentHandler, AskAgentChunk, AskAgentResult } from "./handlers/ask-agent";
@@ -82,7 +83,7 @@ export const confirmProposal = onCall(callable, (request) =>
 );
 
 /**
- * getAdminDashboard({month: "YYYY-MM"}) -> {month, billing, usage, assistant} (see SCHEMA.md).
+ * getAdminDashboard({month: "YYYY-MM"}) -> {month, billing, usage, assistant, households} (see SCHEMA.md).
  * Admins only (custom claim admin: true). Reads the billing export, Cloud Monitoring
  * and the aiUsage rollup.
  */
@@ -98,6 +99,7 @@ export const getAdminDashboard = onCall({ ...callable, timeoutSeconds: 60 }, (re
       now: () => new Date(),
       cache: dashboardCache,
       readAssistantUsage: (month) => readAssistantUsage(getFirestore(), month),
+      readHouseholdActivity: (start, end) => readHouseholdActivity(getFirestore(), start, end),
       // Error names and HTTP status only.
       onError: (part, error) =>
         logger.error("Admin dashboard read failed", {

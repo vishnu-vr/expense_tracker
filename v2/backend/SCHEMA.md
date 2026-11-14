@@ -102,7 +102,7 @@ Source of truth: `functions/src/core/blocks.ts` (`BlockSchema`). At most 12 bloc
 | `exportTransactionsCsv` | `{ from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', timeZone }` | `{ csv, filename, count }` |
 | `askAgent` (streaming) | `{ threadId?, message, timeZone }` | `{ threadId, messageId, blocks: Block[] }`; stream chunks `{ type:'status', text }` \| `{ type:'text', delta }` |
 | `confirmProposal` | `{ threadId, proposalId, accept: boolean }` | `{ proposalId, status: 'applied'|'rejected', appliedCount, skippedTransactionIds }`; `not-found` unless the caller created the proposal |
-| `getAdminDashboard` (admin only) | `{ month: 'YYYY-MM' }` | `{ month, billing, usage, assistant }`, see below |
+| `getAdminDashboard` (admin only) | `{ month: 'YYYY-MM' }` | `{ month, billing, usage, assistant, households }`, see below |
 
 `leaveHome` removes the caller from their home's `memberIds` and deletes `users/{uid}.homeId`. If the caller owned the home and members remain, `ownerId` moves to the first remaining member (returned as `ownershipTransferredTo`). An empty home and all its data are left in place; the caller's transactions stay with the household. `failed-precondition` if the user has no `homeId`; a stale `homeId` is simply cleared.
 
@@ -138,8 +138,19 @@ decimals, net of credits (credits are negative).
                activeHouseholds,            // households with ≥ 1 question
                byHousehold: [{ homeId, homeName, questions, inputTokens, outputTokens }] }
                                             // sorted by inputTokens + outputTokens, highest first
+  households: { available: boolean,        // false if the read failed
+                households, entries,         // all households; entries ever recorded
+                entriesInMonth,              // entries dated in the month (Asia/Kolkata)
+                activeInMonth,               // households with ≥ 1 entry in the month
+                byHousehold: [{ homeId, homeName, members, entries, entriesInMonth,
+                                lastEntryAt /* ISO | null */ }] }
+                                            // sorted by entriesInMonth, then entries, then name
 }
 ```
+`households` uses `count()` aggregations on `transactions` per household plus
+one latest-entry lookup (index `homeId` + `date` desc). Counts and dates only:
+no amounts, notes or other entry content (D-026). A failed read gives
+`households.available: false` and does not fail the call.
 `assistant` comes from the `aiUsage` rollup for the month; `homeName` is read
 from `homes/{homeId}` ("Deleted household" if it no longer exists). Thread
 titles and message text are never read or returned.

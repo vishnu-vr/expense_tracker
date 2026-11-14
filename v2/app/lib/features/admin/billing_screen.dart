@@ -146,11 +146,14 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       const SizedBox(height: 24),
       const SectionTitle('Assistant usage'),
       _AssistantUsage(assistant: d.assistant),
+      const SizedBox(height: 24),
+      const SectionTitle('Households'),
+      _Households(summary: d.households, now: ref.watch(nowProvider)),
       const SizedBox(height: 16),
       Text(
         'Costs come from the Cloud Billing export to BigQuery and are net of credits. '
-        'Usage comes from Cloud Monitoring. Assistant usage is counted by the app per household; '
-        'conversations themselves stay private.',
+        'Usage comes from Cloud Monitoring. Assistant usage and entry counts are counted per household; '
+        'conversations, amounts and notes stay private.',
         style: LedgerText.body(size: 12, color: p.muted, height: 1.4),
       ),
     ];
@@ -551,6 +554,66 @@ class _AssistantUsage extends StatelessWidget {
             subtitleLines: 3,
             subtitle: '${questionCount(h.questions)} · in\u00a0${_count.format(h.inputTokens)} · out\u00a0${_count.format(h.outputTokens)}',
             amount: tokenCount(h.tokens),
+          ),
+    ]);
+  }
+}
+
+class _Households extends StatelessWidget {
+  const _Households({required this.summary, required this.now});
+
+  final HouseholdActivitySummary summary;
+  final DateTime now;
+
+  static String _entries(int n) => '${_count.format(n)}\u00a0${n == 1 ? 'entry' : 'entries'}';
+
+  static String _members(int n) => '$n\u00a0${n == 1 ? 'member' : 'members'}';
+
+  /// "today", "yesterday" or "6 Nov", never split across lines.
+  String _lastDay(DateTime at) {
+    final d = relativeDay(at, now);
+    final word = d == 'Today' || d == 'Yesterday' ? d.toLowerCase() : d;
+    return word.replaceAll(' ', '\u00a0');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final s = summary;
+    if (!s.available) {
+      return const EmptyState('Household activity is not available right now.');
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      LayoutBuilder(builder: (context, c) {
+        final tile = (c.maxWidth - 12) / 2;
+        return Wrap(spacing: 12, runSpacing: 12, children: [
+          SizedBox(width: tile, child: _Stat('Households', _count.format(s.households))),
+          SizedBox(width: tile, child: _Stat('Active this month', _count.format(s.activeInMonth))),
+          SizedBox(width: tile, child: _Stat('Entries this month', _count.format(s.entriesInMonth))),
+          SizedBox(width: tile, child: _Stat('Entries in total', _count.format(s.entries))),
+        ]);
+      }),
+      const SizedBox(height: 16),
+      Text('BY HOUSEHOLD', style: LedgerText.eyebrow(p.muted)),
+      if (s.byHousehold.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text('No households yet.', style: LedgerText.body(size: 14, color: p.muted)),
+        )
+      else
+        for (final (i, h) in s.byHousehold.indexed)
+          _AmountRow(
+            topBorder: i > 0,
+            title: h.homeName,
+            subtitleLines: 3,
+            subtitle: [
+              '${_entries(h.entries)} in total',
+              _members(h.members),
+              h.lastEntryAt == null
+                  ? 'no entries yet'
+                  : 'last entry\u00a0${_lastDay(h.lastEntryAt!)}',
+            ].join(' · '),
+            amount: '${_count.format(h.entriesInMonth)} this month',
           ),
     ]);
   }

@@ -2,6 +2,12 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { BILLING_LIMITS } from "../config";
 import { AssistantUsageSummary, EMPTY_ASSISTANT_USAGE, HouseholdUsageRow, shapeAssistantUsage } from "../core/ai-usage";
 import {
+  EMPTY_HOUSEHOLD_ACTIVITY,
+  HouseholdActivityRow,
+  HouseholdActivitySummary,
+  shapeHouseholdActivity,
+} from "../core/households";
+import {
   BillingSummary,
   EMPTY_USAGE,
   parseMonth,
@@ -18,6 +24,8 @@ export interface AdminDashboard {
   usage: UsageSummary;
   /** From the server-only `aiUsage` rollup (D-025). */
   assistant: AssistantUsageSummary;
+  /** Entry counts per household (D-026). Counts and dates only. */
+  households: HouseholdActivitySummary;
 }
 
 export interface AdminDashboardDeps {
@@ -30,7 +38,9 @@ export interface AdminDashboardDeps {
   cache: Map<string, { at: number; value: AdminDashboard }>;
   /** The month's `aiUsage` rows with household names (data/ai-usage.ts). Omitted: assistant.available is false. */
   readAssistantUsage?: (month: string) => Promise<HouseholdUsageRow[]>;
-  onError?: (part: "billing" | "usage" | "assistant", error: unknown) => void;
+  /** Per-household entry counts for [start, end) (data/households.ts). Omitted: households.available is false. */
+  readHouseholdActivity?: (start: Date, end: Date) => Promise<HouseholdActivityRow[]>;
+  onError?: (part: "billing" | "usage" | "assistant" | "households", error: unknown) => void;
 }
 
 export interface CallerAuth {
@@ -57,7 +67,7 @@ export async function adminDashboardHandler(
 
   const withUsage = usageAvailable(window, now, BILLING_LIMITS.usageRetentionDays);
   const usageEnd = now < window.end ? now : window.end;
-  const [billingResult, usageResult, assistantResult] = await Promise.allSettled([
+  const [billingResult, usageResult, assistantResult, householdsResult] = await Promise.allSettled([
     readBillingRows(deps.api, window, {
       projectId: deps.projectId,
       dataset: deps.dataset,
@@ -67,11 +77,13 @@ export async function adminDashboardHandler(
     }),
     withUsage ? readUsageSeries(deps.api, deps.projectId, window.start, usageEnd) : Promise.resolve(null),
     deps.readAssistantUsage ? deps.readAssistantUsage(window.month) : Promise.resolve(null),
+    deps.readHouseholdActivity ? deps.readHouseholdActivity(window.start, window.end) : Promise.resolve(null),
   ]);
 
   if (billingResult.status === "rejected") deps.onError?.("billing", billingResult.reason);
   if (usageResult.status === "rejected") deps.onError?.("usage", usageResult.reason);
   if (assistantResult.status === "rejected") deps.onError?.("assistant", assistantResult.reason);
+  if (householdsResult.status === "rejected") deps.onError?.("households", householdsResult.reason);
   if (billingResult.status === "rejected" && usageResult.status === "rejected") {
     throw new HttpsError("unavailable", "Could not read billing or usage. Try again.");
   }
@@ -92,9 +104,19 @@ export async function adminDashboardHandler(
   const assistant: AssistantUsageSummary =
     assistantResult.status === "fulfilled" && assistantResult.value ? shapeAssistantUsage(assistantResult.value) : EMPTY_ASSISTANT_USAGE;
 
-  const value: AdminDashboard = { month: window.month, billing, usage, assistant };
+  const households: HouseholdActivitySummary =
+    householdsResult.status === "fulfilled" && householdsResult.value
+      ? shapeHouseholdActivity(householdsResult.value)
+      : EMPTY_HOUSEHOLD_ACTIVITY;
+
+  const value: AdminDashboard = { month: window.month, billing, usage, assistant, households };
   // Partial failures are not cached, so a retry tries again.
-  if (billingResult.status === "fulfilled" && usageResult.status === "fulfilled" && assistantResult.status === "fulfilled") {
+  if (
+    billingResult.status === "fulfilled" &&
+    usageResult.status === "fulfilled" &&
+    assistantResult.status === "fulfilled" &&
+    householdsResult.status === "fulfilled"
+  ) {
     deps.cache.set(window.month, { at: now.getTime(), value });
   }
   return value;

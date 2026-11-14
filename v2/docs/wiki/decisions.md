@@ -9,6 +9,18 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-026 · Admin dashboard shows entries per household
+**2026-11-14 · Accepted · owner request**
+
+The admin Billing & usage screen has a Households section: number of
+households, households active this month, entries this month and in total,
+and per household its name, member count, entries this month and in total,
+and the date of the latest entry. It is computed live with Firestore
+`count()` aggregations (cheap at this scale) rather than a rollup. Counts and
+dates only: amounts, notes and other entry content are never read for it.
+
+---
+
 ## D-025 · Past conversations are personal, with usage counted per thread
 **2026-11-14 · Accepted · owner**
 

@@ -5,6 +5,7 @@ import type { GenerateRequest, GenerateResponseData, Part } from "genkit";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { EMBEDDING_DIMENSIONS, EMBEDDING_MODEL } from "../../src/config";
 import { readAssistantUsage } from "../../src/data/ai-usage";
+import { readHouseholdActivity } from "../../src/data/households";
 import { searchEmbeddings } from "../../src/data/firestore-backend";
 import { adminDashboardHandler } from "../../src/handlers/admin-dashboard";
 import { loadHomeData, resolveHome } from "../../src/data/home";
@@ -465,6 +466,35 @@ describe("getAdminDashboard: assistant usage from the aiUsage rollup", () => {
         { homeId: "h1", homeName: "Alice & Bob", questions: 3, inputTokens: 900, outputTokens: 60 },
       ],
     });
+  });
+});
+
+describe("getAdminDashboard: entries per household", () => {
+  it("counts all-time and in-month entries and finds the latest, without reading amounts or notes", async () => {
+    await db.doc("homes/h9").set({ name: "Counting house", displayId: "CNT999", ownerId: "dan", memberIds: ["dan", "eve", "fay"] });
+    const add = (id: string, iso: string) =>
+      db.doc(`transactions/${id}`).set({
+        amount: 4321.5, note: "very secret note", categoryId: "food", type: "expense",
+        userId: "dan", homeId: "h9", tagIds: [], date: Timestamp.fromDate(new Date(iso)),
+      });
+    await add("c1", "2026-10-31T19:00:00Z"); // 1 Nov 00:30 IST: inside November
+    await add("c2", "2026-11-20T08:00:00Z");
+    await add("c3", "2026-10-15T08:00:00Z"); // October
+    await db.doc("homes/h8").set({ name: "", memberIds: ["gil"] });
+
+    const start = new Date("2026-10-31T18:30:00Z");
+    const end = new Date("2026-11-30T18:30:00Z");
+    const rows = await readHouseholdActivity(db, start, end);
+    const h9 = rows.find((r) => r.homeId === "h9");
+    expect(h9).toEqual({
+      homeId: "h9", homeName: "Counting house", members: 3, entries: 3, entriesInMonth: 2,
+      lastEntryAt: "2026-11-20T08:00:00.000Z",
+    });
+    expect(rows.find((r) => r.homeId === "h8")).toMatchObject({ homeName: "Unnamed household", members: 1, entries: 0, lastEntryAt: null });
+    expect(rows.map((r) => r.homeId)).toEqual(expect.arrayContaining(["h1", "h2"]));
+    const json = JSON.stringify(rows);
+    expect(json).not.toContain("very secret note");
+    expect(json).not.toContain("4321");
   });
 });
 
