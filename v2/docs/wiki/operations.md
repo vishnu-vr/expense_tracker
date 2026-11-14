@@ -35,6 +35,22 @@ flutter run --dart-define=BACKEND=emulator    # local emulators (start them firs
 flutter run --dart-define=BACKEND=firebase    # live project
 ```
 
+## Distribute a test build (Firebase App Distribution)
+
+```
+cd v2/app
+# bump `version:` in pubspec.yaml first (the +N build number must go up)
+flutter build apk --release --dart-define=BACKEND=firebase
+firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk \
+  --app 1:117550011867:android:4d858566fa14bdfa91c3fe --project prod \
+  --groups testers --release-notes "What changed"
+```
+Testers are in the `testers` group (add with
+`firebase appdistribution:testers:add <email> --group-alias testers --project prod`).
+Release builds are still signed with the debug key, which is fine for
+testing; Play Store needs a real release key (and its SHA-1 registered for
+Google sign-in). First build: 1.0.0 (1), 2026-11-14.
+
 ## Local emulators
 
 ```
