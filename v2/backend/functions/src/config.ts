@@ -57,6 +57,16 @@ export const AGENT_LIMITS = {
   maxTurns: 10,
 } as const;
 
+/** Assistant usage accounting (D-025). */
+export const AI_USAGE = {
+  /** `aiUsage/{YYYY-MM}_{homeId}` months are India time (fixed +05:30). */
+  timeZone: "Asia/Kolkata",
+  /** Characters of the assistant's first text block kept as the thread's `lastMessagePreview`. */
+  previewChars: 80,
+  /** Rollup docs read per month for the admin view. */
+  maxRollupDocs: 1000,
+} as const;
+
 /** Cloud Functions region. Same as the Firestore database (asia-south1, Mumbai): Firestore triggers must run in the database region. */
 export const REGION = "asia-south1";
 

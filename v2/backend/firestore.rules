@@ -107,17 +107,25 @@ service cloud.firestore {
       }
 
       // AI chat threads: written only by the server (askAgent / confirmProposal).
+      // Conversations are personal (D-025): only the member who started a
+      // thread reads it, its messages and its proposals. Lists must filter
+      // `where('createdBy', '==', uid)`.
       match /aiThreads/{threadId} {
-        allow read: if isHomeMember(homeId);
+        function isThreadCreator() {
+          return isHomeMember(homeId)
+            && get(/databases/$(database)/documents/homes/$(homeId)/aiThreads/$(threadId)).data.createdBy == request.auth.uid;
+        }
+
+        allow read: if isHomeMember(homeId) && resource.data.createdBy == request.auth.uid;
         allow write: if false;
 
         match /messages/{messageId} {
-          allow read: if isHomeMember(homeId);
+          allow read: if isThreadCreator();
           allow write: if false;
         }
 
         match /proposals/{proposalId} {
-          allow read: if isHomeMember(homeId);
+          allow read: if isThreadCreator();
           allow write: if false;
         }
       }
@@ -170,6 +178,13 @@ service cloud.firestore {
     // ------------------------------------------------- transactionEmbeddings
     // Server-only. Clients never read or write vectors.
     match /transactionEmbeddings/{transactionId} {
+      allow read, write: if false;
+    }
+
+    // ------------------------------------------------------------- aiUsage
+    // Monthly assistant usage per household, `{YYYY-MM}_{homeId}`. Written by
+    // askAgent, read by getAdminDashboard. Server-only.
+    match /aiUsage/{docId} {
       allow read, write: if false;
     }
 

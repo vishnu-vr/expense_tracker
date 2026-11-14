@@ -34,8 +34,9 @@ export async function confirmProposalHandler(db: Firestore, uid: string, data: u
 
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(proposalRef);
-    if (!snap.exists) throw new HttpsError("not-found", "Proposal not found.");
     const p = snap.data() ?? {};
+    // Conversations are personal (D-025): only the member who asked sees or resolves its proposals.
+    if (!snap.exists || p.createdBy !== uid) throw new HttpsError("not-found", "Proposal not found.");
     if (p.status !== "pending") {
       throw new HttpsError("failed-precondition", `This suggestion was already ${String(p.status)}.`);
     }

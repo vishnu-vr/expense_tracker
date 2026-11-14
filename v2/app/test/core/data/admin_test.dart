@@ -101,6 +101,33 @@ void main() {
     });
   });
 
+  test('parses the assistant section and tolerates a missing one', () {
+    final d = AdminDashboard.fromJson({
+      'assistant': {
+        'available': true,
+        'questions': 4,
+        'inputTokens': 6000,
+        'outputTokens': 150,
+        'modelCalls': 8,
+        'activeHouseholds': 2,
+        'byHousehold': [
+          {'homeId': 'h2', 'homeName': 'Iyer', 'questions': 1, 'inputTokens': 5000, 'outputTokens': 50},
+          {'homeId': 'h1', 'questions': '3', 'inputTokens': 1000, 'outputTokens': 100},
+          {'homeName': 'no id'},
+          'junk',
+        ],
+      },
+    });
+    final a = d.assistant;
+    expect(a.available, isTrue);
+    expect([a.questions, a.inputTokens, a.outputTokens, a.modelCalls, a.activeHouseholds], [4, 6000, 150, 8, 2]);
+    expect(a.byHousehold.map((h) => h.homeName), ['Iyer', 'Household']);
+    expect(a.byHousehold.first.tokens, 5050);
+    expect(a.byHousehold.last.questions, 3);
+    expect(AdminDashboard.fromJson(const {}).assistant.available, isFalse);
+    expect(AdminDashboard.fromJson(const {}).assistant.byHousehold, isEmpty);
+  });
+
   test('monthKey pads the month', () {
     expect(monthKey(DateTime(2026, 3, 9)), '2026-03');
   });
@@ -116,5 +143,13 @@ void main() {
     final old = await repo.dashboard('2026-08');
     expect(old.billing.gap, BillingGap.notSetUp);
     expect(old.usage.available, isFalse);
+    expect(old.assistant.available, isTrue);
+    expect(old.assistant.byHousehold, isEmpty);
+    // Demo assistant totals match their households.
+    final a = now.assistant;
+    expect(a.byHousehold.fold<int>(0, (s, h) => s + h.questions), a.questions);
+    expect(a.byHousehold.fold<int>(0, (s, h) => s + h.inputTokens), a.inputTokens);
+    expect(a.byHousehold.fold<int>(0, (s, h) => s + h.outputTokens), a.outputTokens);
+    expect(a.activeHouseholds, a.byHousehold.length);
   });
 }

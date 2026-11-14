@@ -183,6 +183,16 @@ final agentRepositoryProvider = Provider<AgentRepository>((ref) {
   );
 });
 
+/// The signed-in user's past assistant conversations (personal, D-025).
+final agentHistoryRepositoryProvider = Provider<AgentHistoryRepository>(
+  (ref) => DemoAgentHistoryRepository(ref.read(nowProvider)),
+);
+
+/// Past conversations, most recently updated first.
+final agentThreadsProvider = StreamProvider.autoDispose<List<AgentThreadSummary>>(
+  (ref) => ref.watch(agentHistoryRepositoryProvider).watchThreads(),
+);
+
 /// Null unless the app runs against a real Firebase project.
 final pushServiceProvider = Provider<PushService?>((ref) => null);
 

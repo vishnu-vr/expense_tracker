@@ -32,6 +32,15 @@ class _FlakyAdminRepository implements AdminRepository {
   }
 }
 
+class _FixedAdminRepository implements AdminRepository {
+  _FixedAdminRepository(this.value);
+
+  final AdminDashboard value;
+
+  @override
+  Future<AdminDashboard> dashboard(String month) async => value;
+}
+
 GoRouter _router(WidgetTester tester) =>
     ProviderScope.containerOf(tester.element(find.byType(MaterialApp))).read(routerProvider);
 
@@ -82,6 +91,47 @@ void main() {
     expect(find.text('Assistant questions'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('askagent'), 300, scrollable: find.byType(Scrollable).first);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('assistant usage section: totals and households by tokens', (tester) async {
+    await pumpApp(tester);
+    await _openBilling(tester);
+    await tester.scrollUntilVisible(find.text('BY HOUSEHOLD'), 300, scrollable: find.byType(Scrollable).first);
+    expect(find.text('Assistant usage'), findsOneWidget);
+    expect(find.text('Active households'), findsOneWidget);
+    expect(find.text('2,78,400'), findsOneWidget);
+    expect(find.text('97 model calls'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Flat 4B, Koramangala'), 200, scrollable: find.byType(Scrollable).first);
+    final sharma = find.text('Sharma household');
+    final iyer = find.text('Iyer family');
+    expect(tester.getTopLeft(sharma).dy, lessThan(tester.getTopLeft(iyer).dy));
+    expect(find.text('187k\u00a0tokens'), findsOneWidget);
+    expect(find.text('27\u00a0questions · in\u00a01,81,000 · out\u00a05,700'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('assistant usage: no questions, and unavailable', (tester) async {
+    await pumpApp(tester, overrides: [
+      adminRepositoryProvider.overrideWithValue(_FixedAdminRepository(const AdminDashboard(
+        month: '2026-11',
+        billing: BillingSummary.missing(BillingGap.noData),
+        usage: UsageSummary(),
+        assistant: AssistantUsageSummary(available: true),
+      ))),
+    ]);
+    await _openBilling(tester);
+    await tester.scrollUntilVisible(find.text('No questions this month.'), 300, scrollable: find.byType(Scrollable).first);
+
+    await pumpApp(tester, overrides: [
+      adminRepositoryProvider.overrideWithValue(_FixedAdminRepository(const AdminDashboard(
+        month: '2026-11',
+        billing: BillingSummary.missing(BillingGap.noData),
+        usage: UsageSummary(),
+      ))),
+    ]);
+    await _openBilling(tester);
+    await tester.scrollUntilVisible(find.text('Assistant usage is not available right now.'), 300,
+        scrollable: find.byType(Scrollable).first);
   });
 
   testWidgets('hide amounts masks the billing figures', (tester) async {
@@ -170,6 +220,25 @@ void main() {
     await tester.tap(find.byTooltip('Previous'));
     await tester.pumpAndSettle();
     await shot(tester, 'billing_not_set_up_390');
+  });
+
+  testWidgets('screenshots of the assistant usage section', (tester) async {
+    await pumpApp(tester, size: const Size(390, 844));
+    await _openBilling(tester);
+    await tester.scrollUntilVisible(find.text('Flat 4B, Koramangala'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -200));
+    await tester.pumpAndSettle();
+    await shot(tester, 'billing_assistant_390');
+  });
+
+  testWidgets('screenshot of the assistant usage section at 320px with 1.3x text', (tester) async {
+    await pumpApp(tester, size: const Size(320, 900), textScale: 1.3);
+    await _openBilling(tester);
+    await tester.scrollUntilVisible(find.text('Flat 4B, Koramangala'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -200));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await shot(tester, 'billing_assistant_320_1.3x');
   });
 
   testWidgets('screenshot at 320px with 1.3x text', (tester) async {

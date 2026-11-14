@@ -4,7 +4,9 @@ import { genkit } from "genkit";
 import type { GenerateRequest, GenerateResponseData, Part } from "genkit";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { EMBEDDING_DIMENSIONS, EMBEDDING_MODEL } from "../../src/config";
+import { readAssistantUsage } from "../../src/data/ai-usage";
 import { searchEmbeddings } from "../../src/data/firestore-backend";
+import { adminDashboardHandler } from "../../src/handlers/admin-dashboard";
 import { loadHomeData, resolveHome } from "../../src/data/home";
 import { askAgentHandler, AskAgentChunk } from "../../src/handlers/ask-agent";
 import { confirmProposalHandler } from "../../src/handlers/confirm-proposal";
@@ -333,21 +335,67 @@ describe("askAgent", () => {
     expect(chunks.filter((c) => c.type === "text").map((c) => (c as any).delta).join("")).toBe("Groceries were the biggest part of October spending.\n");
 
     const thread = await db.doc(`homes/h1/aiThreads/${res.threadId}`).get();
-    expect(thread.data()).toMatchObject({ title: "How much did we spend in October?", createdBy: "alice" });
-    expect(Object.keys(thread.data()!).sort()).toEqual(["createdAt", "createdBy", "title", "updatedAt"]);
+    expect(thread.data()).toMatchObject({
+      title: "How much did we spend in October?",
+      createdBy: "alice",
+      // Two model calls at 10 in / 5 out each (the scripted model's usage).
+      usage: { questions: 1, inputTokens: 20, outputTokens: 10, modelCalls: 2 },
+      lastModel: s.model,
+      lastMessagePreview: "Groceries were the biggest part of October spending.",
+    });
+    expect(Object.keys(thread.data()!).sort()).toEqual(["createdAt", "createdBy", "lastMessagePreview", "lastModel", "title", "updatedAt", "usage"]);
     const messages = (await thread.ref.collection("messages").orderBy("createdAt").get()).docs;
     expect(messages.map((m) => m.get("role"))).toEqual(["user", "assistant"]);
     expect(messages[0].get("blocks")).toEqual([{ type: "text", text: "How much did we spend in October?" }]);
     expect(messages[1].id).toBe(res.messageId);
     expect(messages[1].get("blocks")).toEqual(res.blocks);
-    expect(Object.keys(messages[1].data()).sort()).toEqual(["blocks", "createdAt", "role"]);
+    expect(Object.keys(messages[1].data()).sort()).toEqual(["blocks", "createdAt", "role", "usage"]);
+    const usage = messages[1].get("usage");
+    expect(usage).toMatchObject({ inputTokens: 20, outputTokens: 10, modelCalls: 2, model: s.model });
+    expect(Number.isInteger(usage.latencyMs) && usage.latencyMs >= 0).toBe(true);
+    expect(Object.keys(messages[0].data()).sort()).toEqual(["blocks", "createdAt", "role"]); // no usage on the question
+
+    // Monthly rollup, India-time month of NOW (10 Nov 2026), ids and counts only.
+    const rollup = await db.doc("aiUsage/2026-11_h1").get();
+    expect(rollup.data()).toMatchObject({ month: "2026-11", homeId: "h1", questions: 1, inputTokens: 20, outputTokens: 10, modelCalls: 2 });
+    expect(Object.keys(rollup.data()!).sort()).toEqual(["homeId", "inputTokens", "modelCalls", "month", "outputTokens", "questions", "updatedAt"]);
+  });
+
+  it("accumulates usage on the thread and in the monthly rollup across questions and threads", async () => {
+    const one = () => scripted([() => [call("respond", { blocks: [{ type: "stat", label: "Spent", value: "₹5,000.50" }] })]]);
+    const { threadId } = await askAgentHandler(deps(one()), "alice", { message: "How much?", timeZone: "Asia/Kolkata" }, () => {});
+    await askAgentHandler(deps(one()), "alice", { threadId, message: "And now?", timeZone: "Asia/Kolkata" }, () => {});
+    await askAgentHandler(deps(one()), "bob", { message: "Mine?", timeZone: "Asia/Kolkata" }, () => {});
+    await askAgentHandler(deps(one()), "carol", { message: "Carol?", timeZone: "Asia/Kolkata" }, () => {});
+
+    const thread = await db.doc(`homes/h1/aiThreads/${threadId}`).get();
+    expect(thread.get("usage")).toEqual({ questions: 2, inputTokens: 20, outputTokens: 10, modelCalls: 2 });
+    expect(thread.get("lastMessagePreview")).toBe("Spent: ₹5,000.50"); // no text block: falls back to the stat
+    expect((await db.doc("aiUsage/2026-11_h1").get()).data()).toMatchObject({ questions: 3, inputTokens: 30, outputTokens: 15, modelCalls: 3 });
+    expect((await db.doc("aiUsage/2026-11_h2").get()).data()).toMatchObject({ homeId: "h2", questions: 1 });
+
+    // A failed answer is not counted.
+    const broken = scripted([() => { throw new Error("down"); }]);
+    await askAgentHandler(deps(broken), "alice", { threadId, message: "again", timeZone: "Asia/Kolkata" }, () => {}).catch(() => {});
+    expect((await db.doc(`homes/h1/aiThreads/${threadId}`).get()).get("usage.questions")).toBe(2);
+    expect((await db.doc("aiUsage/2026-11_h1").get()).get("questions")).toBe(3);
+  });
+
+  it("the month rolls over at midnight India time", async () => {
+    const s = scripted([() => [call("respond", { blocks: [{ type: "text", text: "ok" }] })]]);
+    await askAgentHandler({ ...deps(s), now: () => new Date("2026-10-31T18:45:00Z") }, "alice", { message: "hi", timeZone: "Asia/Kolkata" }, () => {});
+    expect((await db.doc("aiUsage/2026-11_h1").get()).exists).toBe(true);
+    expect((await db.doc("aiUsage/2026-10_h1").get()).exists).toBe(false);
   });
 
   it("continues a thread with its earlier messages as history", async () => {
     const first = scripted([() => [call("respond", { blocks: [{ type: "stat", label: "Spent in October", value: "₹5,000.50" }] })]]);
     const { threadId } = await askAgentHandler(deps(first), "alice", { message: "How much in October?", timeZone: "Asia/Kolkata" }, () => {});
     const second = scripted([() => [call("respond", { blocks: [{ type: "text", text: "Nothing in September." }] })]]);
-    const res = await askAgentHandler(deps(second), "bob", { threadId, message: "And September?", timeZone: "Asia/Kolkata" }, () => {});
+    // Threads are personal: a housemate cannot continue (or even find) it.
+    expect(await code(askAgentHandler(deps(second), "bob", { threadId, message: "peek", timeZone: "Asia/Kolkata" }, () => {}))).toBe("not-found");
+    expect(second.requests).toHaveLength(0);
+    const res = await askAgentHandler(deps(second), "alice", { threadId, message: "And September?", timeZone: "Asia/Kolkata" }, () => {});
     expect(res.threadId).toBe(threadId);
     const convo = second.requests[0].messages.filter((m) => m.role !== "system").map((m) => [m.role, m.content[0].text]);
     expect(convo).toEqual([
@@ -382,6 +430,41 @@ describe("askAgent", () => {
     expect(err.message).toBe("The assistant could not answer right now. Please try again.");
     const threads = await db.collection("homes/h1/aiThreads").get();
     expect((await threads.docs[0].ref.collection("messages").get()).docs.map((m) => m.get("role"))).toEqual(["user"]);
+  });
+});
+
+describe("getAdminDashboard: assistant usage from the aiUsage rollup", () => {
+  it("reads the month's rollup with household names, never thread content", async () => {
+    await db.doc("aiUsage/2026-11_h1").set({ month: "2026-11", homeId: "h1", questions: 3, inputTokens: 900, outputTokens: 60, modelCalls: 5 });
+    await db.doc("aiUsage/2026-11_h2").set({ month: "2026-11", homeId: "h2", questions: 1, inputTokens: 4000, outputTokens: 10, modelCalls: 2 });
+    await db.doc("aiUsage/2026-11_gone").set({ month: "2026-11", homeId: "gone", questions: 1, inputTokens: 1, outputTokens: 1, modelCalls: 1 });
+    await db.doc("aiUsage/2026-10_h1").set({ month: "2026-10", homeId: "h1", questions: 50, inputTokens: 1, outputTokens: 1, modelCalls: 1 });
+    await db.doc("homes/h1/aiThreads/secret").set({ title: "Private question", createdBy: "alice", createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+
+    const rows = await readAssistantUsage(db, "2026-11");
+    expect(rows.map((r) => [r.homeId, r.homeName, r.questions]).sort()).toEqual([["gone", "Deleted household", 1], ["h1", "Alice & Bob", 3], ["h2", "Carol", 1]]);
+
+    expect(JSON.stringify(rows)).not.toContain("Private question");
+  });
+
+  it("feeds the admin dashboard's assistant section (billing failing does not hide it)", async () => {
+    await db.doc("aiUsage/2026-08_h1").set({ month: "2026-08", homeId: "h1", questions: 3, inputTokens: 900, outputTokens: 60, modelCalls: 5 });
+    await db.doc("aiUsage/2026-08_h2").set({ month: "2026-08", homeId: "h2", questions: 1, inputTokens: 4000, outputTokens: 10, modelCalls: 2 });
+    const api = { request: async () => { throw Object.assign(new Error("no Google APIs in tests"), { status: 403 }); } };
+    // August is past Monitoring retention, so only billing is attempted (and fails).
+    const r = await adminDashboardHandler(
+      { api, projectId: "demo", dataset: "billing_export", location: "US", now: () => NOW, cache: new Map(), readAssistantUsage: (m) => readAssistantUsage(db, m) },
+      { uid: "admin", token: { admin: true } },
+      { month: "2026-08" },
+    );
+    expect(r.billing).toEqual({ configured: false, reason: "unavailable" });
+    expect(r.assistant).toEqual({
+      available: true, questions: 4, inputTokens: 4900, outputTokens: 70, modelCalls: 7, activeHouseholds: 2,
+      byHousehold: [
+        { homeId: "h2", homeName: "Carol", questions: 1, inputTokens: 4000, outputTokens: 10 },
+        { homeId: "h1", homeName: "Alice & Bob", questions: 3, inputTokens: 900, outputTokens: 60 },
+      ],
+    });
   });
 });
 
@@ -427,8 +510,8 @@ describe("proposals: propose -> confirmProposal", () => {
     const r = await propose("alice", "propose_recategorise", { transactionIds: ["a1", "a2", "b1"], categoryId: "pets" });
     expect((await proposal(r.threadId, r.proposalId)).get("params.transactionIds")).toEqual(["a1", "a2"]);
 
-    // Bob (a member, but not the owner of those entries) cannot apply it…
-    expect(await code(confirmProposalHandler(db, "bob", { threadId: r.threadId, proposalId: r.proposalId, accept: true }))).toBe("permission-denied");
+    // Bob (a member, but not the one who asked) cannot see or apply it…
+    expect(await code(confirmProposalHandler(db, "bob", { threadId: r.threadId, proposalId: r.proposalId, accept: true }))).toBe("not-found");
     expect((await db.doc("transactions/a1").get()).get("categoryId")).toBe("food");
     expect((await proposal(r.threadId, r.proposalId)).get("status")).toBe("pending");
 

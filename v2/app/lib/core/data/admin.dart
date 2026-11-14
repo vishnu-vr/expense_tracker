@@ -187,11 +187,75 @@ class UsageSummary {
   }
 }
 
+class HouseholdAssistantUsage {
+  const HouseholdAssistantUsage({
+    required this.homeId,
+    required this.homeName,
+    required this.questions,
+    required this.inputTokens,
+    required this.outputTokens,
+  });
+
+  final String homeId;
+  final String homeName;
+  final int questions;
+  final int inputTokens;
+  final int outputTokens;
+
+  int get tokens => inputTokens + outputTokens;
+}
+
+/// Assistant usage for the month from the server-only `aiUsage` rollup
+/// (D-025). Counts and household names only, no conversation content.
+class AssistantUsageSummary {
+  const AssistantUsageSummary({
+    this.available = false,
+    this.questions = 0,
+    this.inputTokens = 0,
+    this.outputTokens = 0,
+    this.modelCalls = 0,
+    this.activeHouseholds = 0,
+    this.byHousehold = const [],
+  });
+
+  /// False when the rollup could not be read (or an older backend sent none).
+  final bool available;
+  final int questions;
+  final int inputTokens;
+  final int outputTokens;
+  final int modelCalls;
+  final int activeHouseholds;
+
+  /// Highest token use first.
+  final List<HouseholdAssistantUsage> byHousehold;
+
+  factory AssistantUsageSummary.fromJson(Map<String, dynamic> json) => AssistantUsageSummary(
+        available: json['available'] == true,
+        questions: _int(json['questions']),
+        inputTokens: _int(json['inputTokens']),
+        outputTokens: _int(json['outputTokens']),
+        modelCalls: _int(json['modelCalls']),
+        activeHouseholds: _int(json['activeHouseholds']),
+        byHousehold: _list(json['byHousehold'], (m) {
+          final id = _str(m['homeId']);
+          if (id.isEmpty) return null;
+          return HouseholdAssistantUsage(
+            homeId: id,
+            homeName: _str(m['homeName'], 'Household'),
+            questions: _int(m['questions']),
+            inputTokens: _int(m['inputTokens']),
+            outputTokens: _int(m['outputTokens']),
+          );
+        }),
+      );
+}
+
 class AdminDashboard {
   const AdminDashboard({
     required this.month,
     required this.billing,
     required this.usage,
+    this.assistant = const AssistantUsageSummary(),
     this.isSample = false,
   });
 
@@ -199,6 +263,7 @@ class AdminDashboard {
   final String month;
   final BillingSummary billing;
   final UsageSummary usage;
+  final AssistantUsageSummary assistant;
 
   /// Demo data, labelled "Sample data" on screen.
   final bool isSample;
@@ -210,6 +275,7 @@ class AdminDashboard {
         month: _str(json['month'], fallbackMonth),
         billing: BillingSummary.fromJson(_map(json['billing'])),
         usage: UsageSummary.fromJson(_map(json['usage'])),
+        assistant: AssistantUsageSummary.fromJson(_map(json['assistant'])),
       );
 }
 
@@ -264,11 +330,33 @@ class DemoAdminRepository implements AdminRepository {
             ],
           )
         : const UsageSummary();
+    final assistant = month == current || month == previous
+        ? AssistantUsageSummary(
+            available: true,
+            questions: isCurrent ? 42 : 61,
+            inputTokens: isCurrent ? 278400 : 401200,
+            outputTokens: isCurrent ? 8820 : 12650,
+            modelCalls: isCurrent ? 97 : 140,
+            activeHouseholds: 3,
+            byHousehold: [
+              HouseholdAssistantUsage(
+                  homeId: 'demo', homeName: 'Sharma household', questions: isCurrent ? 27 : 38,
+                  inputTokens: isCurrent ? 181000 : 252000, outputTokens: isCurrent ? 5700 : 7900),
+              HouseholdAssistantUsage(
+                  homeId: 'h2', homeName: 'Iyer family', questions: isCurrent ? 11 : 17,
+                  inputTokens: isCurrent ? 71400 : 112200, outputTokens: isCurrent ? 2320 : 3550),
+              HouseholdAssistantUsage(
+                  homeId: 'h3', homeName: 'Flat 4B, Koramangala', questions: isCurrent ? 4 : 6,
+                  inputTokens: isCurrent ? 26000 : 37000, outputTokens: isCurrent ? 800 : 1200),
+            ],
+          )
+        : const AssistantUsageSummary(available: true);
     if (month != current && month != previous) {
       return AdminDashboard(
         month: month,
         billing: const BillingSummary.missing(BillingGap.notSetUp),
         usage: usage,
+        assistant: assistant,
         isSample: true,
       );
     }
@@ -290,6 +378,7 @@ class DemoAdminRepository implements AdminRepository {
       month: month,
       isSample: true,
       usage: usage,
+      assistant: assistant,
       billing: BillingSummary(
         currency: 'INR',
         dataAsOf: isCurrent ? DateTime(now.year, now.month, now.day, 6, 30) : DateTime(now.year, now.month, 2, 9),

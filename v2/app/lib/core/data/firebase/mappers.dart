@@ -5,6 +5,7 @@ library;
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 
 import '../../domain/models.dart';
+import '../agent.dart';
 import '../repositories.dart';
 
 DateTime? dateFrom(Object? v) => switch (v) {
@@ -129,3 +130,55 @@ InsightCard? insightFromDoc(String id, Map<String, dynamic> d, String userId) {
     createdAt: at,
   );
 }
+
+int _count(Object? v) => v is num && v.isFinite && v > 0 ? v.round() : 0;
+
+AgentUsage agentUsageFrom(Object? v) {
+  if (v is! Map) return const AgentUsage();
+  return AgentUsage(
+    questions: _count(v['questions']),
+    inputTokens: _count(v['inputTokens']),
+    outputTokens: _count(v['outputTokens']),
+    modelCalls: _count(v['modelCalls']),
+  );
+}
+
+/// `homes/{homeId}/aiThreads/{id}`. Null without an `updatedAt` yet (a
+/// pending server timestamp) so the list never shows a dateless row.
+AgentThreadSummary? threadSummaryFromDoc(String id, Map<String, dynamic> d) {
+  final updatedAt = dateFrom(d['updatedAt']) ?? dateFrom(d['createdAt']);
+  if (updatedAt == null) return null;
+  final title = d['title'];
+  return AgentThreadSummary(
+    id: id,
+    title: title is String && title.trim().isNotEmpty ? title : 'Conversation',
+    createdAt: dateFrom(d['createdAt']),
+    updatedAt: updatedAt,
+    lastMessagePreview: (d['lastMessagePreview'] as String?) ?? '',
+    lastModel: d['lastModel'] as String?,
+    usage: agentUsageFrom(d['usage']),
+  );
+}
+
+/// `…/messages/{id}`: blocks parsed with [AgentBlock.fromJson]; unknown ones
+/// are dropped. Null when nothing renderable is left.
+AgentStoredMessage? storedMessageFromDoc(Map<String, dynamic> d) {
+  final raw = d['blocks'];
+  final blocks = [
+    if (raw is List)
+      for (final b in raw)
+        if (b is Map) ?AgentBlock.fromJson(Map<String, dynamic>.from(b)),
+  ];
+  if (blocks.isEmpty) return null;
+  return AgentStoredMessage(
+    fromUser: d['role'] != 'assistant',
+    blocks: blocks,
+    createdAt: dateFrom(d['createdAt']),
+  );
+}
+
+ProposalStatus proposalStatusFrom(Object? v) => switch (v) {
+      'applied' => ProposalStatus.applied,
+      'rejected' => ProposalStatus.rejected,
+      _ => ProposalStatus.pending,
+    };

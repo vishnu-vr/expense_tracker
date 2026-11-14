@@ -52,6 +52,11 @@ const as = (method, path, body, qs = '') => fetch(`${FS}/${path}${qs}`, {
   method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   body: body ? JSON.stringify(body) : undefined }).then(j);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function query(collectionId, field, value) {
+  return ((await admin('POST', `${FS}:runQuery`, { structuredQuery: { from: [{ collectionId }],
+    where: { fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: { stringValue: value } } } } })).body ?? [])
+    .filter((r) => r.document).map((r) => r.document);
+}
 let failures = 0;
 const check = (name, ok, extra = '') => (ok || failures++, console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? ' — ' + extra : ''}`));
 
@@ -109,7 +114,16 @@ try {
   check('assistant answered', ask.status === 200 && blocks.length > 0,
     `${((Date.now() - t0) / 1000).toFixed(1)}s, ${ask.status}${ask.body.error ? ' ' + JSON.stringify(ask.body.error).slice(0, 200) : ''}`);
   for (const b of blocks) console.log('      ', b.type, JSON.stringify(b).slice(0, 220));
-  if (ask.body.result?.threadId) created.push(`homes/${homeId}/aiThreads/${ask.body.result.threadId}`);
+  if (ask.body.result?.threadId) {
+    created.push(`homes/${homeId}/aiThreads/${ask.body.result.threadId}`);
+    const thread = await admin('GET', `${FS}/homes/${homeId}/aiThreads/${ask.body.result.threadId}`);
+    const u = thread.body.fields?.usage?.mapValue?.fields ?? {};
+    const q = Number(u.questions?.integerValue ?? 0);
+    const tokens = Number(u.inputTokens?.integerValue ?? 0) + Number(u.outputTokens?.integerValue ?? 0);
+    check('thread records usage', q === 1 && tokens > 0, `${q} question, ${tokens} tokens`);
+    const roll = await query('aiUsage', 'homeId', homeId);
+    check('monthly usage rollup written', roll.length === 1 && Number(roll[0].fields?.questions?.integerValue) === 1);
+  }
 } finally {
   await cleanup();
   if (failures) process.exitCode = 1;
@@ -122,10 +136,6 @@ try {
  */
 async function cleanup() {
   const del = async (p) => admin('DELETE', `${FS}/${p}`);
-  const query = async (collectionId, field, value) =>
-    ((await admin('POST', `${FS}:runQuery`, { structuredQuery: { from: [{ collectionId }],
-      where: { fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: { stringValue: value } } } } })).body ?? [])
-      .filter((r) => r.document).map((r) => r.document);
   const path = (doc) => doc.name.split('/documents/')[1];
 
   for (let pass = 0; pass < 2; pass++) {
@@ -143,6 +153,7 @@ async function cleanup() {
       }
       for (const e of await query('transactionEmbeddings', 'homeId', homeId)) await del(path(e));
       for (const n of await query('notifications', 'homeId', homeId)) await del(path(n));
+      for (const r of await query('aiUsage', 'homeId', homeId)) await del(path(r));
       if (pass === 1) await del(`homes/${homeId}`);
     }
     // Deleting transactions fires the trigger, which writes "deleted"

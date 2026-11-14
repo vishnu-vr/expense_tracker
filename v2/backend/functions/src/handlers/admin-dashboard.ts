@@ -1,5 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { BILLING_LIMITS } from "../config";
+import { AssistantUsageSummary, EMPTY_ASSISTANT_USAGE, HouseholdUsageRow, shapeAssistantUsage } from "../core/ai-usage";
 import {
   BillingSummary,
   EMPTY_USAGE,
@@ -15,6 +16,8 @@ export interface AdminDashboard {
   month: string;
   billing: BillingSummary;
   usage: UsageSummary;
+  /** From the server-only `aiUsage` rollup (D-025). */
+  assistant: AssistantUsageSummary;
 }
 
 export interface AdminDashboardDeps {
@@ -25,7 +28,9 @@ export interface AdminDashboardDeps {
   now: () => Date;
   /** Per-month results, kept for BILLING_LIMITS.cacheMs. Shared across calls in one instance. */
   cache: Map<string, { at: number; value: AdminDashboard }>;
-  onError?: (part: "billing" | "usage", error: unknown) => void;
+  /** The month's `aiUsage` rows with household names (data/ai-usage.ts). Omitted: assistant.available is false. */
+  readAssistantUsage?: (month: string) => Promise<HouseholdUsageRow[]>;
+  onError?: (part: "billing" | "usage" | "assistant", error: unknown) => void;
 }
 
 export interface CallerAuth {
@@ -33,7 +38,7 @@ export interface CallerAuth {
   token: Record<string, unknown>;
 }
 
-/** getAdminDashboard({month: "YYYY-MM"}): Google Cloud costs and usage for one month. Admins only. */
+/** getAdminDashboard({month: "YYYY-MM"}): Google Cloud costs, usage and assistant usage for one month. Admins only. */
 export async function adminDashboardHandler(
   deps: AdminDashboardDeps,
   auth: CallerAuth | undefined,
@@ -52,7 +57,7 @@ export async function adminDashboardHandler(
 
   const withUsage = usageAvailable(window, now, BILLING_LIMITS.usageRetentionDays);
   const usageEnd = now < window.end ? now : window.end;
-  const [billingResult, usageResult] = await Promise.allSettled([
+  const [billingResult, usageResult, assistantResult] = await Promise.allSettled([
     readBillingRows(deps.api, window, {
       projectId: deps.projectId,
       dataset: deps.dataset,
@@ -61,10 +66,12 @@ export async function adminDashboardHandler(
       timeZone: BILLING_LIMITS.timeZone,
     }),
     withUsage ? readUsageSeries(deps.api, deps.projectId, window.start, usageEnd) : Promise.resolve(null),
+    deps.readAssistantUsage ? deps.readAssistantUsage(window.month) : Promise.resolve(null),
   ]);
 
   if (billingResult.status === "rejected") deps.onError?.("billing", billingResult.reason);
   if (usageResult.status === "rejected") deps.onError?.("usage", usageResult.reason);
+  if (assistantResult.status === "rejected") deps.onError?.("assistant", assistantResult.reason);
   if (billingResult.status === "rejected" && usageResult.status === "rejected") {
     throw new HttpsError("unavailable", "Could not read billing or usage. Try again.");
   }
@@ -82,9 +89,12 @@ export async function adminDashboardHandler(
   const usage: UsageSummary =
     usageResult.status === "fulfilled" && usageResult.value ? shapeUsage(usageResult.value) : EMPTY_USAGE;
 
-  const value: AdminDashboard = { month: window.month, billing, usage };
+  const assistant: AssistantUsageSummary =
+    assistantResult.status === "fulfilled" && assistantResult.value ? shapeAssistantUsage(assistantResult.value) : EMPTY_ASSISTANT_USAGE;
+
+  const value: AdminDashboard = { month: window.month, billing, usage, assistant };
   // Partial failures are not cached, so a retry tries again.
-  if (billingResult.status === "fulfilled" && usageResult.status === "fulfilled") {
+  if (billingResult.status === "fulfilled" && usageResult.status === "fulfilled" && assistantResult.status === "fulfilled") {
     deps.cache.set(window.month, { at: now.getTime(), value });
   }
   return value;

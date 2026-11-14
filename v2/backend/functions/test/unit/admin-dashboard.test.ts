@@ -119,6 +119,57 @@ describe("getAdminDashboard", () => {
     expect(errors).toEqual(["billing", "usage"]);
   });
 
+  it("adds the assistant section from the aiUsage rollup, sorted by tokens", async () => {
+    const { api } = fakeApi("ok");
+    const months: string[] = [];
+    const r = await adminDashboardHandler(
+      deps(api, {
+        readAssistantUsage: async (month) => {
+          months.push(month);
+          return [
+            { homeId: "h1", homeName: "Sharma", questions: 3, inputTokens: 1000, outputTokens: 100, modelCalls: 6 },
+            { homeId: "h2", homeName: "Iyer", questions: 1, inputTokens: 5000, outputTokens: 50, modelCalls: 2 },
+          ];
+        },
+      }),
+      admin,
+      { month: "2026-11" },
+    );
+    expect(months).toEqual(["2026-11"]);
+    expect(r.assistant).toEqual({
+      available: true, questions: 4, inputTokens: 6000, outputTokens: 150, modelCalls: 8, activeHouseholds: 2,
+      byHousehold: [
+        { homeId: "h2", homeName: "Iyer", questions: 1, inputTokens: 5000, outputTokens: 50 },
+        { homeId: "h1", homeName: "Sharma", questions: 3, inputTokens: 1000, outputTokens: 100 },
+      ],
+    });
+  });
+
+  it("an assistant read failure leaves billing and usage, and is not cached", async () => {
+    const { api } = fakeApi("ok");
+    const errors: string[] = [];
+    let fail = true;
+    const d = deps(api, {
+      onError: (p) => errors.push(p),
+      readAssistantUsage: async () => {
+        if (fail) throw new Error("boom");
+        return [];
+      },
+    });
+    const a = await adminDashboardHandler(d, admin, { month: "2026-11" });
+    expect(a.assistant.available).toBe(false);
+    expect(a.billing.configured).toBe(true);
+    expect(errors).toEqual(["assistant"]);
+    fail = false;
+    const b = await adminDashboardHandler(d, admin, { month: "2026-11" });
+    expect(b.assistant).toMatchObject({ available: true, questions: 0, byHousehold: [] });
+  });
+
+  it("without a rollup reader the assistant section is unavailable", async () => {
+    const r = await adminDashboardHandler(deps(fakeApi("ok").api), admin, { month: "2026-11" });
+    expect(r.assistant).toMatchObject({ available: false, questions: 0, byHousehold: [] });
+  });
+
   it("fails when both reads fail", async () => {
     await expect(adminDashboardHandler(deps(fakeApi("error", "error").api), admin, { month: "2026-11" })).rejects.toMatchObject({ code: "unavailable" });
   });

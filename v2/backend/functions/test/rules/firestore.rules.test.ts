@@ -49,11 +49,15 @@ beforeEach(async () => {
       await setDoc(doc(f, `homes/${h}/categories/pets`), { name: "Pets", icon: "pets", color: "#000", type: "expense" });
       await setDoc(doc(f, `homes/${h}/categoryBudgets/food`), { categoryId: "food", amount: 10000, updatedAt: when });
       await setDoc(doc(f, `homes/${h}/tags/trip`), { name: "Trip" });
-      await setDoc(doc(f, `homes/${h}/aiThreads/th1`), { title: "Spending", createdBy: "x", createdAt: when, updatedAt: when });
+      const owner = h === "h1" ? "alice" : "carol";
+      await setDoc(doc(f, `homes/${h}/aiThreads/th1`), { title: "Spending", createdBy: owner, createdAt: when, updatedAt: when, usage: { questions: 1, inputTokens: 10, outputTokens: 5, modelCalls: 1 } });
       await setDoc(doc(f, `homes/${h}/aiThreads/th1/messages/m1`), { role: "user", blocks: [{ type: "text", text: "hi" }], createdAt: when });
-      await setDoc(doc(f, `homes/${h}/aiThreads/th1/proposals/p1`), { action: "set_budget", status: "pending", params: {}, summary: "s", createdBy: "x", createdAt: when });
+      await setDoc(doc(f, `homes/${h}/aiThreads/th1/proposals/p1`), { action: "set_budget", status: "pending", params: {}, summary: "s", createdBy: owner, createdAt: when });
+      await setDoc(doc(f, `aiUsage/2026-10_${h}`), { month: "2026-10", homeId: h, questions: 1, inputTokens: 10, outputTokens: 5, modelCalls: 1, updatedAt: when });
       await setDoc(doc(f, `homes/${h}/insights/i1`), { kind: "month_review", title: "t", body: "b", data: {}, periodKey: "2026-10", createdAt: when, dismissedBy: [] });
     }
+    await setDoc(doc(f, "homes/h1/aiThreads/thBob"), { title: "Bob's", createdBy: "bob", createdAt: when, updatedAt: when });
+    await setDoc(doc(f, "homes/h1/aiThreads/thBob/messages/m1"), { role: "user", blocks: [{ type: "text", text: "private" }], createdAt: when });
     await setDoc(doc(f, "transactions/tA"), txDoc("alice", "h1"));
     await setDoc(doc(f, "transactions/tB"), txDoc("bob", "h1"));
     await setDoc(doc(f, "transactions/tC"), txDoc("carol", "h2"));
@@ -156,17 +160,43 @@ describe("homes", () => {
 });
 
 describe("AI threads", () => {
-  it("members read threads, messages and proposals; outsiders cannot", async () => {
+  it("only the creator reads a thread, its messages and proposals", async () => {
     for (const path of ["aiThreads/th1", "aiThreads/th1/messages/m1", "aiThreads/th1/proposals/p1"]) {
-      await assertSucceeds(getDoc(doc(db("bob"), `homes/h1/${path}`)));
-      await assertFails(getDoc(doc(db("carol"), `homes/h1/${path}`)));
+      await assertSucceeds(getDoc(doc(db("alice"), `homes/h1/${path}`))); // creator
+      await assertFails(getDoc(doc(db("bob"), `homes/h1/${path}`))); // same home, not the creator
+      await assertFails(getDoc(doc(db("carol"), `homes/h1/${path}`))); // another home
+      await assertFails(getDoc(doc(db("dave"), `homes/h1/${path}`))); // no home
+      await assertFails(getDoc(doc(db(), `homes/h1/${path}`))); // signed out
     }
     await assertSucceeds(getDocs(query(collection(db("alice"), "homes/h1/aiThreads/th1/messages"), orderBy("createdAt"))));
+    await assertFails(getDocs(query(collection(db("bob"), "homes/h1/aiThreads/th1/messages"), orderBy("createdAt"))));
+    await assertSucceeds(getDocs(collection(db("alice"), "homes/h1/aiThreads/th1/proposals")));
+    await assertFails(getDocs(collection(db("bob"), "homes/h1/aiThreads/th1/proposals")));
+    await assertSucceeds(getDoc(doc(db("bob"), "homes/h1/aiThreads/thBob/messages/m1")));
+    await assertFails(getDoc(doc(db("alice"), "homes/h1/aiThreads/thBob/messages/m1")));
+  });
+  it("a member lists only their own threads, newest first", async () => {
+    const mine = (uid: string, home = "h1") =>
+      query(collection(db(uid), `homes/${home}/aiThreads`), where("createdBy", "==", uid), orderBy("updatedAt", "desc"));
+    await assertSucceeds(getDocs(mine("alice")));
+    await assertSucceeds(getDocs(mine("bob")));
+    await assertFails(getDocs(collection(db("alice"), "homes/h1/aiThreads"))); // unfiltered
+    await assertFails(getDocs(query(collection(db("alice"), "homes/h1/aiThreads"), where("createdBy", "==", "bob"))));
+    await assertFails(getDocs(mine("carol", "h1"))); // not a member
+    await assertFails(getDocs(mine("dave", "h1")));
+  });
+  it("a former member loses access to their own threads", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "homes/h1"), { memberIds: ["alice"] });
+    });
+    await assertFails(getDoc(doc(db("bob"), "homes/h1/aiThreads/thBob")));
+    await assertFails(getDoc(doc(db("bob"), "homes/h1/aiThreads/thBob/messages/m1")));
   });
   it("nothing under a thread is client-writable — only the server writes", async () => {
     const f = db("alice");
     await assertFails(setDoc(doc(f, "homes/h1/aiThreads/new"), { title: "x", createdBy: "alice", createdAt: when, updatedAt: when }));
     await assertFails(updateDoc(doc(f, "homes/h1/aiThreads/th1"), { title: "renamed" }));
+    await assertFails(updateDoc(doc(f, "homes/h1/aiThreads/th1"), { "usage.questions": 0 }));
     await assertFails(deleteDoc(doc(f, "homes/h1/aiThreads/th1")));
     await assertFails(addDoc(collection(f, "homes/h1/aiThreads/th1/messages"), { role: "assistant", blocks: [{ type: "text", text: "forged" }], createdAt: when }));
     await assertFails(updateDoc(doc(f, "homes/h1/aiThreads/th1/messages/m1"), { blocks: [] }));
@@ -254,6 +284,19 @@ describe("transactionEmbeddings", () => {
     await assertFails(setDoc(doc(db("alice"), "transactionEmbeddings/new"), { homeId: "h1", text: "x" }));
     await assertFails(updateDoc(doc(db("alice"), "transactionEmbeddings/tA"), { text: "x" }));
     await assertFails(deleteDoc(doc(db("alice"), "transactionEmbeddings/tA")));
+  });
+});
+
+describe("aiUsage", () => {
+  it("is server-only: no client reads or writes, not even the household's own row", async () => {
+    await assertFails(getDoc(doc(db("alice"), "aiUsage/2026-10_h1")));
+    await assertFails(getDoc(doc(db("carol"), "aiUsage/2026-10_h1")));
+    await assertFails(getDocs(query(collection(db("alice"), "aiUsage"), where("homeId", "==", "h1"))));
+    await assertFails(getDocs(collection(db("alice"), "aiUsage")));
+    await assertFails(setDoc(doc(db("alice"), "aiUsage/2026-11_h1"), { month: "2026-11", homeId: "h1", questions: 0 }));
+    await assertFails(updateDoc(doc(db("alice"), "aiUsage/2026-10_h1"), { questions: 0 }));
+    await assertFails(deleteDoc(doc(db("alice"), "aiUsage/2026-10_h1")));
+    await assertFails(getDoc(doc(db(), "aiUsage/2026-10_h1")));
   });
 });
 

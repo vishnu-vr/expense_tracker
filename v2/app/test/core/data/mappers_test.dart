@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:track_expense/core/data/agent.dart';
 import 'package:track_expense/core/data/firebase/firestore_household_repository.dart';
 import 'package:track_expense/core/data/firebase/mappers.dart';
 import 'package:track_expense/core/domain/models.dart';
@@ -58,6 +59,55 @@ void main() {
     expect(n.type, HouseholdNotificationType.transactionDeleted);
     expect(n.readBy, ['u1']);
     expect(notificationFromDoc('n', {'type': 'x'}), isNull);
+  });
+
+  test('AI thread summaries carry usage and preview; need a timestamp', () {
+    final t = threadSummaryFromDoc('th1', {
+      'title': 'Why was October high?',
+      'createdBy': 'u1',
+      'createdAt': Timestamp.fromDate(DateTime(2026, 11, 1, 9)),
+      'updatedAt': Timestamp.fromDate(DateTime(2026, 11, 2, 9)),
+      'lastMessagePreview': 'Groceries were up.',
+      'lastModel': 'vertexai/gemini-3.8-flash',
+      'usage': {'questions': 6, 'inputTokens': 47000, 'outputTokens': 1200, 'modelCalls': 14},
+    })!;
+    expect(t.updatedAt, DateTime(2026, 11, 2, 9));
+    expect(t.lastMessagePreview, 'Groceries were up.');
+    expect(t.usage.questions, 6);
+    expect(t.usage.tokens, 48200);
+    expect(t.usage.modelCalls, 14);
+    expect(t.lastModel, 'vertexai/gemini-3.8-flash');
+
+    // Older threads have no usage or preview yet.
+    final old = threadSummaryFromDoc('th0', {'title': '', 'createdAt': Timestamp.fromDate(DateTime(2026, 10, 1))})!;
+    expect(old.title, 'Conversation');
+    expect(old.updatedAt, DateTime(2026, 10, 1));
+    expect(old.usage.questions, 0);
+    expect(old.lastMessagePreview, '');
+    expect(agentUsageFrom({'questions': -2, 'inputTokens': 'x', 'outputTokens': 3.6}).outputTokens, 4);
+    expect(agentUsageFrom({'questions': -2}).questions, 0);
+    expect(threadSummaryFromDoc('x', {'title': 'pending'}), isNull);
+  });
+
+  test('stored messages reuse the block parser and drop unusable docs', () {
+    final m = storedMessageFromDoc({
+      'role': 'assistant',
+      'blocks': [
+        {'type': 'stat', 'label': 'Spent', 'value': '₹1,000'},
+        {'type': 'hologram'},
+        {'type': 'proposal', 'proposalId': 'p1', 'action': 'set_budget', 'summary': 'Set it'},
+      ],
+      'usage': {'inputTokens': 10, 'outputTokens': 5, 'modelCalls': 1, 'model': 'm', 'latencyMs': 900},
+      'createdAt': Timestamp.fromDate(DateTime(2026, 11, 1)),
+    })!;
+    expect(m.fromUser, isFalse);
+    expect(m.blocks.map((b) => b.runtimeType), [StatBlock, ProposalBlock]);
+    expect(storedMessageFromDoc({'role': 'user', 'blocks': [{'type': 'text', 'text': 'hi'}]})!.fromUser, isTrue);
+    expect(storedMessageFromDoc({'role': 'assistant', 'blocks': 'nope'}), isNull);
+    expect(proposalStatusFrom('applied'), ProposalStatus.applied);
+    expect(proposalStatusFrom('rejected'), ProposalStatus.rejected);
+    expect(proposalStatusFrom('pending'), ProposalStatus.pending);
+    expect(proposalStatusFrom(null), ProposalStatus.pending);
   });
 
   test('switchMap follows only the latest inner stream', () async {

@@ -155,6 +155,182 @@ abstract class AgentRepository {
   });
 }
 
+/// Running totals the server keeps on a thread (D-025).
+class AgentUsage {
+  const AgentUsage({
+    this.questions = 0,
+    this.inputTokens = 0,
+    this.outputTokens = 0,
+    this.modelCalls = 0,
+  });
+
+  final int questions;
+  final int inputTokens;
+  final int outputTokens;
+  final int modelCalls;
+
+  int get tokens => inputTokens + outputTokens;
+
+  /// "6 questions · 48k tokens".
+  String get label => '${questionCount(questions)} · ${tokenCount(tokens)}';
+}
+
+/// Joins a number and its unit so a narrow line never wraps between them.
+const _nbsp = '\u00a0';
+
+/// "1 question", "6 questions" (non-breaking space).
+String questionCount(int n) => n == 1 ? '1${_nbsp}question' : '$n${_nbsp}questions';
+
+/// "850 tokens", "48k tokens", "1.2M tokens" (non-breaking space).
+String tokenCount(int n) {
+  if (n < 1000) return '$n${_nbsp}tokens';
+  if (n < 999500) return '${(n / 1000).round()}k${_nbsp}tokens';
+  final m = n / 1000000;
+  return '${m >= 10 ? m.round() : m.toStringAsFixed(1).replaceFirst(RegExp(r'\.0$'), '')}M${_nbsp}tokens';
+}
+
+/// One past conversation in the list. Only the signed-in user's own threads
+/// are ever listed (threads are personal).
+class AgentThreadSummary {
+  const AgentThreadSummary({
+    required this.id,
+    required this.title,
+    required this.updatedAt,
+    this.createdAt,
+    this.lastMessagePreview = '',
+    this.lastModel,
+    this.usage = const AgentUsage(),
+  });
+
+  final String id;
+  final String title;
+  final DateTime updatedAt;
+  final DateTime? createdAt;
+  final String lastMessagePreview;
+  final String? lastModel;
+  final AgentUsage usage;
+}
+
+/// Server-side state of a stored proposal.
+enum ProposalStatus { pending, applied, rejected }
+
+/// A stored message of a past conversation.
+class AgentStoredMessage {
+  const AgentStoredMessage({required this.fromUser, required this.blocks, this.createdAt});
+
+  final bool fromUser;
+  final List<AgentBlock> blocks;
+  final DateTime? createdAt;
+}
+
+/// A past conversation with its messages (oldest first) and the status of
+/// each proposal in it, so resolved ones do not offer Confirm again.
+class AgentThread {
+  const AgentThread({
+    required this.summary,
+    required this.messages,
+    this.proposalStatus = const {},
+  });
+
+  final AgentThreadSummary summary;
+  final List<AgentStoredMessage> messages;
+  final Map<String, ProposalStatus> proposalStatus;
+}
+
+/// The signed-in user's past conversations.
+abstract class AgentHistoryRepository {
+  /// Newest first (most recently updated), at most 50.
+  Stream<List<AgentThreadSummary>> watchThreads();
+
+  /// Null when the thread does not exist or belongs to someone else.
+  Future<AgentThread?> loadThread(String threadId);
+}
+
+/// Sample conversations for demo mode and tests.
+class DemoAgentHistoryRepository implements AgentHistoryRepository {
+  DemoAgentHistoryRepository(DateTime now, {List<AgentThread>? threads})
+      : _threads = threads ?? _samples(now);
+
+  final List<AgentThread> _threads;
+
+  static List<AgentThread> _samples(DateTime now) {
+    final yesterday = now.subtract(const Duration(days: 1, hours: 2));
+    final lastWeek = now.subtract(const Duration(days: 6, hours: 5));
+    return [
+      AgentThread(
+        summary: AgentThreadSummary(
+          id: 'demo-dining',
+          title: 'Why was October dining so high?',
+          createdAt: yesterday.subtract(const Duration(minutes: 4)),
+          updatedAt: yesterday,
+          lastMessagePreview: 'Swiggy and Zomato orders made up most of the rise in October.',
+          lastModel: 'vertexai/gemini-3.8-flash',
+          usage: const AgentUsage(questions: 2, inputTokens: 13240, outputTokens: 430, modelCalls: 5),
+        ),
+        messages: [
+          const AgentStoredMessage(fromUser: true, blocks: [TextBlock('Why was October dining so high?')]),
+          AgentStoredMessage(fromUser: false, blocks: [
+            const StatBlock(label: 'Food in October', value: '₹9,840', caption: '₹6,120 in September'),
+            const BarsBlock(title: 'Where it went', items: [
+              BarItem(label: 'Swiggy', value: 4210, display: '₹4,210'),
+              BarItem(label: 'Zomato', value: 2890, display: '₹2,890'),
+              BarItem(label: 'Restaurants', value: 2740, display: '₹2,740'),
+            ]),
+            const TextBlock('Swiggy and Zomato orders made up most of the rise in October.'),
+          ]),
+          const AgentStoredMessage(fromUser: true, blocks: [TextBlock('Set a food budget for me')]),
+          const AgentStoredMessage(fromUser: false, blocks: [
+            TextBlock('A budget a little under October keeps you honest without being unrealistic.'),
+            ProposalBlock(
+              proposalId: 'demo-p-applied',
+              action: 'set_budget',
+              summary: 'Set a monthly Food budget of ₹8,000',
+            ),
+          ]),
+        ],
+        proposalStatus: const {'demo-p-applied': ProposalStatus.applied},
+      ),
+      AgentThread(
+        summary: AgentThreadSummary(
+          id: 'demo-bills',
+          title: 'Which bills went up this year?',
+          createdAt: lastWeek,
+          updatedAt: lastWeek,
+          lastMessagePreview: 'Netflix went from ₹649 to ₹799 in October; electricity is up 18% on last year.',
+          lastModel: 'vertexai/gemini-3.8-flash',
+          usage: const AgentUsage(questions: 1, inputTokens: 6610, outputTokens: 205, modelCalls: 2),
+        ),
+        messages: const [
+          AgentStoredMessage(fromUser: true, blocks: [TextBlock('Which bills went up this year?')]),
+          AgentStoredMessage(fromUser: false, blocks: [
+            BarsBlock(title: 'Price changes', items: [
+              BarItem(label: 'Netflix', value: 150, display: '+₹150'),
+              BarItem(label: 'Electricity', value: 412, display: '+₹412'),
+            ]),
+            TextBlock('Netflix went from ₹649 to ₹799 in October; electricity is up 18% on last year.'),
+            ProposalBlock(
+              proposalId: 'demo-p-pending',
+              action: 'set_budget',
+              summary: 'Set a monthly Entertainment budget of ₹1,000',
+            ),
+          ]),
+        ],
+        proposalStatus: const {'demo-p-pending': ProposalStatus.pending},
+      ),
+    ];
+  }
+
+  @override
+  Stream<List<AgentThreadSummary>> watchThreads() async* {
+    yield [for (final t in _threads) t.summary]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  @override
+  Future<AgentThread?> loadThread(String threadId) async =>
+      _threads.where((t) => t.summary.id == threadId).firstOrNull;
+}
+
 /// Stand-in assistant for development: it answers every question with a real
 /// month-over-month comparison computed from the household's data. It does not
 /// understand the question.

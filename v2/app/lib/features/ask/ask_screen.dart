@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
 import '../../core/data/agent.dart';
@@ -29,10 +30,13 @@ const _suggestions = [
 ];
 
 class AskScreen extends ConsumerStatefulWidget {
-  const AskScreen({super.key, this.initialQuestion});
+  const AskScreen({super.key, this.initialQuestion, this.threadId});
 
   /// Sent automatically on open (used by "Ask why" on Home).
   final String? initialQuestion;
+
+  /// A past conversation to open and continue (`/ask?thread=<id>`).
+  final String? threadId;
 
   @override
   ConsumerState<AskScreen> createState() => _AskScreenState();
@@ -47,13 +51,70 @@ class _AskScreenState extends ConsumerState<AskScreen> {
   var _busy = false;
   String? _status;
   var _streamed = '';
+  var _loadingThread = false;
 
   @override
   void initState() {
     super.initState();
     final q = widget.initialQuestion;
-    if (q != null && q.trim().isNotEmpty) {
+    final thread = widget.threadId;
+    if (thread != null && thread.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openThread(thread));
+    } else if (q != null && q.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _send(q));
+    }
+  }
+
+  void _newChat() => setState(() {
+        _messages.clear();
+        _proposals.clear();
+        _threadId = null;
+      });
+
+  Future<void> _showHistory() async {
+    final id = await context.push<String>('/ask/history');
+    if (id != null && mounted && id != _threadId) await _openThread(id);
+  }
+
+  /// Replaces the chat with a stored conversation; the next question continues it.
+  Future<void> _openThread(String id) async {
+    setState(() {
+      _loadingThread = true;
+      _messages.clear();
+      _proposals.clear();
+      _threadId = null;
+    });
+    AgentThread? thread;
+    try {
+      thread = await ref.read(agentHistoryRepositoryProvider).loadThread(id);
+    } catch (_) {
+      thread = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loadingThread = false;
+      if (thread == null) return;
+      _threadId = thread.summary.id;
+      for (final m in thread.messages) {
+        final text = m.blocks.whereType<TextBlock>().firstOrNull;
+        if (m.fromUser) {
+          if (text != null) _messages.add(ChatMessage.user(text.text));
+        } else {
+          _messages.add(ChatMessage.assistant(m.blocks));
+        }
+      }
+      thread.proposalStatus.forEach((pid, status) {
+        _proposals[pid] = switch (status) {
+          ProposalStatus.applied => ProposalState.accepted,
+          ProposalStatus.rejected => ProposalState.declined,
+          ProposalStatus.pending => ProposalState.pending,
+        };
+      });
+    });
+    if (thread == null) {
+      showToast(context, 'Could not open that conversation.');
+    } else {
+      _toEnd();
     }
   }
 
@@ -75,7 +136,7 @@ class _AskScreenState extends ConsumerState<AskScreen> {
 
   Future<void> _send(String text) async {
     final message = text.trim();
-    if (message.isEmpty || _busy) return;
+    if (message.isEmpty || _busy || _loadingThread) return;
     _input.clear();
     setState(() {
       _messages.add(ChatMessage.user(message));
@@ -145,26 +206,27 @@ class _AskScreenState extends ConsumerState<AskScreen> {
       appBar: AppBar(
         title: const Text('Ask'),
         actions: [
+          IconButton(
+            tooltip: 'Past conversations',
+            onPressed: _busy || _loadingThread ? null : _showHistory,
+            icon: const Icon(Icons.history),
+          ),
           if (_messages.isNotEmpty && !_busy)
-            TextButton(
-              onPressed: () => setState(() {
-                _messages.clear();
-                _proposals.clear();
-                _threadId = null;
-              }),
-              child: const Text('New chat'),
-            ),
+            TextButton(onPressed: _newChat, child: const Text('New chat')),
           const SizedBox(width: 12),
         ],
       ),
       body: Column(children: [
         Expanded(
-          child: _messages.isEmpty
+          child: _loadingThread
+              ? const Center(child: CircularProgressIndicator())
+              : _messages.isEmpty
               ? _Welcome(onPick: _send)
               : ListView(
                   controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
                   children: [
+                    if (_threadId != null) _ThreadUsage(threadId: _threadId!),
                     for (final m in _messages)
                       if (m.fromUser)
                         _UserBubble((m.blocks.first as TextBlock).text)
@@ -240,6 +302,89 @@ class _AskScreenState extends ConsumerState<AskScreen> {
       ]),
     );
   }
+}
+
+/// "6 questions · 48k tokens" for the open conversation; tap for details.
+/// Live from the thread list, so it updates after each answer.
+class _ThreadUsage extends ConsumerWidget {
+  const _ThreadUsage({required this.threadId});
+
+  final String threadId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final summary = ref
+        .watch(agentThreadsProvider)
+        .value
+        ?.where((t) => t.id == threadId)
+        .firstOrNull;
+    if (summary == null || summary.usage.questions == 0) return const SizedBox(height: 8);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () => _showUsageSheet(context, summary),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 32),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.info_outline, size: 14, color: p.muted),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'This conversation · ${summary.usage.label}',
+                  style: LedgerText.body(size: 12, color: p.muted, tabular: true),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final _fullCount = NumberFormat.decimalPattern('en_IN');
+
+void _showUsageSheet(BuildContext context, AgentThreadSummary t) {
+  final p = context.palette;
+  final u = t.usage;
+  Widget row(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(children: [
+          Expanded(child: Text(label, style: LedgerText.body(color: p.muted))),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.end,
+                style: LedgerText.body(weight: 500, tabular: true)),
+          ),
+        ]),
+      );
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Conversation usage', style: LedgerText.display(size: 20)),
+          const SizedBox(height: 4),
+          Text('Only you can see this conversation.',
+              style: LedgerText.body(size: 13, color: p.muted)),
+          const SizedBox(height: 12),
+          row('Questions', _fullCount.format(u.questions)),
+          row('Input tokens', _fullCount.format(u.inputTokens)),
+          row('Output tokens', _fullCount.format(u.outputTokens)),
+          row('Model calls', _fullCount.format(u.modelCalls)),
+          if (t.lastModel != null) row('Model', t.lastModel!.split('/').last),
+        ]),
+      ),
+    ),
+  );
 }
 
 class _Welcome extends StatelessWidget {

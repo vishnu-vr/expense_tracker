@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../core/data/session.dart';
 import '../core/domain/models.dart';
 import '../features/admin/billing_screen.dart';
+import '../features/ask/ask_history_screen.dart';
 import '../features/ask/ask_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/onboarding_screen.dart';
@@ -104,10 +105,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/tags/:id',
         builder: (_, state) => TagDetailScreen(tagId: state.pathParameters['id']!),
       ),
+      // Optional ?thread=<id> opens a past conversation to continue it.
       GoRoute(
         path: '/ask',
-        builder: (_, state) => AskScreen(initialQuestion: state.extra as String?),
+        builder: (_, state) => AskScreen(
+          initialQuestion: state.extra as String?,
+          threadId: state.uri.queryParameters['thread'],
+        ),
       ),
+      GoRoute(path: '/ask/history', builder: (_, _) => const AskHistoryScreen()),
       GoRoute(path: '/sms', builder: (_, _) => const SmsScreen()),
       GoRoute(path: '/admin/billing', builder: (_, _) => const BillingScreen()),
     ],

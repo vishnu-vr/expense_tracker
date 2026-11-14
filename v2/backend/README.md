@@ -71,7 +71,7 @@ The scheduled `generateInsights` function is not started by the emulator suite (
 Error codes used by callables: `unauthenticated`, `invalid-argument`, `failed-precondition`
 (user has no home / proposal already resolved or no longer valid), `permission-denied`
 (not a member of the home their profile points at / no entry in a proposal is theirs),
-`not-found` (invite code, thread, proposal), `internal` (model failure).
+`not-found` (invite code; a thread or proposal that is missing or was started by another member, D-025), `internal` (model failure).
 
 ## The agent
 

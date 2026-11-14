@@ -34,9 +34,9 @@ Subcollections (all read/write by home members unless stated):
 - `categories/{id}` — `{ name, icon, color, type: 'income'|'expense' }`. Custom categories only; the built-in defaults (same ids as v1: `food`, `grocery`, `salary`, …) are merged in by the app and by the server (`functions/src/core/categories.ts`). A home doc with a default's id overrides it.
 - `categoryBudgets/{categoryId}` — `{ categoryId, amount: number, updatedAt: Timestamp }`. Monthly budget; doc id = category id.
 - `tags/{id}` — `{ name, color?, note?, createdBy?, createdAt? }`.
-- `aiThreads/{threadId}` — `{ title, createdBy, createdAt, updatedAt }`. **Read-only for clients**; created/updated by `askAgent`.
-  - `messages/{id}` — `{ role: 'user'|'assistant', blocks: Block[], createdAt }`. Read-only for clients. Order by `createdAt`.
-  - `proposals/{id}` — `{ action, params, summary, status: 'pending'|'applied'|'rejected', createdBy, createdAt, resolvedBy?, resolvedAt?, result? }`. Read-only for clients; resolved through `confirmProposal`.
+- `aiThreads/{threadId}` — `{ title, createdBy, createdAt, updatedAt, usage?: { questions, inputTokens, outputTokens, modelCalls }, lastModel?, lastMessagePreview? }`. **Personal and read-only for clients** (D-025): only the member whose uid is `createdBy` can read the thread, its messages and its proposals; list queries must filter `where('createdBy','==', uid)` (index: `createdBy` ASC, `updatedAt` DESC). Created/updated by `askAgent`, which also rejects continuing someone else's thread (`not-found`). `usage` is incremented (`FieldValue.increment`) after each successful answer; `lastModel` is the model id (e.g. `vertexai/gemini-3.8-flash`); `lastMessagePreview` is the first ~80 characters of the latest answer's first text block (or its first stat). Threads created before D-025 have no `usage`/preview until their next answer.
+  - `messages/{id}` — `{ role: 'user'|'assistant', blocks: Block[], createdAt, usage? }`. Read-only for clients. Order by `createdAt`. Assistant messages carry `usage: { inputTokens, outputTokens, modelCalls, model, latencyMs }` (that one answer).
+  - `proposals/{id}` — `{ action, params, summary, status: 'pending'|'applied'|'rejected', createdBy, createdAt, resolvedBy?, resolvedAt?, result? }`. Read-only for clients; resolved through `confirmProposal` (by `createdBy` only).
 - `insights/{id}` — `{ kind, title, body, data, periodKey, createdAt, dismissedBy: string[] }`. Read by members; the only client write is adding/removing **your own uid** in `dismissedBy`. Doc id is stable: `<kind>_<periodKey>[_<subject>]`.
 
 ### `transactions/{id}`
@@ -63,6 +63,9 @@ Note: a transaction created with a `createdAt` more than 24 h in the past is tre
 ### `transactionEmbeddings/{txId}` — server only
 `{ homeId, vector: Vector(768), text, model, updatedAt }`. No client access at all. Maintained by the `onTransactionWritten` trigger. Only entries with a note have one. `text` is `"<note> | <category name> | <matched merchant> | <tag names>"` — amount, date and type are never embedded.
 
+### `aiUsage/{YYYY-MM}_{homeId}` — server only
+`{ month: 'YYYY-MM', homeId, questions, inputTokens, outputTokens, modelCalls, updatedAt }`. Monthly assistant usage per household (month in Asia/Kolkata), incremented by `askAgent` after each successful answer and read by `getAdminDashboard`. Counts only, no text. No client access at all (D-025).
+
 ### `notifications/{id}`
 `{ type: 'transaction_added'|'transaction_updated'|'transaction_deleted', message, transactionId, homeId, createdBy, createdByName, createdAt: Timestamp, readBy: string[] }`
 
@@ -87,6 +90,7 @@ Source of truth: `functions/src/core/blocks.ts` (`BlockSchema`). At most 12 bloc
 
 - `transactions`: (`homeId` ASC, `date` ASC) and (`homeId` ASC, `date` DESC)
 - `notifications`: (`homeId` ASC, `createdAt` DESC)
+- `aiThreads` (collection scope): (`createdBy` ASC, `updatedAt` DESC) — the Past conversations list
 - `transactionEmbeddings`: (`homeId` ASC, `vector` VECTOR dimension 768, flat)
 
 ## Callable functions (region `asia-south1`)
@@ -97,8 +101,8 @@ Source of truth: `functions/src/core/blocks.ts` (`BlockSchema`). At most 12 bloc
 | `leaveHome` | `{}` | `{ homeId, ownershipTransferredTo: string \| null }` |
 | `exportTransactionsCsv` | `{ from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', timeZone }` | `{ csv, filename, count }` |
 | `askAgent` (streaming) | `{ threadId?, message, timeZone }` | `{ threadId, messageId, blocks: Block[] }`; stream chunks `{ type:'status', text }` \| `{ type:'text', delta }` |
-| `confirmProposal` | `{ threadId, proposalId, accept: boolean }` | `{ proposalId, status: 'applied'|'rejected', appliedCount, skippedTransactionIds }` |
-| `getAdminDashboard` (admin only) | `{ month: 'YYYY-MM' }` | `{ month, billing, usage }`, see below |
+| `confirmProposal` | `{ threadId, proposalId, accept: boolean }` | `{ proposalId, status: 'applied'|'rejected', appliedCount, skippedTransactionIds }`; `not-found` unless the caller created the proposal |
+| `getAdminDashboard` (admin only) | `{ month: 'YYYY-MM' }` | `{ month, billing, usage, assistant }`, see below |
 
 `leaveHome` removes the caller from their home's `memberIds` and deletes `users/{uid}.homeId`. If the caller owned the home and members remain, `ownerId` moves to the first remaining member (returned as `ownershipTransferredTo`). An empty home and all its data are left in place; the caller's transactions stay with the household. `failed-precondition` if the user has no `homeId`; a stale `homeId` is simply cleared.
 
@@ -128,9 +132,18 @@ decimals, net of credits (credits are negative).
            assistantQuestions,              // askagent requests
            functionCalls: [{ name, count }],
            firestore: { reads, writes, deletes },
-           tokens: [{ model, input, output }] }
+           tokens: [{ model, input, output }] },
+  assistant: { available: boolean,         // false if the aiUsage read failed
+               questions, inputTokens, outputTokens, modelCalls,
+               activeHouseholds,            // households with ≥ 1 question
+               byHousehold: [{ homeId, homeName, questions, inputTokens, outputTokens }] }
+                                            // sorted by inputTokens + outputTokens, highest first
 }
 ```
+`assistant` comes from the `aiUsage` rollup for the month; `homeName` is read
+from `homes/{homeId}` ("Deleted household" if it no longer exists). Thread
+titles and message text are never read or returned.
 `not_set_up`: the BigQuery export dataset/table does not exist yet.
 `no_data`: it exists but has no rows for the month. `unavailable`: the query
-failed (usage is still returned). Cached in memory for 15 minutes per month.
+failed (usage is still returned). A failed `aiUsage` read gives
+`assistant.available: false` and does not fail the call. Cached in memory for 15 minutes per month.

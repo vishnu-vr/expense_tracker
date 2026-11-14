@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
 import '../../core/data/admin.dart';
+import '../../core/data/agent.dart' show questionCount, tokenCount;
 import '../../core/format/money.dart';
 import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/common.dart';
@@ -142,10 +143,14 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       const SizedBox(height: 24),
       const SectionTitle('Usage'),
       _Usage(usage: d.usage),
+      const SizedBox(height: 24),
+      const SectionTitle('Assistant usage'),
+      _AssistantUsage(assistant: d.assistant),
       const SizedBox(height: 16),
       Text(
         'Costs come from the Cloud Billing export to BigQuery and are net of credits. '
-        'Usage comes from Cloud Monitoring.',
+        'Usage comes from Cloud Monitoring. Assistant usage is counted by the app per household; '
+        'conversations themselves stay private.',
         style: LedgerText.body(size: 12, color: p.muted, height: 1.4),
       ),
     ];
@@ -312,10 +317,18 @@ class _ByService extends StatelessWidget {
 /// A ruled row whose title and subtitle may wrap to two lines, with the
 /// amount on the right and an optional full-width widget underneath.
 class _AmountRow extends StatelessWidget {
-  const _AmountRow({required this.title, required this.amount, this.subtitle, this.below, this.topBorder = true});
+  const _AmountRow({
+    required this.title,
+    required this.amount,
+    this.subtitle,
+    this.subtitleLines = 2,
+    this.below,
+    this.topBorder = true,
+  });
 
   final String title;
   final String? subtitle;
+  final int subtitleLines;
   final String amount;
   final Widget? below;
   final bool topBorder;
@@ -334,7 +347,7 @@ class _AmountRow extends StatelessWidget {
               if (subtitle != null) ...[
                 const SizedBox(height: 2),
                 Text(subtitle!,
-                    maxLines: 2,
+                    maxLines: subtitleLines,
                     overflow: TextOverflow.ellipsis,
                     style: LedgerText.body(size: 12, color: p.muted)),
               ],
@@ -493,6 +506,51 @@ class _Usage extends StatelessWidget {
             topBorder: i > 0,
             title: f.name,
             trailing: Text(_count.format(f.count), style: figure),
+          ),
+    ]);
+  }
+}
+
+class _AssistantUsage extends StatelessWidget {
+  const _AssistantUsage({required this.assistant});
+
+  final AssistantUsageSummary assistant;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final a = assistant;
+    if (!a.available) {
+      return const EmptyState('Assistant usage is not available right now.');
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      LayoutBuilder(builder: (context, c) {
+        final tile = (c.maxWidth - 12) / 2;
+        return Wrap(spacing: 12, runSpacing: 12, children: [
+          SizedBox(width: tile, child: _Stat('Questions', _count.format(a.questions))),
+          SizedBox(width: tile, child: _Stat('Active households', _count.format(a.activeHouseholds))),
+          SizedBox(width: tile, child: _Stat('Input tokens', _count.format(a.inputTokens))),
+          SizedBox(width: tile, child: _Stat('Output tokens', _count.format(a.outputTokens))),
+        ]);
+      }),
+      const SizedBox(height: 8),
+      Text('${_count.format(a.modelCalls)} model calls',
+          style: LedgerText.body(size: 12, color: p.muted, tabular: true)),
+      const SizedBox(height: 16),
+      Text('BY HOUSEHOLD', style: LedgerText.eyebrow(p.muted)),
+      if (a.byHousehold.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text('No questions this month.', style: LedgerText.body(size: 14, color: p.muted)),
+        )
+      else
+        for (final (i, h) in a.byHousehold.indexed)
+          _AmountRow(
+            topBorder: i > 0,
+            title: h.homeName,
+            subtitleLines: 3,
+            subtitle: '${questionCount(h.questions)} · in\u00a0${_count.format(h.inputTokens)} · out\u00a0${_count.format(h.outputTokens)}',
+            amount: tokenCount(h.tokens),
           ),
     ]);
   }

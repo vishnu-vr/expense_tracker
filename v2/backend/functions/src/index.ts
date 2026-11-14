@@ -23,6 +23,7 @@ import {
   insightsPhrasingModelId,
   REGION,
 } from "./config";
+import { readAssistantUsage } from "./data/ai-usage";
 import { defaultRestClient } from "./data/billing";
 import { AdminDashboard, adminDashboardHandler } from "./handlers/admin-dashboard";
 import { askAgentHandler, AskAgentChunk, AskAgentResult } from "./handlers/ask-agent";
@@ -81,8 +82,9 @@ export const confirmProposal = onCall(callable, (request) =>
 );
 
 /**
- * getAdminDashboard({month: "YYYY-MM"}) -> {month, billing, usage} (see SCHEMA.md).
- * Admins only (custom claim admin: true). Reads the billing export and Cloud Monitoring.
+ * getAdminDashboard({month: "YYYY-MM"}) -> {month, billing, usage, assistant} (see SCHEMA.md).
+ * Admins only (custom claim admin: true). Reads the billing export, Cloud Monitoring
+ * and the aiUsage rollup.
  */
 let billingApi: ReturnType<typeof defaultRestClient> | null = null;
 const dashboardCache = new Map<string, { at: number; value: AdminDashboard }>();
@@ -95,6 +97,7 @@ export const getAdminDashboard = onCall({ ...callable, timeoutSeconds: 60 }, (re
       location: billingLocation(),
       now: () => new Date(),
       cache: dashboardCache,
+      readAssistantUsage: (month) => readAssistantUsage(getFirestore(), month),
       // Error names and HTTP status only.
       onError: (part, error) =>
         logger.error("Admin dashboard read failed", {

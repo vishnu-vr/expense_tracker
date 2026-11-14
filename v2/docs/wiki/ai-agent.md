@@ -86,6 +86,27 @@ It reports numeric accuracy, latency and token use per model. Without
   each tool on later model rounds. It comes from Genkit's per-call registry
   and does not affect answers (eval and smoke test pass). Ignore it in logs.
 
+## Conversations and usage (D-025)
+
+- Threads live at `homes/{homeId}/aiThreads/{threadId}` and are **personal**:
+  only the member who started one can read it, continue it (`askAgent`) or
+  resolve its proposals (`confirmProposal`); anyone else gets `not-found`.
+- The app lists them under Ask › Past conversations (`/ask/history`,
+  `createdBy == uid` ordered by `updatedAt desc`, limit 50) and reopens one
+  with `/ask?thread=<id>`, rendering the stored blocks with the same widgets.
+  Proposal docs' `status` decides whether Confirm is still offered.
+- After each successful answer the server writes, in one batch:
+  - `usage {inputTokens, outputTokens, modelCalls, model, latencyMs}` on the
+    assistant message;
+  - `usage.{questions, inputTokens, outputTokens, modelCalls}` increments,
+    `lastModel`, `lastMessagePreview` (first text block, 80 chars) and
+    `updatedAt` on the thread;
+  - the same increments on `aiUsage/{YYYY-MM}_{homeId}` (India-time month,
+    server-only), which feeds the admin dashboard's "Assistant usage".
+- Token counts are what the model reports to Genkit per call, summed over the
+  run (`RunAgentResult.usage`). They are counts only; no prompt or answer text
+  is copied anywhere new.
+
 ## Ideas not built yet
 
 - What-if answers ("if dining drops 20%…") as a dedicated tool.

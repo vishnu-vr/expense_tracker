@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 
 import '../core/data/firebase/firebase_session_repository.dart';
 import '../core/data/firebase/functions_admin_repository.dart';
+import '../core/data/agent.dart';
+import '../core/data/firebase/firestore_agent_history_repository.dart';
 import '../core/data/firebase/firestore_household_repository.dart';
 import '../core/data/firebase/functions_agent_repository.dart';
 import '../core/data/firebase/push_service.dart';
@@ -36,6 +38,15 @@ class _NoHousehold implements HouseholdRepository {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw StateError('No household: the user is not signed in yet');
+}
+
+/// No conversations before sign-in.
+class _NoHistory implements AgentHistoryRepository {
+  @override
+  Stream<List<AgentThreadSummary>> watchThreads() => Stream.value(const []);
+
+  @override
+  Future<AgentThread?> loadThread(String threadId) async => null;
 }
 
 /// Initialises Firebase when needed and returns the provider overrides for
@@ -97,6 +108,17 @@ Future<List<Override>> backendOverrides({required String timeZone}) async {
         currentUserId: user.id,
         currentUserEmail: user.email,
         homeId: homeId,
+      );
+    }),
+    agentHistoryRepositoryProvider.overrideWith((ref) {
+      final session = ref.watch(sessionProvider).value;
+      final user = session?.user;
+      final homeId = session?.homeId;
+      if (user == null || homeId == null) return _NoHistory();
+      return FirestoreAgentHistoryRepository(
+        firestore: db,
+        homeId: homeId,
+        currentUserId: user.id,
       );
     }),
     agentRepositoryProvider.overrideWithValue(

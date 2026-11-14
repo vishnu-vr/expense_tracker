@@ -9,6 +9,37 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-025 · Past conversations are personal, with usage counted per thread
+**2026-11-14 · Accepted · owner**
+
+The owner asked for a past-conversations area and per-thread usage visible
+to the user and the admin.
+- **Personal threads.** A thread, its messages and its proposals are readable
+  only by its `createdBy` member (still home-scoped); housemates and
+  outsiders get nothing. `askAgent` and `confirmProposal` treat another
+  member's thread or proposal as `not-found`. This supersedes the earlier
+  "any home member reads aiThreads" rule. Questions can mention personal
+  matters, and nothing in the app needed shared threads.
+- **Usage written by the server** in the same batch as the answer: the
+  assistant message gets `usage {inputTokens, outputTokens, modelCalls,
+  model, latencyMs}`; the thread gets `FieldValue.increment` totals in
+  `usage {questions, inputTokens, outputTokens, modelCalls}`, plus
+  `lastModel` and an 80-character `lastMessagePreview`. Failed answers are
+  not counted. Pure helpers in `functions/src/core/ai-usage.ts` (D-011).
+- **Monthly rollup** `aiUsage/{YYYY-MM}_{homeId}` (India-time month),
+  server-only (rules deny all client access). `getAdminDashboard` reads it
+  for its `assistant` section: totals, active households, and per household
+  name + counts sorted by tokens. The admin never sees thread titles or
+  message text; the rollup holds counts only.
+- App: Ask › history button opens `/ask/history`; a thread opens with
+  `/ask?thread=<id>` and continues there. Proposals already resolved show
+  their outcome instead of Confirm.
+- Rules out for now: sharing a thread with the household, deleting or
+  renaming threads from the app, and per-user (rather than per-household)
+  usage in the admin view.
+
+---
+
 ## D-024 · Admin billing and usage dashboard inside the app
 **2026-11-14 · Accepted · owner**
 
