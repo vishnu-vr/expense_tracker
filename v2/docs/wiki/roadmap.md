@@ -13,6 +13,7 @@ folder; this page is the working copy.
 - Live smoke test: all 11 checks pass, including a real assistant answer.
 - Eval on `gemini-3.8-flash`: 35/35, all figures exact (D-020).
 - v1 data migrated: 9 accounts, 6 households, 2,795 entries, totals match (D-023).
+- Admin billing & usage dashboard live: `getAdminDashboard` deployed, owner is admin, build 1.0.0 (3) distributed (D-024, 2026-11-14).
 - Google sign-in enabled and wired in the app; reaches Google's sign-in screen
   on Android.
 
@@ -24,7 +25,6 @@ folder; this page is the working copy.
 | Finish installing Xcode + CocoaPods | iOS build |
 | Play Store SMS permission declaration | Your developer account |
 | Turn on the Cloud Billing export to BigQuery (dataset `billing_export`, US multi-region; D-024) | Only a billing account admin can, in the console; see operations.md › Billing dashboard |
-| Make your account admin, deploy `getAdminDashboard`, ship a test build (D-024) | Custom claims, deploys and IAM on prod need your go-ahead |
 
 ## Next up (in order)
 
