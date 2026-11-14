@@ -48,7 +48,7 @@ fills in the rows, so the model cannot invent entries.
 | `AGENT_MODEL` | `vertexai/gemini-3.8-flash` | `backend/functions/.env.expense-tracker-v2-5c9fa` |
 | `VERTEX_LOCATION` | `global` (D-018) | same |
 | Embeddings | `gemini-embedding-001`, 768 dims | `backend/functions/src/config.ts` |
-| Claude option | `vertex-model-garden/claude-…`, `MODEL_GARDEN_LOCATION=us-east5` | needs terms accepted in Model Garden |
+| Claude option | `vertex-model-garden/claude-sonnet-5`, `MODEL_GARDEN_LOCATION` | enabled, but needs a quota increase first (D-022) |
 
 To switch models: change `AGENT_MODEL`, run the eval, compare, redeploy.
 
@@ -64,8 +64,16 @@ cd v2/backend/functions
 npm run eval -- --model vertexai/gemini-3.8-flash
 ```
 
-It reports numeric accuracy, latency and token use per model. Not yet run
-against a real model (as of 2026-11-14).
+It reports numeric accuracy, latency and token use per model. Without
+`gcloud`, pass a short-lived token from your Firebase CLI login (D-021); see
+[operations.md › Run the model eval](operations.md#run-the-model-eval).
+
+### Results
+
+| Date | Model | Passed | Exact figures | Latency mean / p95 | Tokens per question (in / out) |
+|---|---|---|---|---|---|
+| 2026-11-14 | `vertexai/gemini-3.8-flash` | 35/35 | 100% | 9.7 s / 15.6 s | ~6,600 / ~210 |
+| — | `vertex-model-garden/claude-sonnet-5` | not run: quota (D-022) | | | |
 
 ## Status on 2026-11-14
 
@@ -73,7 +81,10 @@ against a real model (as of 2026-11-14).
   the last 7 days, and on what?" and got correct stat, bars, transactions and
   text blocks in about 12 s.
 - Embeddings verified live (768 dims written by the trigger).
-- Answer quality across many questions has not been measured: run the eval.
+- Eval: 35/35 on `gemini-3.8-flash` (see Results above).
+- Known log noise: Genkit logs `ERROR: /tool/<name> already registered.` for
+  each tool on later model rounds. It comes from Genkit's per-call registry
+  and does not affect answers (eval and smoke test pass). Ignore it in logs.
 
 ## Ideas not built yet
 

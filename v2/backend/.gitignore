@@ -1,5 +1,6 @@
 node_modules/
 functions/lib/
+functions/lib-eval/
 *.log
 .env
 .env.*

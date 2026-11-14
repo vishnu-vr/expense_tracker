@@ -12,7 +12,7 @@ Phone (Flutter, Android + iOS)
  └─ Android native: SmsReceiver.kt  bank SMS → "Add this entry?" notification
 
 Firebase project expense-tracker-v2-5c9fa (asia-south1)
- ├─ Auth                       email/password (Google: not enabled yet)
+ ├─ Auth                       email/password, Google
  ├─ Firestore                  schema v2, security rules = the access model
  ├─ Cloud Functions (Node 22)
  │    ├─ callables (public     joinHome, leaveHome, askAgent (streaming),

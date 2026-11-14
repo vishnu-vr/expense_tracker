@@ -12,7 +12,7 @@
     "test": "vitest run --config vitest.config.mts",
     "test:rules": "vitest run --config vitest.rules.config.mts",
     "test:rules:emulator": "cd .. && firebase emulators:exec --only firestore --project demo-track-expense \"npm --prefix functions run test:rules\"",
-    "eval": "tsx eval/run.ts",
+    "eval": "tsc -p tsconfig.eval.json && node lib-eval/eval/run.js",
     "migrate": "tsx src/scripts/migrate-v1-to-v2.ts"
   },
   "dependencies": {

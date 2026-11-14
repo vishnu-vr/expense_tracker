@@ -110,10 +110,37 @@ The model is not served in that location. Current Gemini models are on
 ### zsh eats `:g…` after a variable
 In zsh, `$m:generateContent` applies a history modifier. Write `${m}:…`.
 
-### Sign-in with Google does nothing
-Google is not enabled in Firebase Auth yet, and each machine's signing key
-must be registered: `firebase apps:android:sha:create <appId> <SHA1> --project prod`.
-This Mac's debug key is registered. A release key will need adding too.
+### Sign-in with Google fails
+- Google is enabled in Firebase Auth (2026-11-14). The app passes the web
+  client id (`DefaultFirebaseOptions.googleWebClientId`) as `serverClientId`;
+  without it Android cannot get an ID token.
+- Each signing key must be registered:
+  `firebase apps:android:sha:create <appId> <SHA1> --project prod`. This Mac's
+  debug key is registered; a release key will need adding too.
+- iOS uses `googleIosClientId` and the reversed client id URL scheme in
+  `app/ios/Runner/Info.plist`.
+
+### Eval: every question fails with "Unknown action type returned from plugin"
+It was run through `tsx` instead of the compiled build. Use `npm run eval`,
+which compiles first (D-021).
+
+## Run the model eval
+
+Runs the 35 golden questions against a real model (billed, about 6,600 input
+tokens per question). No `gcloud` needed: the token comes from your Firebase
+CLI login and stays in memory.
+```
+cd v2/backend/functions
+FT=$(npm root -g)/firebase-tools/lib
+EVAL_ACCESS_TOKEN=$(node -e "
+const {configstore}=require('$FT/configstore.js'); const a=require('$FT/auth.js');
+a.getAccessToken(configstore.get('tokens').refresh_token,['https://www.googleapis.com/auth/cloud-platform']).then(t=>process.stdout.write(t.access_token));
+") GOOGLE_CLOUD_PROJECT=expense-tracker-v2-5c9fa VERTEX_LOCATION=global \
+  npm run eval -- --model vertexai/gemini-3.8-flash
+```
+Add `,vertex-model-garden/claude-sonnet-5` to `--model` to compare (once the
+Claude quota exists), or `--only spend_oct,goa_trip` for a quick check. The
+token lasts about an hour. Results are written to `lib-eval/eval/results/`.
 
 ## Data migration v1 → v2 (not run)
 

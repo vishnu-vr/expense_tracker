@@ -9,6 +9,37 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-022 · Claude needs a Vertex AI quota increase before it can be compared
+**2026-11-14 · Accepted · waiting on the owner**
+
+Claude is enabled in Model Garden, but every request (`claude-sonnet-5` on
+`global` and `us-east5`) returns 429 "Quota exceeded … Please submit a quota
+increase request". New projects start with no Claude quota. Until the owner
+files the increase, the agent stays on Gemini. When quota arrives, check which
+location answers and set `MODEL_GARDEN_LOCATION` to it (`global` is listed on
+the pricing page).
+
+## D-021 · The eval runs from compiled CommonJS, with an in-memory token
+**2026-11-14 · Accepted**
+
+- `npm run eval` compiles `src` + `eval` to `lib-eval/` (`tsconfig.eval.json`)
+  and runs it with Node, exactly like the deployed functions. Through `tsx`,
+  the lazily imported model plugin loads an ESM copy of Genkit next to the CJS
+  one and every call fails with "Unknown action type returned from plugin".
+- Without `gcloud`, credentials come from `EVAL_ACCESS_TOKEN`: a short-lived
+  access token for the signed-in Firebase CLI account, held in memory and
+  passed to the plugin via `useAccessTokenForVertex` (eval only; deployed
+  functions use their service account). Writing the CLI's refresh token to a
+  credentials file was rejected as too risky.
+
+## D-020 · gemini-3.8-flash is the agent model for now
+**2026-11-14 · Accepted · on eval results**
+
+First real eval: **35/35 questions passed, 100% of figures exact**. Mean
+latency 9.7 s (median 7.9 s, p95 15.6 s), about 6,600 input and 210 output
+tokens per question, 2.3 model calls per question. Claude comparison is
+pending (D-022). Re-run the eval after any change to the prompt, tools or model.
+
 ## D-019 · Callable functions need a public invoker binding
 **2026-11-14 · Accepted · found during the first deploy**
 

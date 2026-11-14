@@ -2,7 +2,7 @@
  * Agent evaluation: run every golden question against the fixture household
  * with a real model and score the answers deterministically.
  *
- *   npm run eval -- --model vertexai/gemini-3.8-flash
+ *   npm run eval -- --model vertexai/gemini-3.8-flash      (compiles to lib-eval/, then runs)
  *   npm run eval -- --model vertexai/gemini-3.8-flash,vertex-model-garden/claude-sonnet-5
  *   npm run eval -- --model googleai/gemini-3.8-flash --only spend_oct,goa_trip
  *
@@ -12,7 +12,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { getAgentRuntime, parseModelId, ModelId } from "../src/agent/models";
+import { getAgentRuntime, parseModelId, ModelId, useAccessTokenForVertex } from "../src/agent/models";
 import { runAgent } from "../src/agent/run";
 import { agentModelId } from "../src/config";
 import { FIXTURE_NOW, FIXTURE_TIME_ZONE } from "./fixture";
@@ -63,7 +63,10 @@ function assertCredentials(model: ModelId): void {
     return;
   }
   const adcFile = join(homedir(), ".config", "gcloud", "application_default_credentials.json");
-  const hasAdc = !!process.env.GOOGLE_APPLICATION_CREDENTIALS || existsSync(adcFile);
+  // EVAL_ACCESS_TOKEN: a short-lived token, e.g. from `node scripts/print-access-token.mjs`
+  // (signed-in Firebase CLI account). Used in memory only, never written anywhere.
+  const hasAdc =
+    !!process.env.EVAL_ACCESS_TOKEN || !!process.env.GOOGLE_APPLICATION_CREDENTIALS || existsSync(adcFile);
   const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
   const problems: string[] = [];
   if (!hasAdc) {
@@ -171,6 +174,12 @@ async function main() {
     }
   });
   models.forEach(assertCredentials);
+  if (process.env.EVAL_ACCESS_TOKEN) {
+    useAccessTokenForVertex(
+      process.env.EVAL_ACCESS_TOKEN,
+      process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "",
+    );
+  }
 
   let goldens = buildGoldens();
   if (args.only) {

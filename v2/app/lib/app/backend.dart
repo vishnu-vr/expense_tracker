@@ -75,7 +75,16 @@ Future<List<Override>> backendOverrides({required String timeZone}) async {
 
   return [
     sessionRepositoryProvider.overrideWithValue(
-      FirebaseSessionRepository(auth: auth, firestore: db, functions: functions),
+      FirebaseSessionRepository(
+        auth: auth,
+        firestore: db,
+        functions: functions,
+        // The emulator accepts any Google token, so only the real project needs these.
+        googleServerClientId:
+            backendMode == 'firebase' ? DefaultFirebaseOptions.googleWebClientId : null,
+        googleIosClientId:
+            backendMode == 'firebase' ? DefaultFirebaseOptions.googleIosClientId : null,
+      ),
     ),
     householdRepositoryProvider.overrideWith((ref) {
       final session = ref.watch(sessionProvider).value;

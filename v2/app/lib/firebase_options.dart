@@ -5,6 +5,7 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 
+
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform => switch (defaultTargetPlatform) {
         TargetPlatform.android => android,
@@ -27,5 +28,15 @@ class DefaultFirebaseOptions {
     projectId: 'expense-tracker-v2-5c9fa',
     storageBucket: 'expense-tracker-v2-5c9fa.firebasestorage.app',
     iosBundleId: 'com.vapps.trackExpense',
+    iosClientId: '117550011867-6bmfj6434cgci2m2ao7n0gejo5javbhq.apps.googleusercontent.com',
   );
+
+  /// Web OAuth client of the Google sign-in provider. Android exchanges the
+  /// Google account for an ID token addressed to this client.
+  static const googleWebClientId =
+      '117550011867-ep18b4r5dvb9nqnfcti7h96cja43hlql.apps.googleusercontent.com';
+
+  /// iOS OAuth client (from GoogleService-Info.plist).
+  static const googleIosClientId =
+      '117550011867-6bmfj6434cgci2m2ao7n0gejo5javbhq.apps.googleusercontent.com';
 }

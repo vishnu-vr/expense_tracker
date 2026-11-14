@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../session.dart';
@@ -27,7 +28,15 @@ class FirebaseSessionRepository implements SessionRepository {
     required this._auth,
     required FirebaseFirestore firestore,
     required this._functions,
+    this.googleServerClientId,
+    this.googleIosClientId,
   }) : _db = firestore;
+
+  /// Web OAuth client id the Google ID token is issued for (needed on Android).
+  final String? googleServerClientId;
+
+  /// iOS OAuth client id.
+  final String? googleIosClientId;
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _db;
@@ -88,7 +97,10 @@ class FirebaseSessionRepository implements SessionRepository {
   Future<void> signInWithGoogle() async {
     try {
       if (!_googleReady) {
-        await GoogleSignIn.instance.initialize();
+        await GoogleSignIn.instance.initialize(
+          clientId: defaultTargetPlatform == TargetPlatform.iOS ? googleIosClientId : null,
+          serverClientId: googleServerClientId,
+        );
         _googleReady = true;
       }
       final account = await GoogleSignIn.instance.authenticate();

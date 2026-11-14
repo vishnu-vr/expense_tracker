@@ -44,6 +44,29 @@ const runtimes = new Map<string, Promise<AgentRuntime>>();
  * Plugins are imported lazily so loading the functions module (deploy-time
  * discovery, emulators, unit tests) never needs credentials or the heavier SDKs.
  */
+/**
+ * Auth for local tools (the eval) when no Application Default Credentials
+ * exist: a short-lived OAuth access token held in memory only. Deployed
+ * functions never set this; they use the runtime service account.
+ */
+let accessTokenOverride: { token: string; projectId: string } | null = null;
+
+export function useAccessTokenForVertex(token: string, projectId: string): void {
+  accessTokenOverride = { token, projectId };
+  runtimes.clear();
+}
+
+/** Extra plugin options for the access-token override; empty when not set. */
+async function vertexAuthOptions(): Promise<{ googleAuth?: Record<string, unknown>; projectId?: string }> {
+  if (!accessTokenOverride) return {};
+  const { OAuth2Client } = await import("google-auth-library");
+  const client = new OAuth2Client();
+  client.setCredentials({ access_token: accessTokenOverride.token });
+  const { projectId } = accessTokenOverride;
+  // The plugin reads the project from its own options, not from googleAuth.
+  return { googleAuth: { authClient: client, projectId }, projectId };
+}
+
 export function getAgentRuntime(rawModelId: string): Promise<AgentRuntime> {
   const modelId = parseModelId(rawModelId);
   let runtime = runtimes.get(modelId.id);
@@ -61,20 +84,24 @@ async function createRuntime(modelId: ModelId): Promise<AgentRuntime> {
     return { ai: genkit({ plugins: [googleAI()] }), model: googleAI.model(modelId.name), modelId };
   }
   const { vertexAI } = await import("@genkit-ai/google-genai");
+  const auth = await vertexAuthOptions();
   if (modelId.provider === "vertex-model-garden") {
     // Claude (and other partner models) through Vertex AI Model Garden. The
     // model must be enabled for the project in the Model Garden console.
     const { vertexModelGarden } = await import("@genkit-ai/vertexai/modelgarden");
     return {
       ai: genkit({
-        plugins: [vertexAI({ location: vertexLocation() }), vertexModelGarden({ location: modelGardenLocation() })],
+        plugins: [
+          vertexAI({ location: vertexLocation(), ...auth }),
+          vertexModelGarden({ location: modelGardenLocation(), ...auth }),
+        ],
       }),
       model: vertexModelGarden.model(modelId.name),
       modelId,
     };
   }
   return {
-    ai: genkit({ plugins: [vertexAI({ location: vertexLocation() })] }),
+    ai: genkit({ plugins: [vertexAI({ location: vertexLocation(), ...auth })] }),
     model: vertexAI.model(modelId.name),
     modelId,
   };

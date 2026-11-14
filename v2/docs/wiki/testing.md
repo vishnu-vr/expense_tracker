@@ -12,7 +12,7 @@ on every change; run the slow ones before a deploy or release.
 | Backend unit | `cd v2/backend/functions && npm test` | Agent tools, insight detectors, golden answers, proposals, migration transform, agent loop with a scripted model | seconds |
 | Rules + handlers | `cd v2/backend/functions && npm run test:rules:emulator` | Security rules allow/deny, every handler against the Firestore emulator | ~1 min |
 | Live smoke | `cd v2/backend && node scripts/smoke-live.mjs` | The deployed project: rules, triggers, embeddings, one real assistant answer; cleans up after itself (`--cleanup` sweeps leftovers) | ~1 min, tiny cost |
-| Model eval | `cd v2/backend/functions && npm run eval -- --model <id>` | Assistant accuracy on 35 golden questions | minutes, billed |
+| Model eval | `cd v2/backend/functions && npm run eval -- --model <id>` (token setup: [operations.md](operations.md#run-the-model-eval)) | Assistant accuracy on 35 golden questions; last: gemini-3.8-flash 35/35 | ~6 min, billed |
 
 CI (`.github/workflows/v2-app.yml`) runs `flutter analyze` and `flutter test`
 on changes under `v2/app`, and `.github/workflows/v2-backend.yml` runs the
