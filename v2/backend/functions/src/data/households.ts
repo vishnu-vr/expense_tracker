@@ -12,11 +12,18 @@ function toIso(value: unknown): string | null {
 
 /**
  * For every household: name, member count, total entries, entries dated in
- * [start, end), and the latest entry date. Uses count() aggregations and one
- * single-document read per household (index homeId + date desc). No amounts,
- * notes or other entry content are read.
+ * [start, end), and the latest entry date up to `now` (entries dated in the
+ * future, such as EMIs entered ahead, are counted but are not the "last
+ * entry"). Uses count() aggregations and one single-document read per
+ * household (index homeId + date desc). No amounts, notes or other entry
+ * content are read.
  */
-export async function readHouseholdActivity(db: Firestore, start: Date, end: Date): Promise<HouseholdActivityRow[]> {
+export async function readHouseholdActivity(
+  db: Firestore,
+  start: Date,
+  end: Date,
+  now: Date = new Date(),
+): Promise<HouseholdActivityRow[]> {
   const homes = await db.collection("homes").select("name", "memberIds").limit(MAX_HOMES).get();
   const tx = db.collection("transactions");
   return Promise.all(
@@ -25,7 +32,7 @@ export async function readHouseholdActivity(db: Firestore, start: Date, end: Dat
       const [all, inMonth, last] = await Promise.all([
         mine.count().get(),
         mine.where("date", ">=", Timestamp.fromDate(start)).where("date", "<", Timestamp.fromDate(end)).count().get(),
-        mine.orderBy("date", "desc").limit(1).select("date").get(),
+        mine.where("date", "<=", Timestamp.fromDate(now)).orderBy("date", "desc").limit(1).select("date").get(),
       ]);
       const members = home.get("memberIds");
       return {

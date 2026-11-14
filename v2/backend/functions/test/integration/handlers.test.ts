@@ -480,14 +480,15 @@ describe("getAdminDashboard: entries per household", () => {
     await add("c1", "2026-10-31T19:00:00Z"); // 1 Nov 00:30 IST: inside November
     await add("c2", "2026-11-20T08:00:00Z");
     await add("c3", "2026-10-15T08:00:00Z"); // October
+    await add("c4", "2027-03-01T15:45:00Z"); // an EMI entered ahead: counted, but not the last entry
     await db.doc("homes/h8").set({ name: "", memberIds: ["gil"] });
 
     const start = new Date("2026-10-31T18:30:00Z");
     const end = new Date("2026-11-30T18:30:00Z");
-    const rows = await readHouseholdActivity(db, start, end);
+    const rows = await readHouseholdActivity(db, start, end, new Date("2026-11-25T00:00:00Z"));
     const h9 = rows.find((r) => r.homeId === "h9");
     expect(h9).toEqual({
-      homeId: "h9", homeName: "Counting house", members: 3, entries: 3, entriesInMonth: 2,
+      homeId: "h9", homeName: "Counting house", members: 3, entries: 4, entriesInMonth: 2,
       lastEntryAt: "2026-11-20T08:00:00.000Z",
     });
     expect(rows.find((r) => r.homeId === "h8")).toMatchObject({ homeName: "Unnamed household", members: 1, entries: 0, lastEntryAt: null });

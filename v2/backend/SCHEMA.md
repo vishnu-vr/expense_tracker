@@ -143,7 +143,9 @@ decimals, net of credits (credits are negative).
                 entriesInMonth,              // entries dated in the month (Asia/Kolkata)
                 activeInMonth,               // households with ≥ 1 entry in the month
                 byHousehold: [{ homeId, homeName, members, entries, entriesInMonth,
-                                lastEntryAt /* ISO | null */ }] }
+                                lastEntryAt /* ISO | null; latest entry dated up to now,
+                                               future-dated entries (EMIs entered ahead) are
+                                               counted in `entries` but skipped here */ }] }
                                             // sorted by entriesInMonth, then entries, then name
 }
 ```
