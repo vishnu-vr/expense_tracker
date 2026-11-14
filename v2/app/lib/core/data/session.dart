@@ -1,12 +1,16 @@
 import 'dart:async';
 
 class AppUser {
-  const AppUser({required this.id, this.email, this.name, this.photoUrl});
+  const AppUser({required this.id, this.email, this.name, this.photoUrl, this.isAdmin = false});
 
   final String id;
   final String? email;
   final String? name;
   final String? photoUrl;
+
+  /// Custom claim `admin: true` (set with backend `npm run set-admin`).
+  /// Unlocks Profile › Admin › Billing & usage. The server checks it again.
+  final bool isAdmin;
 
   String get displayName {
     if (name != null && name!.trim().isNotEmpty) return name!.trim();
@@ -57,7 +61,7 @@ abstract class SessionRepository {
 class DemoSessionRepository implements SessionRepository {
   DemoSessionRepository({Session initial = _signedIn}) : _session = initial;
 
-  static const _user = AppUser(id: 'u1', email: 'asha@example.com', name: 'Asha');
+  static const _user = AppUser(id: 'u1', email: 'asha@example.com', name: 'Asha', isAdmin: true);
   static const _signedIn = Session(user: _user, homeId: 'demo');
 
   Session _session;

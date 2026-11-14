@@ -1,6 +1,11 @@
 /**
  * One-off migration: Track Expense v1 project -> v2 project.
  *
+ * With a short-lived access token (no key files; see docs/wiki/migration-plan.md):
+ *   MIGRATE_ACCESS_TOKEN=<token> npm run migrate -- --source-project public-exp-tracker \
+ *     --target-project expense-tracker-v2-5c9fa            [--execute]
+ *
+ * With service-account keys:
  *   npm run migrate -- --source-key ./v1-sa.json --target-key ./v2-sa.json            # dry run (default)
  *   npm run migrate -- --source-key ./v1-sa.json --target-key ./v2-sa.json --execute  # actually write
  *
@@ -21,8 +26,9 @@
  *    which exposes no write method.
  *  - Refuses to run if source and target are the same project.
  */
-import { cert, initializeApp } from "firebase-admin/app";
+import { cert, Credential, initializeApp } from "firebase-admin/app";
 import { Firestore, getFirestore } from "firebase-admin/firestore";
+import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { HomeTotals, summarizeByHome, totalsEqual, transformTransaction, V2Transaction } from "./migrate-transform";
@@ -30,30 +36,55 @@ import { HomeTotals, summarizeByHome, totalsEqual, transformTransaction, V2Trans
 interface Args {
   sourceKey: string;
   targetKey: string;
+  sourceProject: string;
+  targetProject: string;
   execute: boolean;
 }
 
-function parseArgs(argv: string[]): Args {
+export function parseArgs(argv: string[]): Args {
   let sourceKey = process.env.SOURCE_SERVICE_ACCOUNT ?? "";
   let targetKey = process.env.TARGET_SERVICE_ACCOUNT ?? "";
+  let sourceProject = "";
+  let targetProject = "";
   let execute = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--source-key") sourceKey = argv[++i] ?? "";
     else if (a === "--target-key") targetKey = argv[++i] ?? "";
+    else if (a === "--source-project") sourceProject = argv[++i] ?? "";
+    else if (a === "--target-project") targetProject = argv[++i] ?? "";
     else if (a === "--execute") execute = true;
     else if (a === "--dry-run") execute = false;
     else if (a === "--help" || a === "-h") {
-      console.log("Usage: npm run migrate -- --source-key <v1 service account json> --target-key <v2 service account json> [--execute]");
+      console.log(
+        "Usage: npm run migrate -- --source-key <v1 key json> --target-key <v2 key json> [--execute]\n" +
+          "   or: MIGRATE_ACCESS_TOKEN=<token> npm run migrate -- --source-project <v1 id> --target-project <v2 id> [--execute]",
+      );
       process.exit(0);
     } else {
       throw new Error(`Unknown argument: ${a}`);
     }
   }
-  if (!sourceKey || !targetKey) {
-    throw new Error("Both --source-key and --target-key (or SOURCE_SERVICE_ACCOUNT / TARGET_SERVICE_ACCOUNT) are required.");
+  const tokenMode = !!sourceProject || !!targetProject;
+  if (tokenMode) {
+    if (!sourceProject || !targetProject) throw new Error("Give both --source-project and --target-project.");
+    if (!process.env.MIGRATE_ACCESS_TOKEN) throw new Error("--source-project/--target-project need MIGRATE_ACCESS_TOKEN.");
+  } else if (!sourceKey || !targetKey) {
+    throw new Error(
+      "Give --source-key and --target-key (or SOURCE_SERVICE_ACCOUNT / TARGET_SERVICE_ACCOUNT), " +
+        "or --source-project and --target-project with MIGRATE_ACCESS_TOKEN.",
+    );
   }
-  return { sourceKey, targetKey, execute };
+  return { sourceKey, targetKey, sourceProject, targetProject, execute };
+}
+
+/**
+ * Admin SDK credential backed by a short-lived OAuth access token held in
+ * memory (e.g. from the signed-in Firebase CLI account). Nothing is written
+ * to disk. Tokens last about an hour, which is ample for a household.
+ */
+export function accessTokenCredential(token: string): Credential {
+  return { getAccessToken: async () => ({ access_token: token, expires_in: 3000 }) };
 }
 
 type Doc = { id: string; data: Record<string, unknown> };
@@ -66,6 +97,25 @@ class ReadOnlySource {
     const snap = await this.db.collection(path).get();
     return snap.docs.map((d) => ({ id: d.id, data: d.data() }));
   }
+}
+
+/**
+ * Firestore client authenticated with an in-memory access token. The Admin
+ * SDK's getFirestore() only accepts key files or default credentials, so the
+ * client is built directly; the settings are passed through to google-auth.
+ */
+export function firestoreWithToken(projectId: string, token: string): Firestore {
+  // Use the google-auth-library copy that Firestore itself depends on; a
+  // different major version fails inside gRPC ("headers.forEach is not a function").
+  const fromFirestore = createRequire(require.resolve("@google-cloud/firestore"));
+  const { OAuth2Client } = fromFirestore("google-auth-library") as typeof import("google-auth-library");
+  const authClient = new OAuth2Client();
+  authClient.setCredentials({ access_token: token });
+  return new Firestore({ projectId, authClient } as ConstructorParameters<typeof Firestore>[0]);
+}
+
+function openProjectWithToken(projectId: string, token: string): { db: Firestore; projectId: string } {
+  return { db: firestoreWithToken(projectId, token), projectId };
 }
 
 function openProject(name: string, keyPath: string): { db: Firestore; projectId: string } {
@@ -103,8 +153,13 @@ function printComparison(title: string, left: Map<string, HomeTotals>, right: Ma
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const sourceProject = openProject("source", args.sourceKey);
-  const targetProject = openProject("target", args.targetKey);
+  const token = process.env.MIGRATE_ACCESS_TOKEN ?? "";
+  const sourceProject = args.sourceProject
+    ? openProjectWithToken(args.sourceProject, token)
+    : openProject("source", args.sourceKey);
+  const targetProject = args.targetProject
+    ? openProjectWithToken(args.targetProject, token)
+    : openProject("target", args.targetKey);
   if (sourceProject.projectId === targetProject.projectId) {
     throw new Error(`Source and target are the same project (${sourceProject.projectId}). Refusing to run.`);
   }
@@ -184,7 +239,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((e) => {
+if (require.main === module) main().catch((e) => {
   console.error(e instanceof Error ? e.message : e);
   process.exit(1);
 });

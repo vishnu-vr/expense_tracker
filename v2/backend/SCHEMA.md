@@ -98,7 +98,39 @@ Source of truth: `functions/src/core/blocks.ts` (`BlockSchema`). At most 12 bloc
 | `exportTransactionsCsv` | `{ from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', timeZone }` | `{ csv, filename, count }` |
 | `askAgent` (streaming) | `{ threadId?, message, timeZone }` | `{ threadId, messageId, blocks: Block[] }`; stream chunks `{ type:'status', text }` \| `{ type:'text', delta }` |
 | `confirmProposal` | `{ threadId, proposalId, accept: boolean }` | `{ proposalId, status: 'applied'|'rejected', appliedCount, skippedTransactionIds }` |
+| `getAdminDashboard` (admin only) | `{ month: 'YYYY-MM' }` | `{ month, billing, usage }`, see below |
 
 `leaveHome` removes the caller from their home's `memberIds` and deletes `users/{uid}.homeId`. If the caller owned the home and members remain, `ownerId` moves to the first remaining member (returned as `ownershipTransferredTo`). An empty home and all its data are left in place; the caller's transactions stay with the household. `failed-precondition` if the user has no `homeId`; a stale `homeId` is simply cleared.
 
 All require Firebase Auth. See `README.md` for error codes and streaming notes.
+
+### `getAdminDashboard` (D-024)
+
+Requires the custom claim `admin: true` (`permission-denied` otherwise,
+`unauthenticated` when signed out). `invalid-argument` for a malformed or
+future month (months are India time). `unavailable` only when both the billing
+and the usage reads fail. Amounts are in the billing currency, rounded to 2
+decimals, net of credits (credits are negative).
+
+```
+{
+  month: "2026-11",
+  billing:
+    { configured: true, currency: "INR", dataAsOf: ISO string | null,
+      net, gross, credits, previousMonthNet: number | null,
+      forecastNet: number | null,          // current month only
+      changeVsPreviousMonth: number | null, // (forecastNet ?? net) - previousMonthNet
+      byService: [{ service, amount }],    // net, sorted, small ones summed into "Other"
+      topSkus:   [{ service, sku, amount, usage, unit }],  // top 10 by gross cost
+      daily:     [{ date: "YYYY-MM-DD", amount }] }        // India time
+  | { configured: false, reason: "not_set_up" | "no_data" | "unavailable" },
+  usage: { available: boolean,             // false for months past Monitoring retention (~6 weeks)
+           assistantQuestions,              // askagent requests
+           functionCalls: [{ name, count }],
+           firestore: { reads, writes, deletes },
+           tokens: [{ model, input, output }] }
+}
+```
+`not_set_up`: the BigQuery export dataset/table does not exist yet.
+`no_data`: it exists but has no rows for the month. `unavailable`: the query
+failed (usage is still returned). Cached in memory for 15 minutes per month.

@@ -43,6 +43,18 @@ for the small uppercase labels above figures. Fonts are bundled in
 `PeriodNav`, `EmptyState`, `Pill`, `showToast`, `confirmDialog`,
 `CategoryIcon`, `BurnSparklineView`. Use these before making new ones.
 
+## App icon
+
+Off-white receipt with a torn edge, an ink rupee mark and two ledger rules
+(the second in accent green), on accent green `#0B6E4F`. Master artwork:
+`app/assets/icon/` (`app_icon.svg` full-bleed for iOS and stores,
+`app_icon_foreground.svg` for the Android adaptive icon, `app_icon_monochrome.svg`
+for Android 13 themed icons, `app_icon_1024.png`). Platform files were
+rendered from these: `app/android/app/src/main/res/mipmap-*` and
+`mipmap-anydpi-v26/ic_launcher.xml`, and
+`app/ios/Runner/Assets.xcassets/AppIcon.appiconset` (no alpha channel). To
+change it, edit the SVGs and regenerate every size.
+
 ## Rules of thumb
 
 - Touch targets ≥ 44 px; icon-only buttons get a `tooltip` (it doubles as the

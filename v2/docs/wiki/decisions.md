@@ -9,6 +9,55 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-024 · Admin billing and usage dashboard inside the app
+**2026-11-14 · Accepted · owner**
+
+One admin-only screen (Profile › Admin › Billing & usage) shows what the
+project costs to run, month by month, plus the usage behind it.
+- **Costs** come only from the Cloud Billing export to BigQuery (dataset
+  `billing_export`, US multi-region, so it backfills from the start of the
+  previous month). The callable `getAdminDashboard` queries the
+  `gcp_billing_export_v1_*` tables for the project and invoice month: totals,
+  credits, services, top SKUs, daily cost (India time) and the previous month.
+- **Usage** comes from Cloud Monitoring: Vertex AI tokens per model, Firestore
+  reads/writes/deletes, Cloud Run requests per function (assistant questions =
+  `askagent` requests). Monitoring keeps about six weeks, so older months show
+  "Usage not available".
+- **Admin** is the custom claim `admin: true`, set with
+  `npm run set-admin` (in-memory token, no key files, preview by default). The
+  app hides the screen without it; the callable rejects non-admins with
+  `permission-denied`.
+- All numbers (net = gross + credits, month-end forecast = daily average ×
+  days in month, change vs last month, "Other" grouping) come from
+  `backend/functions/src/core/billing.ts`, unit-tested (D-011). Billing and
+  usage are read independently, so one failing does not hide the other.
+  Results are cached in memory for 15 minutes per month.
+- REST through the `google-auth-library` already installed with
+  firebase-admin (dynamic import, like `agent/models.ts`); no new packages.
+- Rules out for now: manually entered fixed costs, budget alerts, and a
+  separate web dashboard.
+
+---
+
+## D-023 · v1 data migrated from `public-exp-tracker`
+**2026-11-14 · Accepted · owner go-ahead**
+
+9 accounts, 6 households and 2,795 entries copied; every household's counts
+and sums match; embeddings rebuilt. v1 left untouched as the fallback.
+Details and re-run steps: [migration-plan.md](migration-plan.md).
+- The migration and backfill scripts authenticate with an in-memory access
+  token (`MIGRATE_ACCESS_TOKEN`, `BACKFILL_ACCESS_TOKEN`). The Admin SDK's
+  `getFirestore()` refuses non-key credentials, so the scripts build the
+  Firestore client directly with an OAuth client from Firestore's own copy of
+  `google-auth-library` (a different major version fails inside gRPC).
+- Incident: during the first Auth import attempt the v1 password-hash signer
+  key was printed to the assistant's terminal output (a zsh word-splitting
+  mistake). It was not written to the repo or any file. Firebase does not let
+  a project rotate it; the exposure only matters together with the password
+  hashes, which were deleted.
+
+---
+
 ## D-022 · Claude needs a Vertex AI quota increase before it can be compared
 **2026-11-14 · Accepted · waiting on the owner**
 

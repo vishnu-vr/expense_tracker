@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/data/admin.dart';
 import '../core/data/agent.dart';
 import '../core/data/demo_repository.dart';
 import '../core/data/firebase/push_service.dart';
@@ -67,6 +68,22 @@ final sessionRepositoryProvider =
 
 final sessionProvider = StreamProvider<Session>(
   (ref) => ref.watch(sessionRepositoryProvider).watch(),
+);
+
+/// Custom claim `admin: true` on the signed-in account.
+final isAdminProvider = Provider<bool>(
+  (ref) => ref.watch(sessionProvider).value?.user?.isAdmin ?? false,
+);
+
+final adminRepositoryProvider = Provider<AdminRepository>(
+  (ref) => DemoAdminRepository(ref.read(nowProvider)),
+);
+
+/// Billing and usage for a month ("YYYY-MM"). Errors are shown with a Retry
+/// button instead of being retried automatically.
+final adminDashboardProvider = FutureProvider.autoDispose.family<AdminDashboard, String>(
+  (ref, month) => ref.watch(adminRepositoryProvider).dashboard(month),
+  retry: (_, _) => null,
 );
 
 final householdRepositoryProvider = Provider<HouseholdRepository>(

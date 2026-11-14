@@ -1,25 +1,36 @@
 /**
  * Re-embed every transaction of a v2 project (after the migration, or after
- * changing EMBEDDING_MODEL). Needs a service account for the TARGET project
- * with Firestore + Vertex AI access:
+ * changing EMBEDDING_MODEL). Idempotent: transactions whose embedding text and
+ * model are unchanged are skipped.
  *
- *   GOOGLE_APPLICATION_CREDENTIALS=./v2-sa.json GOOGLE_CLOUD_PROJECT=<v2 project> \
- *     npx tsx src/scripts/backfill-embeddings.ts
+ * With a short-lived access token (no key files; see docs/wiki/migration-plan.md):
+ *   BACKFILL_ACCESS_TOKEN=<token> GOOGLE_CLOUD_PROJECT=<v2 project> npm run backfill
  *
- * Idempotent: transactions whose embedding text and model are unchanged are skipped.
+ * With a service account for the v2 project (Firestore + Vertex AI access):
+ *   GOOGLE_APPLICATION_CREDENTIALS=./v2-sa.json GOOGLE_CLOUD_PROJECT=<v2 project> npm run backfill
  */
 import { initializeApp } from "firebase-admin/app";
+import { firestoreWithToken } from "./migrate-v1-to-v2";
 import { getFirestore } from "firebase-admin/firestore";
-import { embedText } from "../agent/models";
+import { embedText, useAccessTokenForVertex } from "../agent/models";
 import { syncTransactionEmbedding } from "../handlers/transactions";
 
 async function main(): Promise<void> {
   const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
-  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS || !project) {
-    throw new Error("Set GOOGLE_APPLICATION_CREDENTIALS and GOOGLE_CLOUD_PROJECT for the v2 project.");
+  const token = process.env.BACKFILL_ACCESS_TOKEN;
+  if ((!process.env.GOOGLE_APPLICATION_CREDENTIALS && !token) || !project) {
+    throw new Error(
+      "Set GOOGLE_CLOUD_PROJECT for the v2 project and either BACKFILL_ACCESS_TOKEN or GOOGLE_APPLICATION_CREDENTIALS.",
+    );
   }
-  initializeApp({ projectId: project });
-  const db = getFirestore();
+  let db;
+  if (token) {
+    useAccessTokenForVertex(token, project);
+    db = firestoreWithToken(project, token);
+  } else {
+    initializeApp({ projectId: project });
+    db = getFirestore();
+  }
   const counts: Record<string, number> = {};
   const snap = await db.collection("transactions").get();
   for (const doc of snap.docs) {

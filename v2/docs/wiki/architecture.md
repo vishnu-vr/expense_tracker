@@ -16,12 +16,14 @@ Firebase project expense-tracker-v2-5c9fa (asia-south1)
  ├─ Firestore                  schema v2, security rules = the access model
  ├─ Cloud Functions (Node 22)
  │    ├─ callables (public     joinHome, leaveHome, askAgent (streaming),
- │    │   invoker, sign-in      confirmProposal, exportTransactionsCsv
-│    │   checked in code)
+ │    │   invoker, sign-in      confirmProposal, exportTransactionsCsv,
+│    │   checked in code)      getAdminDashboard (admin claim only)
  │    ├─ triggers              onTransactionWritten → notification + embedding
  │    │                        onNotificationCreated → FCM push
  │    └─ schedule              generateInsights, 06:00 Asia/Kolkata
- └─ Vertex AI (global)         gemini-3.8-flash (agent), gemini-embedding-001
+ ├─ Vertex AI (global)         gemini-3.8-flash (agent), gemini-embedding-001
+ ├─ BigQuery (US)              billing_export: Cloud Billing export (read by getAdminDashboard)
+ └─ Cloud Monitoring           token, Firestore op and request counts (read by getAdminDashboard)
 ```
 
 ## Run modes
@@ -49,7 +51,7 @@ Firebase.
 | `app/router.dart` | go_router; redirects follow the session (splash → login → onboarding → app) |
 | `app/backend.dart` | Run-mode selection, Firebase init, App Check |
 | `core/domain` | Models and logic ported from v1 (insights, budgets, recurring bills, note grouping, trends, CSV) |
-| `core/data` | `HouseholdRepository`, `SessionRepository`, `AgentRepository`, SMS channel, demo + Firebase implementations |
+| `core/data` | `HouseholdRepository`, `SessionRepository`, `AgentRepository`, `AdminRepository` (billing dashboard), SMS channel, demo + Firebase implementations |
 | `core/theme`, `core/widgets`, `core/format` | Design tokens, shared widgets, money/date formatting and masking |
 | `features/<screen>` | One folder per screen |
 | `firebase_options.dart` | Client config for the v2 project (public identifiers, not secrets) |
@@ -60,11 +62,11 @@ Firebase.
 |---|---|
 | `index.ts` | Function exports only (thin wrappers) |
 | `config.ts` | Region, model ids, embedding model, limits: the one place to change them |
-| `core/` | Pure logic: query, compare, budget, recurring, anomalies, insight detectors, blocks, proposals |
+| `core/` | Pure logic: query, compare, budget, recurring, anomalies, insight detectors, blocks, proposals, billing dashboard shaping |
 | `agent/` | Genkit agent: tools, system prompt, tool loop, provider resolution |
-| `data/` | Firestore access: home resolution, loading, vector search |
+| `data/` | Firestore access: home resolution, loading, vector search; `billing.ts` reads BigQuery + Monitoring over REST |
 | `handlers/` | One file per callable/trigger |
-| `scripts/` | Migration v1→v2 and embedding backfill (never run automatically) |
+| `scripts/` | Migration v1→v2, embedding backfill, `set-admin` (never run automatically) |
 
 ## Data flow examples
 
@@ -78,6 +80,12 @@ caller's home (membership re-checked) → model calls tools → tools compute
 numbers from the household's data → model calls `respond` with blocks →
 server validates, fills in transaction rows, stores the thread → app renders
 blocks. Status chunks ("Thinking…", one per tool) stream while it works.
+
+**Billing dashboard.** Profile › Admin › Billing & usage (shown only with
+the `admin` claim) → `getAdminDashboard({month})` → server checks the claim,
+queries the BigQuery billing export and Cloud Monitoring in parallel, shapes
+the numbers in `core/billing.ts`, caches them 15 min → screen. Without the
+export it returns `billing.configured: false` and the setup steps show.
 
 **Bank SMS.** `SMS_RECEIVED` (system only) → `SmsReceiver` checks the toggle
 and permissions → `SmsParser` (ignores OTPs) → notification with

@@ -13,7 +13,9 @@
     "test:rules": "vitest run --config vitest.rules.config.mts",
     "test:rules:emulator": "cd .. && firebase emulators:exec --only firestore --project demo-track-expense \"npm --prefix functions run test:rules\"",
     "eval": "tsc -p tsconfig.eval.json && node lib-eval/eval/run.js",
-    "migrate": "tsx src/scripts/migrate-v1-to-v2.ts"
+    "migrate": "tsx src/scripts/migrate-v1-to-v2.ts",
+    "set-admin": "tsx src/scripts/set-admin.ts",
+    "backfill": "tsc -p tsconfig.eval.json && node lib-eval/src/scripts/backfill-embeddings.js"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.44.0",

@@ -13,7 +13,18 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { embedText, getAgentRuntime } from "./agent/models";
 import { createModelPhraser } from "./agent/phraser";
-import { agentModelId, defaultTimeZone, enforceAppCheck, insightsPhrasingModelId, REGION } from "./config";
+import {
+  agentModelId,
+  billingDataset,
+  billingLocation,
+  billingProjectId,
+  defaultTimeZone,
+  enforceAppCheck,
+  insightsPhrasingModelId,
+  REGION,
+} from "./config";
+import { defaultRestClient } from "./data/billing";
+import { AdminDashboard, adminDashboardHandler } from "./handlers/admin-dashboard";
 import { askAgentHandler, AskAgentChunk, AskAgentResult } from "./handlers/ask-agent";
 import { confirmProposalHandler } from "./handlers/confirm-proposal";
 import { exportTransactionsCsvHandler } from "./handlers/export-csv";
@@ -67,6 +78,34 @@ export const askAgent = onCall<unknown, Promise<AskAgentResult>, AskAgentChunk>(
 /** confirmProposal({threadId, proposalId, accept}) -> {proposalId, status, appliedCount, skippedTransactionIds} */
 export const confirmProposal = onCall(callable, (request) =>
   confirmProposalHandler(getFirestore(), requireUid(request), request.data),
+);
+
+/**
+ * getAdminDashboard({month: "YYYY-MM"}) -> {month, billing, usage} (see SCHEMA.md).
+ * Admins only (custom claim admin: true). Reads the billing export and Cloud Monitoring.
+ */
+let billingApi: ReturnType<typeof defaultRestClient> | null = null;
+const dashboardCache = new Map<string, { at: number; value: AdminDashboard }>();
+export const getAdminDashboard = onCall({ ...callable, timeoutSeconds: 60 }, (request) =>
+  adminDashboardHandler(
+    {
+      api: (billingApi ??= defaultRestClient()),
+      projectId: billingProjectId(),
+      dataset: billingDataset(),
+      location: billingLocation(),
+      now: () => new Date(),
+      cache: dashboardCache,
+      // Error names and HTTP status only.
+      onError: (part, error) =>
+        logger.error("Admin dashboard read failed", {
+          part,
+          name: (error as Error)?.name,
+          status: (error as { status?: number })?.status,
+        }),
+    },
+    request.auth ? { uid: request.auth.uid, token: request.auth.token as unknown as Record<string, unknown> } : undefined,
+    request.data,
+  ),
 );
 
 /** FCM push to the other household members when a notification doc is created. */

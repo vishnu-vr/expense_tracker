@@ -59,3 +59,28 @@ export const AGENT_LIMITS = {
 
 /** Cloud Functions region. Same as the Firestore database (asia-south1, Mumbai): Firestore triggers must run in the database region. */
 export const REGION = "asia-south1";
+
+/**
+ * Admin billing dashboard (D-024). Costs come from the Cloud Billing export
+ * to BigQuery (`<project>.<BILLING_DATASET>.gcp_billing_export_v1_*`), set up
+ * once in the console; usage comes from Cloud Monitoring.
+ */
+export const billingDataset = (): string => env("BILLING_DATASET", "billing_export");
+/** BigQuery location of the export dataset (fixed when it is created). */
+export const billingLocation = (): string => env("BILLING_LOCATION", "US");
+/** Project whose costs are shown. Defaults to the project the functions run in. */
+export const billingProjectId = (): string => env("BILLING_PROJECT_ID", process.env.GCLOUD_PROJECT ?? "");
+
+export const BILLING_LIMITS = {
+  /** Results per month are cached in memory this long. */
+  cacheMs: 15 * 60_000,
+  /** Services shown by name; the rest are summed into "Other". */
+  topServices: 6,
+  /** SKUs returned, by gross cost. */
+  topSkus: 10,
+  /** Cloud Monitoring keeps most metrics about six weeks; older months have no usage. */
+  usageRetentionDays: 42,
+  /** Billing months, daily buckets and the forecast use this zone (fixed +05:30, no DST). */
+  timeZone: "Asia/Kolkata",
+  utcOffsetMinutes: 330,
+} as const;

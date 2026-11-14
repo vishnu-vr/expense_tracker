@@ -195,6 +195,11 @@ class ProfileScreen extends ConsumerWidget {
           ),
           if (defaultTargetPlatform == TargetPlatform.android)
             nav('Bank SMS detection', '/sms', subtitle: 'Suggest entries from transaction messages'),
+          if (user?.isAdmin ?? false) ...[
+            const SizedBox(height: 12),
+            const SectionTitle('Admin'),
+            nav('Billing & usage', '/admin/billing', subtitle: 'What the app costs to run'),
+          ],
           const SizedBox(height: 24),
           OutlinedButton(
             onPressed: () => guarded(() async {

@@ -158,7 +158,11 @@ Add `,vertex-model-garden/claude-sonnet-5` to `--model` to compare (once the
 Claude quota exists), or `--only spend_oct,goa_trip` for a quick check. The
 token lasts about an hour. Results are written to `lib-eval/eval/results/`.
 
-## Data migration v1 → v2 (not run)
+## Data migration v1 → v2 (done)
+
+Done 2026-11-14 (D-023). Full plan, results and re-run steps:
+[migration-plan.md](migration-plan.md). Source project: `public-exp-tracker`.
+
 
 `backend/functions/src/scripts/migrate-v1-to-v2.ts`. Dry-run by default,
 never writes to the source, prints per-home counts and income/expense sums
@@ -166,6 +170,65 @@ for source vs target. **Needs the owner's explicit go-ahead** and a
 service-account key for each project (keys are gitignored). See
 `backend/README.md` for flags. Afterwards run
 `src/scripts/backfill-embeddings.ts` and the smoke test.
+
+## Billing dashboard (D-024)
+
+Profile › Admin › Billing & usage. Admin accounts only.
+
+**1. Turn on the export (once, billing account admin, console).**
+Billing › Billing export › **BigQuery export** › Standard usage cost › Edit
+settings: project `expense-tracker-v2-5c9fa`, create dataset
+`billing_export`, location **US (multi-region)**. The location cannot be
+changed later; US/EU backfills from the start of the previous month. Data
+arrives within a few hours (the first time up to 5 days). Until then the
+screen shows these steps plus live usage.
+
+**2. Check the functions' access.** The runtime service account
+(`<project number>-compute@developer.gserviceaccount.com` unless changed)
+needs BigQuery Job User, BigQuery Data Viewer and Monitoring Viewer on the
+project. It normally has Editor, which covers all three. Check in the console
+under IAM & Admin › IAM; grant only with the owner's go-ahead.
+
+**3. Make an account admin.** The user must have signed in once. Get a
+short-lived token from the signed-in Firebase CLI without writing it anywhere,
+then preview and apply:
+```
+cd v2/backend/functions
+export ADMIN_ACCESS_TOKEN="$(node -e '
+  const {execSync}=require("child_process");
+  const ft=execSync("npm root -g").toString().trim()+"/firebase-tools/lib";
+  const {configstore}=require(ft+"/configstore.js");
+  require(ft+"/auth.js").getAccessToken(configstore.get("tokens").refresh_token,
+    ["https://www.googleapis.com/auth/cloud-platform"]).then(t=>process.stdout.write(t.access_token));')"
+npm run set-admin -- --project expense-tracker-v2-5c9fa --email you@example.com            # preview
+npm run set-admin -- --project expense-tracker-v2-5c9fa --email you@example.com --execute  # apply
+unset ADMIN_ACCESS_TOKEN
+```
+Add `--revoke` to remove it. Other claims are kept. The app picks it up when
+the ID token refreshes: sign out and back in.
+
+**4. Deploy.** `firebase deploy --only functions:getAdminDashboard --project prod`
+from `v2/backend`. A newly created callable gets the public invoker binding
+(D-019); if it returns 401, see Troubleshooting › Callables return 401
+(service `getadmindashboard`).
+
+**Settings** (`functions/.env.<project>`): `BILLING_DATASET` (default
+`billing_export`), `BILLING_LOCATION` (default `US`), `BILLING_PROJECT_ID`
+(default: the functions' project).
+
+**Troubleshooting**
+- *Setup steps still show after enabling:* the export has not written its
+  first table yet; wait (up to 5 days the first time). Results are also cached
+  15 minutes per month.
+- *"No billing data for this month":* the export exists but has nothing for
+  that month (months before the backfill window).
+- *"Could not read billing data this time":* the query failed; the function
+  log has `Admin dashboard read failed` with `part` and HTTP `status`
+  (403 = missing BigQuery roles).
+- *Usage not available:* months older than about six weeks (Monitoring
+  retention), or Monitoring returned an error (`part: "usage"` in the log).
+- *Admin section missing:* the claim is not set, or the token has not
+  refreshed; sign out and in.
 
 ## Costs to watch
 

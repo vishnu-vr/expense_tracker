@@ -46,14 +46,34 @@ class FirebaseSessionRepository implements SessionRepository {
   DocumentReference<Map<String, dynamic>> _userDoc(String uid) =>
       _db.collection('users').doc(uid);
 
+  /// Reads the `admin` custom claim from the cached ID token. A claim granted
+  /// later shows up when the token refreshes (idTokenChanges emits then).
+  static Future<bool> _isAdmin(User user) async {
+    try {
+      final result = await user.getIdTokenResult();
+      return result.claims?['admin'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Signed-in user plus admin flag. idTokenChanges also fires on every
+  /// hourly refresh; [Stream.distinct] keeps those from rebuilding the session.
+  Stream<({User user, bool isAdmin})?> _users() => _auth
+      .idTokenChanges()
+      .asyncMap((user) async => user == null ? null : (user: user, isAdmin: await _isAdmin(user)))
+      .distinct((a, b) => a?.user.uid == b?.user.uid && a?.isAdmin == b?.isAdmin);
+
   @override
-  Stream<Session> watch() => switchMap(_auth.authStateChanges(), (user) {
-        if (user == null) return Stream.value(const Session());
+  Stream<Session> watch() => switchMap(_users(), (signedIn) {
+        if (signedIn == null) return Stream.value(const Session());
+        final user = signedIn.user;
         final appUser = AppUser(
           id: user.uid,
           email: user.email,
           name: user.displayName,
           photoUrl: user.photoURL,
+          isAdmin: signedIn.isAdmin,
         );
         unawaited(_ensureUserDoc(user));
         return _userDoc(user.uid).snapshots().map((snap) {

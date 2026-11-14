@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:track_expense/app/providers.dart';
@@ -17,16 +18,23 @@ Future<void> pumpApp(
   Size size = const Size(390, 844),
   Map<String, Object> prefs = const {},
   double pixelRatio = 1,
+  double textScale = 1,
+  List<Override> overrides = const [],
 }) async {
   tester.view.physicalSize = size * pixelRatio;
   tester.view.devicePixelRatio = pixelRatio;
   addTearDown(tester.view.reset);
+  if (textScale != 1) {
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  }
   SharedPreferences.setMockInitialValues(prefs);
   final sp = await SharedPreferences.getInstance();
   await tester.pumpWidget(ProviderScope(
     overrides: [
       nowProvider.overrideWithValue(testNow),
       sharedPreferencesProvider.overrideWithValue(sp),
+      ...overrides,
     ],
     child: const TrackExpenseApp(),
   ));

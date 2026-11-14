@@ -12,6 +12,7 @@ folder; this page is the working copy.
   indexes, functions, Vertex AI, Android + iOS apps registered, app connected.
 - Live smoke test: all 11 checks pass, including a real assistant answer.
 - Eval on `gemini-3.8-flash`: 35/35, all figures exact (D-020).
+- v1 data migrated: 9 accounts, 6 households, 2,795 entries, totals match (D-023).
 - Google sign-in enabled and wired in the app; reaches Google's sign-in screen
   on Android.
 
@@ -20,15 +21,17 @@ folder; this page is the working copy.
 | Item | Why it needs you |
 |---|---|
 | Request a Claude quota increase in Vertex AI (D-022) | Quota requests are made by the project owner in the console |
-| Go-ahead for the v1 → v2 data migration | Reads your real data |
 | Finish installing Xcode + CocoaPods | iOS build |
 | Play Store SMS permission declaration | Your developer account |
+| Turn on the Cloud Billing export to BigQuery (dataset `billing_export`, US multi-region; D-024) | Only a billing account admin can, in the console; see operations.md › Billing dashboard |
+| Make your account admin, deploy `getAdminDashboard`, ship a test build (D-024) | Custom claims, deploys and IAM on prod need your go-ahead |
 
 ## Next up (in order)
 
 1. Compare Claude in the eval once its quota is granted (D-022); pick the
    model on accuracy first, then latency and cost (D-010).
-2. Data migration dry run, compare counts and sums, then the real run.
+2. Household members install the v2 build and sign in with their usual
+   accounts (data migrated 2026-11-14, D-023).
 3. Release signing key, register its SHA-1, internal testing track.
 4. Turn on App Check enforcement (`ENFORCE_APP_CHECK=true`) once release
    builds ship with Play Integrity / App Attest.

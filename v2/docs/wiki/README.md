@@ -14,6 +14,7 @@ true: when you change behaviour, update the page in the same change.
 | [testing.md](testing.md) | Adding tests or checking a change |
 | [operations.md](operations.md) | Running, deploying, migrating, or something is broken |
 | [roadmap.md](roadmap.md) | Deciding what to do next; what is blocked on the owner |
+| [migration-plan.md](migration-plan.md) | Copying v1 data from `public-exp-tracker` into v2 |
 
 Elsewhere:
 - Data contract: [`../../backend/SCHEMA.md`](../../backend/SCHEMA.md)

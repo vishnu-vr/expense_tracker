@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/data/session.dart';
 import '../core/domain/models.dart';
+import '../features/admin/billing_screen.dart';
 import '../features/ask/ask_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/onboarding_screen.dart';
@@ -45,6 +46,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               ? '/login'
               : (s.homeId == null ? '/onboarding' : null);
       if (gate != null) return at == gate ? null : gate;
+      // Admin screens: the server checks the claim too; this just hides them.
+      if (at.startsWith('/admin') && !(s.user?.isAdmin ?? false)) return '/home';
       return _gates.contains(at) ? '/home' : null;
     },
     routes: [
@@ -106,6 +109,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => AskScreen(initialQuestion: state.extra as String?),
       ),
       GoRoute(path: '/sms', builder: (_, _) => const SmsScreen()),
+      GoRoute(path: '/admin/billing', builder: (_, _) => const BillingScreen()),
     ],
   );
   ref.onDispose(router.dispose);

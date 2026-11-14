@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 
 import '../core/data/firebase/firebase_session_repository.dart';
+import '../core/data/firebase/functions_admin_repository.dart';
 import '../core/data/firebase/firestore_household_repository.dart';
 import '../core/data/firebase/functions_agent_repository.dart';
 import '../core/data/firebase/push_service.dart';
@@ -101,6 +102,7 @@ Future<List<Override>> backendOverrides({required String timeZone}) async {
     agentRepositoryProvider.overrideWithValue(
       FunctionsAgentRepository(functions, timeZone: timeZone),
     ),
+    adminRepositoryProvider.overrideWithValue(FunctionsAdminRepository(functions)),
     // Push needs a real project; the emulators have no messaging service.
     if (backendMode == 'firebase')
       pushServiceProvider.overrideWithValue(PushService(FirebaseMessaging.instance, db)),
