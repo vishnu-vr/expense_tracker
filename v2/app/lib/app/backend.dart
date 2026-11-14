@@ -12,21 +12,22 @@ import '../core/data/firebase/firestore_household_repository.dart';
 import '../core/data/firebase/functions_agent_repository.dart';
 import '../core/data/firebase/push_service.dart';
 import '../core/data/repositories.dart';
+import '../firebase_options.dart';
 import 'providers.dart';
 
 /// Which backend the app talks to. Chosen at build time:
 ///
 ///   flutter run                                  (demo: in-memory sample data)
 ///   flutter run --dart-define=BACKEND=emulator   (local Firebase emulators)
-///   flutter run --dart-define=BACKEND=firebase   (real project; needs the
-///       google-services.json / GoogleService-Info.plist of the new project)
+///   flutter run --dart-define=BACKEND=firebase   (expense-tracker-v2-5c9fa)
 const backendMode = String.fromEnvironment('BACKEND', defaultValue: 'demo');
 
 /// Host of the Firebase emulators. The Android emulator reaches the Mac at
 /// 10.0.2.2; override for a physical phone with `--dart-define=EMULATOR_HOST=`.
 const _emulatorHostOverride = String.fromEnvironment('EMULATOR_HOST');
 
-const _functionsRegion = 'us-central1';
+/// Must match REGION in v2/backend/functions/src/config.ts.
+const _functionsRegion = 'asia-south1';
 
 /// A household repository that fails loudly if used before sign-in. Screens
 /// that need data are only reachable once the session is ready.
@@ -57,7 +58,7 @@ Future<List<Override>> backendOverrides({required String timeZone}) async {
     await FirebaseAuth.instance.useAuthEmulator(host, 9099);
     FirebaseFunctions.instanceFor(region: _functionsRegion).useFunctionsEmulator(host, 5001);
   } else {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     // Callable functions reject requests that do not come from this app.
     await FirebaseAppCheck.instance.activate(
       providerAndroid: kDebugMode

@@ -89,7 +89,7 @@ Source of truth: `functions/src/core/blocks.ts` (`BlockSchema`). At most 12 bloc
 - `notifications`: (`homeId` ASC, `createdAt` DESC)
 - `transactionEmbeddings`: (`homeId` ASC, `vector` VECTOR dimension 768, flat)
 
-## Callable functions (region `us-central1`)
+## Callable functions (region `asia-south1`)
 
 | name | request | response |
 |---|---|---|

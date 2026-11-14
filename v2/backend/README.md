@@ -3,9 +3,11 @@
 Cloud Functions (TypeScript, Node 22), Firestore rules and indexes for the Flutter rebuild.
 Data model and callable contracts: [`SCHEMA.md`](SCHEMA.md).
 
-Everything here runs against emulators and the demo project id `demo-track-expense`
-(the `demo-` prefix means the Firebase CLI never contacts a real project). Nothing in
-this folder is wired to a real project; add one to `.firebaserc` when you are ready to deploy.
+The default project is the emulator-only `demo-track-expense` (the `demo-` prefix means
+the Firebase CLI never contacts a real project). The live project is the `prod` alias,
+`expense-tracker-v2-5c9fa` (asia-south1); pass `--project prod` explicitly to deploy.
+Deploy steps, the live smoke test (`scripts/smoke-live.mjs`) and troubleshooting are in
+[`../docs/wiki/operations.md`](../docs/wiki/operations.md).
 
 ## Layout
 

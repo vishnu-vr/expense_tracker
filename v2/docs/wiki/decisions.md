@@ -1,0 +1,181 @@
+# Decision log
+
+Every decision that shapes Track Expense v2, newest first. Each entry says who
+decided, why, and what it rules out. Before changing anything listed here,
+add a new entry that supersedes the old one; do not silently edit history.
+
+Status values: **Accepted** (in force), **Superseded** (replaced by a later
+entry), **Proposed** (not yet agreed).
+
+---
+
+## D-019 · Callable functions need a public invoker binding
+**2026-11-14 · Accepted · found during the first deploy**
+
+Firebase callable functions run on Cloud Run and must allow `allUsers` to
+invoke them; each function checks the caller's Firebase sign-in itself. The
+first deploy failed half-way, and the retry updated the functions without
+adding that binding, so every callable answered HTTP 401.
+- **Fixed 2026-11-14** with the owner's go-ahead: `allUsers` → `roles/run.invoker`
+  set on each callable's Cloud Run service. The change takes about a minute to
+  apply. If a callable is ever recreated by hand and 401s again, see
+  [operations.md › Callables return 401](operations.md#callables-return-401).
+- `askAgent`, `joinHome`, `leaveHome`, `confirmProposal`, `exportTransactionsCsv`
+  are affected. Triggers and the schedule are not.
+
+## D-018 · Vertex AI location is `global`
+**2026-11-14 · Accepted**
+
+`gemini-3.8-flash` (and `gemini-3.5-flash`) answer only on the `global`
+Vertex AI location for this project; `us-central1` returns 404. Embeddings
+(`gemini-embedding-001`) work on both. `VERTEX_LOCATION=global` in
+`backend/functions/.env.expense-tracker-v2-5c9fa`, and it is the code default.
+Model Garden (Claude) keeps its own `MODEL_GARDEN_LOCATION`.
+
+## D-017 · Everything runs in `asia-south1` (Mumbai)
+**2026-11-14 · Accepted**
+
+- Firestore `(default)` database: `asia-south1`, matching both v1 projects.
+  This cannot be changed later.
+- Cloud Functions: `asia-south1`. Firestore triggers must run in the database
+  region, and keeping callables there avoids cross-region latency.
+- The app's `_functionsRegion` (`app/lib/app/backend.dart`) must equal
+  `REGION` (`backend/functions/src/config.ts`).
+
+## D-016 · New Firebase project `expense-tracker-v2-5c9fa`
+**2026-11-14 · Accepted · owner**
+
+Created by the owner on the Blaze plan. Vertex AI, Firestore and the build
+services are enabled. The `.firebaserc` alias is `prod`; `default` stays the
+emulator-only `demo-track-expense` so a bare `firebase` command can never
+touch production.
+
+## D-015 · Function settings file is committed
+**2026-11-14 · Accepted**
+
+`backend/functions/.env.expense-tracker-v2-5c9fa` holds model ids, locations
+and flags only, never secrets, and is committed so a deploy is reproducible.
+Secrets, if ever needed, go in Secret Manager (`defineSecret`).
+
+## D-014 · Package lock is generated with npm 10
+**2026-11-14 · Accepted**
+
+Cloud Build uses npm 10 (Node 22). A lock written by npm 11 (local Node 24)
+omits optional peer packages and makes `npm ci` fail in the cloud. After
+changing dependencies run `npx npm@10 install --package-lock-only` in
+`backend/functions`.
+
+## D-013 · Notifications and embeddings are server-written
+**2026-11-10 · Accepted**
+
+The `onTransactionWritten` trigger writes household notifications and keeps
+`transactionEmbeddings/{txId}` in step. Clients can only add their own uid to
+`readBy`; clients can never read vectors. This keeps 768 floats per entry off
+phones and stops clients forging activity.
+- A new entry whose `createdAt` is more than 24 hours old is treated as an
+  import and sends no notification (avoids push spam during migration).
+
+## D-012 · Leaving a household is a server call
+**2026-11-10 · Accepted**
+
+Rules let only the owner edit a home, so a member cannot remove themselves
+from `memberIds`. `leaveHome` does it in a transaction and hands ownership to
+the first remaining member when the owner leaves. The last member leaving
+keeps the home and its data (nothing is deleted).
+
+## D-011 · The assistant never does arithmetic
+**2026-11-10 · Accepted**
+
+The model plans and explains; every number comes from a tool that computes
+it in code (`backend/functions/src/core`). Tools return ready-to-quote
+`…Display` strings. The model answers through a final `respond` tool with
+typed blocks (`text`, `stat`, `bars`, `transactions`, `proposal`), validated
+server-side and rendered natively by the app.
+- Write actions are proposals only. Nothing changes until a member taps
+  Confirm, and `confirmProposal` only changes the confirmer's own entries.
+- Rejected alternative: free-form markdown answers with numbers computed by
+  the model. The v1 assistant did this and got sums wrong.
+
+## D-010 · Agent model is configurable; Gemini first, Claude compared later
+**2026-11-10 · Accepted · owner chose "keep it swappable"**
+
+Genkit is the swap layer. `AGENT_MODEL` picks the model:
+`vertexai/gemini-3.8-flash` (default), `vertex-model-garden/claude-…`, or
+`googleai/…` for evals with an API key. The choice between Gemini and Claude
+is made on the eval harness (35 golden questions with exact answers), not on
+taste. Claude needs the owner to accept its terms in Model Garden first.
+
+## D-009 · Embeddings: what goes in, what stays out
+**2026-11-10 · Accepted**
+
+Embedded text is `note | category name | matched merchant | tag names`.
+Amounts, dates and income/expense stay structured filters, because vectors
+are bad at them. Model `gemini-embedding-001`, 768 dimensions
+(`text-embedding-004` retires 1 April 2027). Entries without a note get no
+vector. Used for semantic note search only (later: categorisation).
+- The on-device MiniLM model from v1 is dropped; rule-based note grouping is
+  ported to Dart (`app/lib/core/domain/note_grouping.dart`).
+
+## D-008 · Schema v2 changes
+**2026-11-10 · Accepted**
+
+- `transactions.date` is a Firestore `Timestamp` (was an ISO string).
+- `accountId` and the on-document `embedding` are dropped.
+- New: `aiThreads` (+ `messages`, `proposals`) and `insights` under each home.
+- Full contract: [`backend/SCHEMA.md`](../../backend/SCHEMA.md).
+
+## D-007 · Proactive insights are deterministic
+**2026-11-10 · Accepted**
+
+The daily `generateInsights` job (06:00 Asia/Kolkata) runs detectors in code:
+month review, subscription price change / new / stopped, missing bill,
+unusual transaction, budget forecast, merchant habit, category drift, budget
+suggestion, likely duplicate. A model may only reword titles, and a template
+fallback means it works with no model at all. Card ids are stable
+(`kind_periodKey_subject`) so reruns update rather than duplicate.
+
+## D-006 · Design direction "Ledger"
+**2026-11-10 · Accepted · owner picked from three mockups**
+
+Light, editorial: off-white ground, ink rules, large tabular numbers, one
+deep-green accent, Space Grotesk headings, Inter body. Dark theme mirrors it.
+Mockups: https://claude.ai/artifact/6ADJAJmXeMjoDUKKuHWsqC (A is the chosen
+one). Details: [design-system.md](design-system.md).
+
+## D-005 · Bank SMS detection stays a suggestion, on-device only
+**2026-11-10 · Accepted · auto-add is a separate, later decision**
+
+A Kotlin `BroadcastReceiver` parses incoming bank messages on the phone and
+posts "Add this entry?". Tapping it opens the form prefilled. Message text is
+never stored, logged or uploaded. Off by default; the toggle is a real
+setting (v1 reset it to on at every launch). The receiver is protected with
+`BROADCAST_SMS` so other apps cannot fake messages. Android only: iOS has no
+API to read SMS.
+
+## D-004 · Plain Dart models, Riverpod without code generation
+**2026-11-10 · Accepted**
+
+Models are hand-written immutable classes; providers are plain Riverpod.
+`freezed`/`riverpod_generator` were tried and removed to avoid a build step.
+Pure logic lives in `app/lib/core/domain` with no Flutter imports.
+
+## D-003 · New app lives in `v2/`; v1 is never modified
+**2026-11-10 · Accepted · owner instruction**
+
+The Angular/Capacitor app, its `functions/`, rules and both v1 Firebase
+projects (`expense-tracker-e7ff7`, `public-exp-tracker`) are in use and are
+not changed. v2 only ever reads from v1, and only via the migration script,
+and only with the owner's explicit go-ahead.
+
+## D-002 · Android + iOS, one Flutter codebase
+**2026-11-10 · Accepted · owner**
+
+Web stays on the v1 PWA until it is retired. SMS features are Android-only.
+iOS needs Sign in with Apple alongside Google before App Store release.
+
+## D-001 · Rebuild in Flutter with a real AI agent
+**2026-11-10 · Accepted · owner**
+
+v1 is a WebView app with a single-shot "Ask AI" (no tools, no memory, weak
+embeddings, a likely-broken vector index). v2 is native, multi-turn and
+tool-based. The approved plan is mirrored in [roadmap.md](roadmap.md).

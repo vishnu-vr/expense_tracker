@@ -33,7 +33,7 @@ export const DEFAULT_AGENT_MODEL = "vertexai/gemini-3.8-flash";
 export const agentModelId = (): string => env("AGENT_MODEL", DEFAULT_AGENT_MODEL);
 
 /** Vertex AI location for Gemini + embeddings. */
-export const vertexLocation = (): string => env("VERTEX_LOCATION", "us-central1");
+export const vertexLocation = (): string => env("VERTEX_LOCATION", "global");
 /** Vertex AI location for Model Garden (Claude) models. */
 export const modelGardenLocation = (): string => env("MODEL_GARDEN_LOCATION", "us-east5");
 
@@ -57,5 +57,5 @@ export const AGENT_LIMITS = {
   maxTurns: 10,
 } as const;
 
-/** Cloud Functions region. */
-export const REGION = "us-central1";
+/** Cloud Functions region. Same as the Firestore database (asia-south1, Mumbai): Firestore triggers must run in the database region. */
+export const REGION = "asia-south1";

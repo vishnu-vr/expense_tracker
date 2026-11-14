@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-track-expense"
+    "default": "demo-track-expense",
+    "prod": "expense-tracker-v2-5c9fa"
   }
 }

@@ -4,8 +4,11 @@ The Flutter rebuild. Everything here is new; the original Angular/Capacitor app
 in the repo root is not modified and keeps using its own Firebase project.
 
 - `app/` — Flutter app (Android + iOS).
-- `backend/` — Firebase backend for the new project (functions, rules, indexes).
-  See `backend/README.md` and `backend/SCHEMA.md`.
+- `backend/` — Firebase backend (functions, rules, indexes), deployed to
+  `expense-tracker-v2-5c9fa`. See `backend/README.md` and `backend/SCHEMA.md`.
+- `docs/wiki/` — decisions, architecture, AI agent, SMS, design system,
+  testing, operations and roadmap. Start at `docs/wiki/README.md`.
+- `CLAUDE.md` / `AGENTS.md` — instructions for AI coding agents.
 
 ## Running the app
 
@@ -14,7 +17,7 @@ cd app
 flutter pub get
 flutter run                                  # demo: in-memory sample household
 flutter run --dart-define=BACKEND=emulator   # local Firebase emulators (start them from backend/)
-flutter run --dart-define=BACKEND=firebase   # real project, once its config files are added
+flutter run --dart-define=BACKEND=firebase   # live project expense-tracker-v2-5c9fa
 ```
 
 Android builds on this machine need:
@@ -32,6 +35,7 @@ flutter analyze
 flutter test
 SHOTS_DIR=/some/dir flutter test --update-goldens test/features   # also writes PNGs of each screen
 (cd android && ./gradlew :app:testDebugUnitTest)                  # Kotlin SMS parser tests
+flutter test integration_test                                     # on a running emulator or phone
 ```
 
 ## Layout of `app/lib`
