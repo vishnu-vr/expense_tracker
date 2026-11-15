@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ASHA, FIXTURE_TODAY, fixtureHomeData, generateFixtureTransactions, VIKRAM } from "../../eval/fixture";
 import { FixtureBackend } from "../../eval/fixture-backend";
 import { buildGoldens } from "../../eval/golden";
-import { extractNumbers, flattenBlocks, scoreAnswer } from "../../eval/scoring";
+import { extractNumbers, flattenBlocks, scoreAnswer, sentenceCount } from "../../eval/scoring";
 import { findAnomalies } from "../../src/core/anomalies";
 import { budgetStatus } from "../../src/core/budget";
 import { comparePeriods } from "../../src/core/compare";
@@ -121,6 +121,18 @@ const TOOL_ANSWERS: Record<string, () => number[]> = {
     return [];
   },
 };
+// Voice and Malayalam questions (D-028) expect the same figures as their typed English twins.
+const TWINS: Record<string, string> = {
+  voice_spend_oct: "spend_oct",
+  voice_food_oct_vs_sep: "food_oct_vs_sep",
+  voice_propose_budget: "propose_budget",
+  ml_spend_oct: "spend_oct",
+  ml_grocery_sep: "grocery_sep",
+  ml_swiggy_oct: "swiggy_oct",
+  ml_food_budget_now: "food_budget_now",
+  ml_propose_budget: "propose_budget",
+};
+for (const [id, twin] of Object.entries(TWINS)) TOOL_ANSWERS[id] = TOOL_ANSWERS[twin];
 
 describe("fixture household", () => {
   it("is deterministic", () => {
@@ -206,6 +218,30 @@ describe("eval scoring", () => {
     expect(scoreAnswer(budget, [block], [stored]).pass).toBe(true);
     expect(scoreAnswer(budget, [{ type: "text", text: "Done! Budget is now ₹14,000." }], []).pass).toBe(false);
     expect(flattenBlocks([block])).toContain("14,000");
+  });
+});
+
+describe("eval scoring: voice and Malayalam (D-028)", () => {
+  const voice = goldens.find((g) => g.id === "voice_spend_oct")!;
+  const ml = goldens.find((g) => g.id === "ml_spend_oct")!;
+  const oct = voice.numbers[0].value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  it("counts sentences without splitting figures", () => {
+    expect(sentenceCount("You spent ₹1,71,518.44 last month. Mostly food.")).toBe(2);
+    expect(sentenceCount("One. Two! Three?")).toBe(3);
+  });
+  it("needs a short spoken text block first that carries a figure", () => {
+    expect(scoreAnswer(voice, [{ type: "text", text: `You spent ₹${oct} in October.` }, { type: "stat", label: "Spent", value: `₹${oct}` }], []).pass).toBe(true);
+    expect(scoreAnswer(voice, [{ type: "stat", label: "Spent", value: `₹${oct}` }, { type: "text", text: "That was October." }], []).missing)
+      .toEqual(["first block is not a spoken text answer"]);
+    expect(scoreAnswer(voice, [{ type: "text", text: "October is done. It was busy. Here it is." }, { type: "stat", label: "Spent", value: `₹${oct}` }], []).missing)
+      .toEqual(["spoken answer longer than 2 sentences", "spoken answer carries none of the expected figures"]);
+  });
+  it("needs Malayalam script for Malayalam questions", () => {
+    expect(scoreAnswer(ml, [{ type: "text", text: `കഴിഞ്ഞ മാസം ₹${oct} ചെലവായി.` }], []).pass).toBe(true);
+    expect(scoreAnswer(ml, [{ type: "text", text: `You spent ₹${oct} last month.` }], []).missing).toEqual(["answer is not in Malayalam"]);
+  });
+  it("every voice/Malayalam question is asked in voice mode", () => {
+    for (const id of Object.keys(TWINS)) expect(goldens.find((g) => g.id === id)!.reply).toBe("voice");
   });
 });
 

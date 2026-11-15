@@ -1,5 +1,30 @@
 import { addMonths, monthKey, monthLabel, WEEKDAYS, weekdayIndex } from "../core/dates";
 import { HomeData } from "../core/types";
+import type { AgentLanguage, AgentReplyMode } from "../config";
+
+/**
+ * Extra instructions for a voice reply and/or a Malayalam answer (D-028).
+ * Empty for the default (typed, English), so typed questions see exactly the
+ * same prompt as before. Figures still come only from tools (D-011).
+ */
+export function replyStyleSection(reply: AgentReplyMode = "text", language: AgentLanguage = "en"): string {
+  const parts: string[] = [];
+  if (reply === "voice") {
+    parts.push(`SPOKEN REPLY — the person is talking to you; the app reads your first block aloud
+- Make the FIRST block a text block with a 1–2 sentence spoken answer that leads with the answer. No tables, lists, symbols, ids or dates in YYYY-MM-DD form.
+- Put the details (stat, bars, transactions, further text) in the blocks after it; they stay on screen.
+- Any figure in the spoken answer is still copied verbatim from a tool's Display string.
+- After a propose_* tool, the spoken answer says what you suggested and that they can tap Confirm on screen. Never ask them to confirm by voice.`);
+  }
+  if (language === "ml") {
+    parts.push(`LANGUAGE — answer in Malayalam
+- Write every text block, stat label, caption and bars title in Malayalam script.
+- Keep amounts and numbers exactly as the tools give them, in digits with ₹ (for example ₹1,71,518.44). Never write a number in words.
+- Category, tag, member and merchant names stay as they are.
+- The question may be in Malayalam, English or a mix of both, possibly with recognition errors; understand it as best you can.`);
+  }
+  return parts.length ? `\n\n${parts.join("\n\n")}` : "";
+}
 
 /**
  * System prompt. Provider-neutral: no model-specific syntax.
@@ -11,6 +36,8 @@ export function buildSystemPrompt(input: {
   timeZone: string;
   callerUid: string;
   data: Pick<HomeData, "categories" | "tags" | "members">;
+  reply?: AgentReplyMode;
+  language?: AgentLanguage;
 }): string {
   const { today, timeZone, data } = input;
   const month = monthKey(today);
@@ -51,7 +78,7 @@ ANSWER FORMAT
 - bars: when comparing 2–12 groups or periods — each item has label, value (raw number from the tool) and display (its Display string).
 - transactions: when the user wants to see entries — pass transactionIds from tool rows (at most 20).
 - proposal: after a propose_* tool — pass its proposalId.
-- A good answer is usually one stat or bars block plus one or two sentences of text. Do not repeat every figure in prose.
+- A good answer is usually one stat or bars block plus one or two sentences of text. Do not repeat every figure in prose.${replyStyleSection(input.reply, input.language)}
 
 CATEGORIES (id — name — type)
 ${list(data.categories.map((c) => `${c.id} — ${c.name} — ${c.type}`), 150)}

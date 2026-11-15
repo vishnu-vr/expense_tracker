@@ -13,6 +13,7 @@ import '../../core/data/session.dart';
 import '../../core/domain/agent_models.dart';
 import '../../core/domain/analysis.dart';
 import '../../core/domain/models.dart';
+import '../../core/domain/voice.dart';
 import '../../core/format/money.dart';
 import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/common.dart';
@@ -63,6 +64,14 @@ class ProfileScreen extends ConsumerWidget {
       builder: (context) => _ModelSheet(selected: ref.read(agentModelProvider)),
     );
     if (key != null) ref.read(agentModelProvider.notifier).set(key);
+  }
+
+  Future<void> _chooseVoiceLanguage(BuildContext context, WidgetRef ref) async {
+    final language = await showModalBottomSheet<VoiceLanguage>(
+      context: context,
+      builder: (context) => _VoiceLanguageSheet(selected: ref.read(voiceLanguageProvider)),
+    );
+    if (language != null) ref.read(voiceLanguageProvider.notifier).set(language);
   }
 
   @override
@@ -200,6 +209,12 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => _chooseModel(context, ref),
             trailing: Icon(Icons.chevron_right, size: 20, color: p.muted),
           ),
+          ListRow(
+            title: 'Voice language',
+            subtitle: _voiceLanguageSubtitle(ref),
+            onTap: () => _chooseVoiceLanguage(context, ref),
+            trailing: Icon(Icons.chevron_right, size: 20, color: p.muted),
+          ),
           const SizedBox(height: 12),
           const SectionTitle('Manage'),
           nav('Categories', '/categories'),
@@ -332,6 +347,57 @@ class _ModelSheet extends StatelessWidget {
                   subtitle: o.note,
                   onTap: () => Navigator.pop(context, o.key),
                   trailing: o.key == selected
+                      ? Icon(Icons.check, size: 20, color: p.ink)
+                      : const SizedBox(width: 20),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Malayalam" or, when the phone lacks it, the fallback note (D-028).
+String _voiceLanguageSubtitle(WidgetRef ref) {
+  final language = ref.watch(voiceLanguageProvider);
+  final locales = ref.watch(voiceLocalesProvider).value;
+  if (locales == null) return language.label;
+  final note = resolveVoiceLanguage(language, locales).note;
+  return note == null ? language.label : '${language.label} · $note';
+}
+
+/// Picks the language for talking to the assistant (D-028).
+class _VoiceLanguageSheet extends StatelessWidget {
+  const _VoiceLanguageSheet({required this.selected});
+
+  final VoiceLanguage selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Voice language', style: LedgerText.display(size: 18)),
+            const SizedBox(height: 4),
+            Text(
+              'For talking to the assistant. Amounts are always said as numbers.',
+              style: LedgerText.body(size: 13, color: p.muted),
+            ),
+            const SizedBox(height: 8),
+            for (final (i, l) in VoiceLanguage.values.indexed)
+              Semantics(
+                selected: l == selected,
+                child: ListRow(
+                  topBorder: i > 0,
+                  title: l.label,
+                  onTap: () => Navigator.pop(context, l),
+                  trailing: l == selected
                       ? Icon(Icons.check, size: 20, color: p.ink)
                       : const SizedBox(width: 20),
                 ),

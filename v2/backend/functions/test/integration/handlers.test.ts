@@ -419,6 +419,40 @@ describe("askAgent", () => {
     expect(s.requests).toHaveLength(0);
   });
 
+  it("voice replies and Malayalam reach the model's system prompt (D-028)", async () => {
+    const s = scripted([
+      () => [call("respond", { blocks: [{ type: "text", text: "ok" }] })],
+      () => [call("respond", { blocks: [{ type: "text", text: "ok" }] })],
+      () => [call("respond", { blocks: [{ type: "text", text: "ok" }] })],
+    ]);
+    const system = (i: number) =>
+      s.requests[i].messages.filter((m) => m.role === "system").flatMap((m) => m.content).map((p) => p.text ?? "").join("");
+    const first = await askAgentHandler(deps(s), "alice", { message: "hi", timeZone: "Asia/Kolkata", reply: "voice", language: "ml" }, () => {});
+    expect(system(0)).toContain("SPOKEN REPLY");
+    expect(system(0)).toContain("LANGUAGE — answer in Malayalam");
+    await askAgentHandler(deps(s), "alice", { threadId: first.threadId, message: "again", timeZone: "Asia/Kolkata", reply: "voice", language: "en" }, () => {});
+    expect(system(1)).toContain("SPOKEN REPLY");
+    expect(system(1)).not.toContain("Malayalam");
+    // Typed questions (older apps send neither field) are unchanged.
+    await askAgentHandler(deps(s), "alice", { threadId: first.threadId, message: "typed", timeZone: "Asia/Kolkata" }, () => {});
+    expect(system(2)).not.toContain("SPOKEN REPLY");
+    expect(system(2)).not.toContain("Malayalam");
+    expect(system(2)).toContain("ANSWER FORMAT");
+  });
+
+  it("rejects reply and language values outside the allowlists", async () => {
+    const s = scripted([]);
+    const ask = (extra: Record<string, unknown>) =>
+      code(askAgentHandler(deps(s), "alice", { message: "hi", timeZone: "Asia/Kolkata", ...extra }, () => {}));
+    expect(await ask({ reply: "audio" })).toBe("invalid-argument");
+    expect(await ask({ reply: "VOICE" })).toBe("invalid-argument");
+    expect(await ask({ reply: 1 })).toBe("invalid-argument");
+    expect(await ask({ language: "ta" })).toBe("invalid-argument");
+    expect(await ask({ language: "ml-IN" })).toBe("invalid-argument");
+    expect(await ask({ language: ["ml"] })).toBe("invalid-argument");
+    expect(s.requests).toHaveLength(0);
+  });
+
   it("the month rolls over at midnight India time", async () => {
     const s = scripted([() => [call("respond", { blocks: [{ type: "text", text: "ok" }] })]]);
     await askAgentHandler({ ...deps(s), now: () => new Date("2026-10-31T18:45:00Z") }, "alice", { message: "hi", timeZone: "Asia/Kolkata" }, () => {});

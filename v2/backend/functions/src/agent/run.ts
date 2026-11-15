@@ -4,7 +4,7 @@ import { Block, BlockContext, normalizeBlocks } from "../core/blocks";
 import { categoryNameLookup } from "../core/categories";
 import { toLocalDay } from "../core/dates";
 import { formatINR } from "../core/money";
-import { AGENT_LIMITS } from "../config";
+import { AGENT_LIMITS, AgentLanguage, AgentReplyMode } from "../config";
 import { AgentBackend } from "./backend";
 import { buildSystemPrompt } from "./prompt";
 import { RESPOND_TOOL, runTool, TOOL_SPECS, ToolRunContext } from "./tools";
@@ -21,6 +21,10 @@ export interface RunAgentInput {
   message: string;
   history?: HistoryMessage[];
   timeZone: string;
+  /** "voice": the app reads the first text block aloud (D-028). */
+  reply?: AgentReplyMode;
+  /** Answer language (D-028). */
+  language?: AgentLanguage;
   now?: Date;
   /** Called when a tool starts, with a short user-facing status line. */
   onStatus?: (text: string) => void;
@@ -77,7 +81,14 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       noop,
     ),
   ];
-  const system = buildSystemPrompt({ today, timeZone: input.timeZone, callerUid: backend.uid, data });
+  const system = buildSystemPrompt({
+    today,
+    timeZone: input.timeZone,
+    callerUid: backend.uid,
+    data,
+    reply: input.reply,
+    language: input.language,
+  });
 
   let messages: MessageData[] = [
     ...capHistory(input.history ?? []).map(

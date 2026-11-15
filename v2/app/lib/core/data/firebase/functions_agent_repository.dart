@@ -25,23 +25,39 @@ class FunctionsAgentRepository implements AgentRepository {
     required String message,
     required String timeZone,
     String? model,
+    String? reply,
+    String? language,
   }) =>
       {
         'threadId': ?threadId,
         'message': message,
         'timeZone': timeZone,
         'model': ?model,
+        'reply': ?reply,
+        'language': ?language,
       };
 
   @override
-  Stream<AgentEvent> ask({String? threadId, required String message, String? model}) async* {
+  Stream<AgentEvent> ask({
+    String? threadId,
+    required String message,
+    String? model,
+    String? reply,
+    String? language,
+  }) async* {
     final callable = _functions.httpsCallable(
       'askAgent',
       options: HttpsCallableOptions(timeout: const Duration(minutes: 3)),
     );
     var done = false;
     await for (final response in callable.stream<Object?, Object?>(
-        askPayload(threadId: threadId, message: message, timeZone: timeZone, model: model))) {
+        askPayload(
+            threadId: threadId,
+            message: message,
+            timeZone: timeZone,
+            model: model,
+            reply: reply,
+            language: language))) {
       switch (response) {
         case Chunk(:final partialData):
           final chunk = partialData;

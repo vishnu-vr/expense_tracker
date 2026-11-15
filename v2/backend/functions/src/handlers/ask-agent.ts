@@ -3,7 +3,15 @@ import { HttpsError } from "firebase-functions/v2/https";
 import type { Genkit } from "genkit";
 import type { ModelArgument } from "genkit/model";
 import { HistoryMessage, runAgent, RunAgentResult } from "../agent/run";
-import { AGENT_LIMITS, AGENT_MODEL_KEY_PATTERN, AI_USAGE } from "../config";
+import {
+  AGENT_LANGUAGES,
+  AGENT_LIMITS,
+  AGENT_MODEL_KEY_PATTERN,
+  AGENT_REPLY_MODES,
+  AgentLanguage,
+  AgentReplyMode,
+  AI_USAGE,
+} from "../config";
 import { aiUsageDocId, messagePreview, messageUsage, usageIncrement, usageMonth } from "../core/ai-usage";
 import { Block, BlockSchema, blocksToText } from "../core/blocks";
 import { isValidTimeZone } from "../core/dates";
@@ -16,6 +24,10 @@ export interface AskAgentRequest {
   timeZone: string;
   /** The user's model choice as a key (D-027), e.g. "flash-lite"; the server maps it to a model id. */
   model?: string;
+  /** "voice" when the app will read the answer aloud (D-028); default "text". */
+  reply?: AgentReplyMode;
+  /** Answer language (D-028); default "en". */
+  language?: AgentLanguage;
 }
 
 export type AskAgentChunk = { type: "status"; text: string } | { type: "text"; delta: string };
@@ -57,11 +69,20 @@ function parseRequest(data: unknown): AskAgentRequest {
   if (d.model !== undefined && d.model !== null && (typeof d.model !== "string" || !AGENT_MODEL_KEY_PATTERN.test(d.model))) {
     throw new HttpsError("invalid-argument", "Invalid model.");
   }
+  const oneOf = <T extends string>(value: unknown, allowed: readonly T[], field: string): T | undefined => {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
+      throw new HttpsError("invalid-argument", `${field} must be one of: ${allowed.join(", ")}.`);
+    }
+    return value as T;
+  };
   return {
     threadId: (d.threadId as string | undefined) || undefined,
     message,
     timeZone: d.timeZone,
     model: (d.model as string | undefined) || undefined,
+    reply: oneOf(d.reply, AGENT_REPLY_MODES, "reply"),
+    language: oneOf(d.language, AGENT_LANGUAGES, "language"),
   };
 }
 
@@ -155,6 +176,8 @@ export async function askAgentHandler(
       message: req.message,
       history,
       timeZone: req.timeZone,
+      reply: req.reply,
+      language: req.language,
       now: deps.now?.(),
       onStatus: (text) => void sendChunk({ type: "status", text }),
     });

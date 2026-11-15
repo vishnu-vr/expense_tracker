@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { FIXTURE_BUDGETS, FIXTURE_NOW, FIXTURE_TIME_ZONE, fixtureHomeData } from "../../eval/fixture";
 import { FixtureBackend } from "../../eval/fixture-backend";
 import { parseModelId } from "../../src/agent/models";
-import { buildSystemPrompt } from "../../src/agent/prompt";
+import { buildSystemPrompt, replyStyleSection } from "../../src/agent/prompt";
 import { capHistory, runAgent } from "../../src/agent/run";
 import { RESPOND_TOOL, runTool, TOOL_SPECS } from "../../src/agent/tools";
 import { BlockSchema } from "../../src/core/blocks";
@@ -271,6 +271,47 @@ describe("configuration helpers", () => {
     expect(p).toContain("The person asking: Vikram (member id u_vikram)");
     expect(p).toContain("Last month: October 2026 (2026-10)");
     expect(p).toContain("tag_goa — Goa trip");
+  });
+  it("typed English questions get the unchanged prompt; voice and Malayalam add their sections (D-028)", () => {
+    const base = { today: "2026-11-10", timeZone: "Asia/Kolkata", callerUid: "u_vikram", data: fixtureHomeData() };
+    const plain = buildSystemPrompt(base);
+    expect(replyStyleSection()).toBe("");
+    expect(buildSystemPrompt({ ...base, reply: "text", language: "en" })).toBe(plain);
+    expect(plain).not.toContain("SPOKEN REPLY");
+    expect(plain).not.toContain("Malayalam");
+
+    const voice = buildSystemPrompt({ ...base, reply: "voice" });
+    expect(voice).toContain(replyStyleSection("voice"));
+    expect(voice).not.toContain("LANGUAGE — answer in Malayalam");
+    // The added lines sit after the answer format and before the reference data.
+    expect(voice.indexOf("SPOKEN REPLY")).toBeGreaterThan(voice.indexOf("ANSWER FORMAT"));
+    expect(voice.indexOf("SPOKEN REPLY")).toBeLessThan(voice.indexOf("CATEGORIES (id"));
+
+    const ml = buildSystemPrompt({ ...base, reply: "voice", language: "ml" });
+    expect(ml).toContain("SPOKEN REPLY");
+    expect(ml).toContain("LANGUAGE — answer in Malayalam");
+    expect(ml).toContain("Never write a number in words.");
+    // Numbers still come only from tools (D-011).
+    expect(ml).toContain("You never do arithmetic.");
+
+    expect(replyStyleSection("voice", "en").split("\n")).toEqual([
+      "",
+      "",
+      "SPOKEN REPLY — the person is talking to you; the app reads your first block aloud",
+      "- Make the FIRST block a text block with a 1–2 sentence spoken answer that leads with the answer. No tables, lists, symbols, ids or dates in YYYY-MM-DD form.",
+      "- Put the details (stat, bars, transactions, further text) in the blocks after it; they stay on screen.",
+      "- Any figure in the spoken answer is still copied verbatim from a tool's Display string.",
+      "- After a propose_* tool, the spoken answer says what you suggested and that they can tap Confirm on screen. Never ask them to confirm by voice.",
+    ]);
+    expect(replyStyleSection("text", "ml").split("\n")).toEqual([
+      "",
+      "",
+      "LANGUAGE — answer in Malayalam",
+      "- Write every text block, stat label, caption and bars title in Malayalam script.",
+      "- Keep amounts and numbers exactly as the tools give them, in digits with ₹ (for example ₹1,71,518.44). Never write a number in words.",
+      "- Category, tag, member and merchant names stay as they are.",
+      "- The question may be in Malayalam, English or a mix of both, possibly with recognition errors; understand it as best you can.",
+    ]);
   });
   it("chunks text without losing characters", () => {
     const text = "You spent ₹84,151.25 in October 2026, which is 48.9% more than in September.\nMostly food.";

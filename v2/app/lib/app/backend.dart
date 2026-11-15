@@ -14,6 +14,7 @@ import '../core/data/firebase/firestore_agent_history_repository.dart';
 import '../core/data/firebase/firestore_household_repository.dart';
 import '../core/data/firebase/functions_agent_repository.dart';
 import '../core/data/firebase/push_service.dart';
+import '../core/data/device_voice_service.dart';
 import '../core/data/repositories.dart';
 import '../firebase_options.dart';
 import 'providers.dart';
@@ -125,6 +126,8 @@ Future<List<Override>> backendOverrides({required String timeZone}) async {
       FunctionsAgentRepository(functions, timeZone: timeZone),
     ),
     adminRepositoryProvider.overrideWithValue(FunctionsAdminRepository(functions)),
+    // The phone's own speech recognition and voices (D-028).
+    voiceServiceProvider.overrideWithValue(DeviceVoiceService()),
     // Push needs a real project; the emulators have no messaging service.
     if (backendMode == 'firebase')
       pushServiceProvider.overrideWithValue(PushService(FirebaseMessaging.instance, db)),

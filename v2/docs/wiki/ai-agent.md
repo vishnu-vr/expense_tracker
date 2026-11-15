@@ -78,11 +78,56 @@ To add a choice:
 To remove one, drop it from the app first; the server then treats the old
 key as unknown and answers with the default.
 
+## Voice and Malayalam (D-028)
+
+The app's Talk mode sends spoken questions as normal `askAgent` calls with
+`reply: "voice"` and `language: "en" | "ml"` (allowlists `AGENT_REPLY_MODES`
+and `AGENT_LANGUAGES` in `src/config.ts`; anything else is
+`invalid-argument`). `replyStyleSection` in `src/agent/prompt.ts` appends:
+
+- **voice**: the first block is a text block with a 1–2 sentence spoken
+  answer (no tables, lists, ids or ISO dates); details go in later blocks;
+  spoken figures are still copied from `…Display` strings; after a
+  `propose_*` tool it says what was suggested and to tap Confirm, never to
+  confirm by voice.
+- **ml**: text, stat labels, captions and bar titles in Malayalam script;
+  amounts and numbers exactly as the tools give them (digits with ₹), never
+  in words; names unchanged; the question may be mixed Malayalam/English.
+
+Typed English questions get exactly the old prompt. About 100 extra prompt
+tokens per voice question.
+
+On the phone (`app/lib/core/domain/voice.dart`): `spokenReply` reads the
+first text block (at most 2 sentences; the first stat if there is no text),
+says "The details are on screen." when more is shown, describes proposals and
+says "Tap Confirm on screen to apply it.", and with Hide amounts on drops
+every sentence that contains a figure and says "Amounts are hidden, the
+answer is on screen." Malayalam uses Malayalam phrases (the proposal summary,
+which is server-written English, is not read). `isStopPhrase` ends the
+conversation on whole utterances like "stop", "that's all", "bye", "നിർത്തൂ",
+"മതി" (and transliterations "mathi", "nirthu"); a question that merely
+contains "stop" is sent normally. Malayalam is used only when the phone has
+both recognition and a voice for it; otherwise English, with a note. The
+phone's recogniser may send audio to Google or Apple when on-device
+recognition is unavailable (usual for Malayalam). Nothing heard or said is
+logged.
+
+Eval: 3 voice questions (`voice_*`: first block is a short text answer with
+a figure, same figures as the typed twin) and 5 Malayalam ones (`ml_*`,
+asked in voice mode; the answer must be in Malayalam script). Run them on
+both models:
+
+```
+npm run eval -- --model vertexai/gemini-3.8-flash,vertexai/gemini-3.5-flash-lite \
+  --only voice_spend_oct,voice_food_oct_vs_sep,voice_propose_budget,ml_spend_oct,ml_grocery_sep,ml_swiggy_oct,ml_food_budget_now,ml_propose_budget
+```
+
 ## Evaluating a model
 
 `backend/functions/eval/` has a fixture household (8 months, 2 members,
-budgets, recurring bills, a planted anomaly and a duplicate) and 35 golden
-questions whose expected numbers are computed by code. Unit tests check the
+budgets, recurring bills, a planted anomaly and a duplicate) and 43 golden
+questions (35 typed English, plus 8 voice/Malayalam ones from D-028) whose
+expected numbers are computed by code. Unit tests check the
 expectations against the tools, so the answer key itself is tested.
 
 ```

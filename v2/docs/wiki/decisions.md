@@ -9,6 +9,41 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-028 · Voice mode uses on-device speech around askAgent
+**2026-11-15 · Accepted · owner request**
+
+Ask has a **Talk** mode: tap the mic beside Send and talk hands-free. The
+phone's own speech recognition (`speech_to_text`) and text-to-speech
+(`flutter_tts`) wrap the existing `askAgent`, so tools, threads, usage and
+the model choice (D-027) are unchanged, there is no new paid service, and a
+spoken question costs what a typed one does (plus about 100 prompt tokens).
+The loop is listen → answer aloud → listen again; it ends on a stop phrase
+("stop", "that's all", "bye", "നിർത്തൂ", "മതി"…, checked on the phone and
+never sent), about 8 s of silence, End, or the app going to the background.
+A tap interrupts an answer; a tap while listening pauses so the transcript
+can be fixed. `askAgent` gains two optional, allowlisted fields: `reply`
+(`text` default, `voice`) and `language` (`en` default, `ml`). Voice mode
+asks the model for a 1–2 sentence spoken answer as the first text block;
+Malayalam asks for Malayalam script with amounts kept as digits. Figures
+still come only from tools (D-011). The app speaks that first block (at most
+two sentences), points to bars/entries ("The details are on screen."),
+describes proposals and says to tap Confirm — **proposals are confirmed only
+by tapping, never by voice**. With Hide amounts on, no sentence containing a
+figure is spoken ("Amounts are hidden, the answer is on screen."). Voice
+language (English (India) `en-IN` or Malayalam `ml-IN`) is a per-device
+setting (SharedPreferences `voiceLanguage`) in Profile › Assistant; when the
+phone lacks Malayalam recognition or a Malayalam voice, English is used with
+a note. Recognition prefers on-device for English; otherwise (and usually for
+Malayalam) the phone's recogniser may send audio to Google or Apple.
+Transcripts are never logged; only the final text is sent, as a normal
+question. Screens use a `VoiceService` interface (`core/data/voice.dart`);
+the device implementation is wired in `backend.dart`, demo mode and tests use
+`FakeVoiceService`. Rules out: a cloud speech API or audio model (cost, new
+data flow), voice confirmation of changes, and sentence-by-sentence streamed
+speech (later improvement).
+
+---
+
 ## D-027 · Users choose the assistant model from a server allowlist
 **2026-11-15 · Accepted · owner request**
 

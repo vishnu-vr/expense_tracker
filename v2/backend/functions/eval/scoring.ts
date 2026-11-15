@@ -47,6 +47,35 @@ const same = (a: unknown, b: unknown): boolean => {
   return a === b;
 };
 
+const MALAYALAM = /[\u0D00-\u0D7F]/;
+
+/** Sentences in a spoken answer; a "." inside a figure (₹1,518.44) does not end one. */
+export function sentenceCount(text: string): number {
+  return text.split(/[.!?।]+(?=\s|$)/).filter((s) => s.trim()).length;
+}
+
+/** Voice-mode and language checks (D-028); returns what is missing. */
+export function spokenProblems(golden: Golden, blocks: Block[]): string[] {
+  const problems: string[] = [];
+  if (golden.reply === "voice") {
+    const first = blocks[0];
+    if (!first || first.type !== "text") {
+      problems.push("first block is not a spoken text answer");
+    } else {
+      if (sentenceCount(first.text) > 2 || first.text.length > 320) problems.push("spoken answer longer than 2 sentences");
+      const spoken = extractNumbers(first.text);
+      if (golden.numbers.length && !golden.numbers.some((n) => spoken.some((f) => Math.abs(f - Math.abs(n.value)) <= 0.01))) {
+        problems.push("spoken answer carries none of the expected figures");
+      }
+    }
+  }
+  if (golden.language === "ml") {
+    const text = blocks.find((b) => b.type === "text");
+    if (!text || text.type !== "text" || !MALAYALAM.test(text.text)) problems.push("answer is not in Malayalam");
+  }
+  return problems;
+}
+
 /** Deterministic scoring — no model judges the answer. */
 export function scoreAnswer(golden: Golden, blocks: Block[], proposals: ProposalDraft[]): Score {
   const text = flattenBlocks(blocks);
@@ -80,6 +109,7 @@ export function scoreAnswer(golden: Golden, blocks: Block[], proposals: Proposal
     if (!shown) missing.push("proposal block missing");
     if (!stored) missing.push("proposal not stored with the expected params");
   }
+  missing.push(...spokenProblems(golden, blocks));
   return {
     pass: missing.length === 0,
     numbersExpected: golden.numbers.length,

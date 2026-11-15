@@ -25,6 +25,7 @@ folder; this page is the working copy.
 | Finish installing Xcode + CocoaPods | iOS build |
 | Play Store SMS permission declaration | Your developer account |
 | Go-ahead for the Flash-Lite eval subset (billed, ~66k input tokens), then deploy `askAgent` and ship build 1.0.0 (6) (D-027) | Billed run and a production deploy |
+| Go-ahead for the voice/Malayalam eval subset on Flash and Flash-Lite (billed, 8 questions × 2 models), then deploy `askAgent`, run the manual voice checklist on a real phone, and ship build 1.0.0 (7) (D-028) | Billed run, a production deploy and a real microphone |
 | Turn on the Cloud Billing export to BigQuery (dataset `billing_export`, US multi-region; D-024) | Only a billing account admin can, in the console; see operations.md › Billing dashboard |
 
 ## Next up (in order)
@@ -48,4 +49,6 @@ folder; this page is the working copy.
   private. Poor fit: the multi-step assistant, which stays in the cloud.
   Package names and device support change fast; re-check docs first.
 - What-if tool for the assistant; category suggestions from embeddings.
+- Talk mode: speak the answer sentence by sentence as it streams (D-028 v1
+  waits for the whole answer, about 10 s).
 - Retire the v1 Angular app once v2 is in use.

@@ -56,6 +56,21 @@ export function resolveAgentModel(key?: string): string {
   return choice.id;
 }
 
+/**
+ * How the app will present the answer (D-028). `voice` means the app reads
+ * the first text block aloud, so the prompt asks for a short spoken answer
+ * first. The first entry is the default.
+ */
+export const AGENT_REPLY_MODES = ["text", "voice"] as const;
+export type AgentReplyMode = (typeof AGENT_REPLY_MODES)[number];
+
+/**
+ * Languages the assistant may answer in (D-028): `en` (default) and `ml`
+ * (Malayalam). Anything else in a request is rejected.
+ */
+export const AGENT_LANGUAGES = ["en", "ml"] as const;
+export type AgentLanguage = (typeof AGENT_LANGUAGES)[number];
+
 /** Vertex AI location for Gemini + embeddings. */
 export const vertexLocation = (): string => env("VERTEX_LOCATION", "global");
 /** Vertex AI location for Model Garden (Claude) models. */

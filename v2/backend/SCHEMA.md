@@ -100,7 +100,7 @@ Source of truth: `functions/src/core/blocks.ts` (`BlockSchema`). At most 12 bloc
 | `joinHome` | `{ displayId }` | `{ id, name, displayId, ownerId, memberIds }` |
 | `leaveHome` | `{}` | `{ homeId, ownershipTransferredTo: string \| null }` |
 | `exportTransactionsCsv` | `{ from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', timeZone }` | `{ csv, filename, count }` |
-| `askAgent` (streaming) | `{ threadId?, message, timeZone, model? }` — `model` is a choice key (`flash`, `flash-lite`; `[a-z0-9-]{1,32}`, else `invalid-argument`); missing or unknown means the server default (D-027) | `{ threadId, messageId, blocks: Block[] }`; stream chunks `{ type:'status', text }` \| `{ type:'text', delta }` |
+| `askAgent` (streaming) | `{ threadId?, message, timeZone, model?, reply?, language? }` — `model` is a choice key (`flash`, `flash-lite`; `[a-z0-9-]{1,32}`, else `invalid-argument`); missing or unknown means the server default (D-027). `reply`: `'text'` (default) or `'voice'` (a short spoken answer comes first); `language`: `'en'` (default) or `'ml'` (Malayalam, amounts as digits) (D-028); any other value of either is `invalid-argument` | `{ threadId, messageId, blocks: Block[] }`; stream chunks `{ type:'status', text }` \| `{ type:'text', delta }` |
 | `confirmProposal` | `{ threadId, proposalId, accept: boolean }` | `{ proposalId, status: 'applied'|'rejected', appliedCount, skippedTransactionIds }`; `not-found` unless the caller created the proposal |
 | `getAdminDashboard` (admin only) | `{ month: 'YYYY-MM' }` | `{ month, billing, usage, assistant, households }`, see below |
 

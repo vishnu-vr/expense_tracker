@@ -38,6 +38,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>GIDClientID</key>
 	<string>117550011867-6bmfj6434cgci2m2ao7n0gejo5javbhq.apps.googleusercontent.com</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Track Expense uses the microphone when you talk to the assistant.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Track Expense turns your spoken questions into text for the assistant. Apple may process the audio when on-device recognition is not available.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

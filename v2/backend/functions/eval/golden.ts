@@ -7,6 +7,7 @@
  * production tools return exactly these numbers, so the expectations and the
  * tools verify each other.
  */
+import type { AgentLanguage, AgentReplyMode } from "../src/config";
 import { Tx } from "../src/core/types";
 import { ASHA, FIXTURE_BUDGETS, generateFixtureTransactions, VIKRAM } from "./fixture";
 
@@ -28,6 +29,13 @@ export interface Golden {
   noData?: boolean;
   /** The answer must carry a pending proposal like this (and change nothing). */
   proposal?: { action: "set_budget" | "tag_transactions" | "recategorise"; params: Record<string, unknown> };
+  /**
+   * Asked as a voice question (D-028): the first block must be a short spoken
+   * text answer (at most 2 sentences) that carries at least one expected figure.
+   */
+  reply?: AgentReplyMode;
+  /** Answer language (D-028). "ml": the spoken/first text block must be in Malayalam script. */
+  language?: AgentLanguage;
 }
 
 // ---- naive reference helpers -------------------------------------------------
@@ -267,6 +275,65 @@ export function buildGoldens(all: Tx[] = generateFixtureTransactions()): Golden[
       question: "Tag all my Uber rides from October with the Work tag.",
       numbers: [],
       proposal: { action: "tag_transactions", params: { tagId: "tag_work", transactionIds: ashaUberOct } },
+    },
+
+    // ---- voice mode (D-028): same figures as the typed questions, short spoken answer first
+    { id: "voice_spend_oct", reply: "voice", question: "How much did we spend last month?", numbers: [{ label: "October expenses", value: total(oct) }] },
+    {
+      id: "voice_food_oct_vs_sep",
+      reply: "voice",
+      question: "How did food spending in October compare with September?",
+      numbers: [
+        { label: "September food", value: foodSep },
+        { label: "October food", value: foodOct },
+        { label: "Change", value: r2(foodOct - foodSep) },
+      ],
+    },
+    {
+      id: "voice_propose_budget",
+      reply: "voice",
+      question: "Please set the food budget to ₹14,000 a month.",
+      numbers: [{ label: "Proposed budget", value: 14000 }],
+      text: ["confirm"],
+      proposal: { action: "set_budget", params: { categoryId: "food", amount: 14000 } },
+    },
+
+    // ---- Malayalam, spoken (D-028): amounts stay as digits
+    { id: "ml_spend_oct", reply: "voice", language: "ml", question: "കഴിഞ്ഞ മാസം ഞങ്ങൾ എത്ര രൂപ ചെലവാക്കി?", numbers: [{ label: "October expenses", value: total(oct) }] },
+    {
+      id: "ml_grocery_sep",
+      reply: "voice",
+      language: "ml",
+      question: "സെപ്റ്റംബറിൽ പലചരക്ക് സാധനങ്ങൾക്ക് എത്ര ചെലവായി?",
+      numbers: [{ label: "September grocery", value: total(cat(sep, "grocery")) }],
+    },
+    {
+      id: "ml_swiggy_oct",
+      reply: "voice",
+      language: "ml",
+      question: "October-ൽ എത്ര Swiggy order ചെയ്തു, ആകെ എത്ര ആയി?",
+      numbers: [
+        { label: "Swiggy orders", value: swiggyOct.length },
+        { label: "Swiggy total", value: total(swiggyOct) },
+      ],
+    },
+    {
+      id: "ml_food_budget_now",
+      reply: "voice",
+      language: "ml",
+      question: "ഈ മാസത്തെ food ബജറ്റ് എങ്ങനെയുണ്ട്? എത്ര ചെലവായി, എത്ര ബാക്കിയുണ്ട്?",
+      numbers: [
+        { label: "Food spent in November", value: foodNov },
+        { label: "Food budget remaining", value: r2(12000 - foodNov) },
+      ],
+    },
+    {
+      id: "ml_propose_budget",
+      reply: "voice",
+      language: "ml",
+      question: "food ബജറ്റ് മാസം ₹14,000 ആക്കി മാറ്റൂ.",
+      numbers: [{ label: "Proposed budget", value: 14000 }],
+      proposal: { action: "set_budget", params: { categoryId: "food", amount: 14000 } },
     },
   ];
 }

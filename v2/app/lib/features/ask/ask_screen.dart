@@ -6,9 +6,12 @@ import 'package:intl/intl.dart';
 import '../../app/providers.dart';
 import '../../core/data/agent.dart';
 import '../../core/domain/agent_models.dart';
+import '../../core/domain/voice.dart';
 import '../../core/format/money.dart';
 import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/common.dart';
+import 'talk_controller.dart';
+import 'talk_panel.dart';
 
 enum ProposalState { pending, working, accepted, declined }
 
@@ -53,6 +56,9 @@ class _AskScreenState extends ConsumerState<AskScreen> {
   String? _status;
   var _streamed = '';
   var _loadingThread = false;
+
+  /// The running voice conversation, if any (D-028).
+  TalkController? _talk;
 
   @override
   void initState() {
@@ -121,6 +127,7 @@ class _AskScreenState extends ConsumerState<AskScreen> {
 
   @override
   void dispose() {
+    _talk?.dispose();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -136,9 +143,17 @@ class _AskScreenState extends ConsumerState<AskScreen> {
   }
 
   Future<void> _send(String text) async {
+    await _ask(text);
+  }
+
+  /// Asks [text] in the open conversation and returns the reply blocks (null
+  /// when it failed). [voice] marks a spoken question in that language: the
+  /// server then puts a short spoken answer first (D-028).
+  Future<List<AgentBlock>?> _ask(String text, {VoiceLanguage? voice}) async {
     final message = text.trim();
-    if (message.isEmpty || _busy || _loadingThread) return;
-    _input.clear();
+    if (message.isEmpty || _busy || _loadingThread) return null;
+    if (voice == null) _input.clear();
+    List<AgentBlock>? reply;
     setState(() {
       _messages.add(ChatMessage.user(message));
       _busy = true;
@@ -150,8 +165,12 @@ class _AskScreenState extends ConsumerState<AskScreen> {
     try {
       await for (final e
           in ref.read(agentRepositoryProvider).ask(
-              threadId: _threadId, message: message, model: ref.read(agentModelProvider))) {
-        if (!mounted) return;
+              threadId: _threadId,
+              message: message,
+              model: ref.read(agentModelProvider),
+              reply: voice == null ? null : 'voice',
+              language: voice?.key)) {
+        if (!mounted) return null;
         setState(() {
           switch (e) {
             case AgentStatus(:final text):
@@ -161,14 +180,15 @@ class _AskScreenState extends ConsumerState<AskScreen> {
             case AgentDone(:final threadId, :final blocks):
               answered = true;
               _threadId = threadId;
-              _messages.add(ChatMessage.assistant(
-                  blocks.isEmpty ? [const TextBlock('I could not find an answer to that.')] : blocks));
+              reply = blocks.isEmpty ? [const TextBlock('I could not find an answer to that.')] : blocks;
+              _messages.add(ChatMessage.assistant(reply!));
           }
         });
         _toEnd();
       }
       if (!answered) throw StateError('No answer');
     } catch (_) {
+      reply = null;
       if (mounted) {
         setState(() => _messages.add(ChatMessage.assistant(const [
               TextBlock('Something went wrong while answering. Check your connection and ask again.'),
@@ -184,6 +204,36 @@ class _AskScreenState extends ConsumerState<AskScreen> {
         _toEnd();
       }
     }
+    return reply;
+  }
+
+  void _startTalk() {
+    FocusScope.of(context).unfocus();
+    final talk = TalkController(
+      voice: ref.read(voiceServiceProvider),
+      language: ref.read(voiceLanguageProvider),
+      hideAmounts: () => ref.read(hideAmountsProvider),
+      ask: (text, language) => _ask(text, voice: language),
+      onEnded: _talkEnded,
+    );
+    setState(() => _talk = talk);
+    talk.start();
+  }
+
+  void _talkEnded(TalkEnd reason) {
+    final talk = _talk;
+    if (!mounted) return;
+    setState(() => _talk = null);
+    WidgetsBinding.instance.addPostFrameCallback((_) => talk?.dispose());
+    final message = switch (reason) {
+      TalkEnd.permissionDenied =>
+        'Talking needs the microphone. Allow it for Track Expense in your phone\'s settings, then tap Talk again.',
+      TalkEnd.unavailable => 'Speech recognition isn\'t available on this phone.',
+      TalkEnd.error => 'Speech recognition stopped. Check your connection and try again.',
+      TalkEnd.silence => 'Talk ended after a quiet spell.',
+      _ => null,
+    };
+    if (message != null) showToast(context, message);
   }
 
   Future<void> _resolve(ProposalBlock b, bool accept) async {
@@ -210,10 +260,10 @@ class _AskScreenState extends ConsumerState<AskScreen> {
         actions: [
           IconButton(
             tooltip: 'Past conversations',
-            onPressed: _busy || _loadingThread ? null : _showHistory,
+            onPressed: _busy || _loadingThread || _talk != null ? null : _showHistory,
             icon: const Icon(Icons.history),
           ),
-          if (_messages.isNotEmpty && !_busy)
+          if (_messages.isNotEmpty && !_busy && _talk == null)
             TextButton(onPressed: _newChat, child: const Text('New chat')),
           const SizedBox(width: 12),
         ],
@@ -269,7 +319,10 @@ class _AskScreenState extends ConsumerState<AskScreen> {
                   ],
                 ),
         ),
-        SafeArea(
+        if (_talk != null)
+          SafeArea(top: false, child: TalkPanel(controller: _talk!))
+        else
+          SafeArea(
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
@@ -286,7 +339,14 @@ class _AskScreenState extends ConsumerState<AskScreen> {
                     decoration: const InputDecoration(hintText: 'Ask about your money'),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Talk',
+                  onPressed: _busy || _loadingThread ? null : _startTalk,
+                  style: IconButton.styleFrom(fixedSize: const Size(48, 48)),
+                  icon: const Icon(Icons.mic_none),
+                ),
+                const SizedBox(width: 4),
                 IconButton.filled(
                   tooltip: 'Send',
                   onPressed: _busy ? null : () => _send(_input.text),

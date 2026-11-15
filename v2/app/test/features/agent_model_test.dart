@@ -13,7 +13,7 @@ class _RecordingAgent implements AgentRepository {
   final models = <String?>[];
 
   @override
-  Stream<AgentEvent> ask({String? threadId, required String message, String? model}) async* {
+  Stream<AgentEvent> ask({String? threadId, required String message, String? model, String? reply, String? language}) async* {
     models.add(model);
     yield const AgentDone(threadId: 't1', blocks: [TextBlock('ok')]);
   }

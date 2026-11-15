@@ -113,7 +113,7 @@ async function evaluate(modelRaw: string, goldens: Golden[], verbose: boolean) {
   for (const g of goldens) {
     const backend = new FixtureBackend(g.uid);
     try {
-      const res = await runAgent({ ai, model, backend, message: g.question, timeZone: FIXTURE_TIME_ZONE, now: FIXTURE_NOW });
+      const res = await runAgent({ ai, model, backend, message: g.question, timeZone: FIXTURE_TIME_ZONE, now: FIXTURE_NOW, reply: g.reply, language: g.language });
       const score = scoreAnswer(g, res.blocks, backend.proposals);
       rows.push({
         id: g.id,

@@ -43,6 +43,22 @@ for the small uppercase labels above figures. Fonts are bundled in
 `PeriodNav`, `EmptyState`, `Pill`, `showToast`, `confirmDialog`,
 `CategoryIcon`, `BurnSparklineView`. Use these before making new ones.
 
+## Talk panel (D-028)
+
+Replaces the Ask input while a voice conversation runs, so the thread stays
+visible above it (proposals there are still confirmed by tap). Surface
+colour with an ink top rule. One row: a 36 px round state badge (accent
+fill with a mic while listening, track fill otherwise), the state in
+`LedgerText.display(18)` (Listening, Thinking, Speaking, Paused; a live
+region), and an outlined **End** button (44 px). Under it: the language
+fallback note (12 px muted) when English is used instead of Malayalam, then
+the live transcript, or a muted hint ("Ask a question, or say "stop" to
+end.", "Tap to interrupt."). The whole panel is the tap target: tapping
+interrupts speaking or pauses listening; paused shows a text field with the
+transcript and **Listen again** / **Send**. The mic in the input row is an
+icon button with tooltip **Talk**. While thinking, a short click repeats
+instead of spoken status text.
+
 ## App icon
 
 Off-white receipt with a torn edge, an ink rupee mark and two ledger rules

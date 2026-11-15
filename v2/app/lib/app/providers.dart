@@ -8,10 +8,12 @@ import '../core/data/demo_repository.dart';
 import '../core/data/firebase/push_service.dart';
 import '../core/data/repositories.dart';
 import '../core/data/session.dart';
+import '../core/data/voice.dart';
 import '../core/domain/agent_models.dart';
 import '../core/domain/default_categories.dart';
 import '../core/domain/home_insights.dart';
 import '../core/domain/models.dart';
+import '../core/domain/voice.dart';
 import '../core/format/money.dart';
 
 /// Current time. Overridden in tests; invalidated on pull-to-refresh/resume.
@@ -81,6 +83,34 @@ class AgentModelSetting extends Notifier<String> {
 
 final agentModelProvider =
     NotifierProvider<AgentModelSetting, String>(AgentModelSetting.new);
+
+/// The language the user talks to the assistant in (D-028), from Profile ›
+/// Assistant › Voice language. An unknown stored key falls back to English.
+class VoiceLanguageSetting extends Notifier<VoiceLanguage> {
+  static const _key = 'voiceLanguage';
+
+  @override
+  VoiceLanguage build() =>
+      voiceLanguageOf(ref.watch(sharedPreferencesProvider).getString(_key));
+
+  void set(VoiceLanguage language) {
+    state = language;
+    ref.read(sharedPreferencesProvider).setString(_key, language.key);
+  }
+}
+
+final voiceLanguageProvider =
+    NotifierProvider<VoiceLanguageSetting, VoiceLanguage>(VoiceLanguageSetting.new);
+
+/// Speech recognition and text-to-speech. Demo mode and tests use a scripted
+/// fake; `backend.dart` swaps in the phone's own (D-028).
+final voiceServiceProvider = Provider<VoiceService>((ref) => FakeVoiceService.demo());
+
+/// What the phone supports, for the Voice language row. Never prompts for a
+/// permission, so recognition may be unknown until the first conversation.
+final voiceLocalesProvider = FutureProvider.autoDispose<VoiceLocales>(
+  (ref) => ref.watch(voiceServiceProvider).availableLocales(),
+);
 
 final sessionRepositoryProvider =
     Provider<SessionRepository>((ref) => DemoSessionRepository());

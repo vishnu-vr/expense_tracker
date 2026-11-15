@@ -10,7 +10,7 @@ import '../support/harness.dart';
 
 class _SilentAgent implements AgentRepository {
   @override
-  Stream<AgentEvent> ask({String? threadId, required String message, String? model}) async* {
+  Stream<AgentEvent> ask({String? threadId, required String message, String? model, String? reply, String? language}) async* {
     yield const AgentStatus('Thinking…');
   }
 
