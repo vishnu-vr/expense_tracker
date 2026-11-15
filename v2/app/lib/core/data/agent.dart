@@ -145,8 +145,9 @@ class AgentDone extends AgentEvent {
 
 abstract class AgentRepository {
   /// Sends [message]; pass the [threadId] from the previous [AgentDone] to
-  /// continue a conversation.
-  Stream<AgentEvent> ask({String? threadId, required String message});
+  /// continue a conversation. [model] is the user's model key (D-027); null
+  /// means the server default.
+  Stream<AgentEvent> ask({String? threadId, required String message, String? model});
 
   Future<void> resolveProposal({
     required String threadId,
@@ -344,7 +345,7 @@ class DemoAgentRepository implements AgentRepository {
   final _proposals = <String, ({String categoryId, double amount})>{};
 
   @override
-  Stream<AgentEvent> ask({String? threadId, required String message}) async* {
+  Stream<AgentEvent> ask({String? threadId, required String message, String? model}) async* {
     yield const AgentStatus('Comparing the last two months…');
     final txs = _transactions();
     final thisStart = DateTime(_now.year, _now.month - 1);

@@ -14,7 +14,6 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { embedText, getAgentRuntime } from "./agent/models";
 import { createModelPhraser } from "./agent/phraser";
 import {
-  agentModelId,
   billingDataset,
   billingLocation,
   billingProjectId,
@@ -22,6 +21,7 @@ import {
   enforceAppCheck,
   insightsPhrasingModelId,
   REGION,
+  resolveAgentModel,
 } from "./config";
 import { readAssistantUsage } from "./data/ai-usage";
 import { readHouseholdActivity } from "./data/households";
@@ -58,7 +58,7 @@ export const exportTransactionsCsv = onCall(callable, (request) =>
 );
 
 /**
- * askAgent({threadId?, message, timeZone}) -> {threadId, messageId, blocks}
+ * askAgent({threadId?, message, timeZone, model?}) -> {threadId, messageId, blocks}
  * Streams {type:'status', text} and {type:'text', delta} chunks.
  */
 export const askAgent = onCall<unknown, Promise<AskAgentResult>, AskAgentChunk>(
@@ -67,9 +67,9 @@ export const askAgent = onCall<unknown, Promise<AskAgentResult>, AskAgentChunk>(
     askAgentHandler(
       {
         db: getFirestore(),
-        runtime: () => getAgentRuntime(agentModelId()),
+        runtime: (key) => getAgentRuntime(resolveAgentModel(key)),
         embedQuery: (text) => embedText(text, "RETRIEVAL_QUERY"),
-        onMetrics: (m) => logger.info("askAgent complete", { model: agentModelId(), ...m }),
+        onMetrics: (m) => logger.info("askAgent complete", m),
       },
       requireUid(request),
       request.data,

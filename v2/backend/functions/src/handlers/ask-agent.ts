@@ -3,7 +3,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import type { Genkit } from "genkit";
 import type { ModelArgument } from "genkit/model";
 import { HistoryMessage, runAgent, RunAgentResult } from "../agent/run";
-import { AGENT_LIMITS, AI_USAGE } from "../config";
+import { AGENT_LIMITS, AGENT_MODEL_KEY_PATTERN, AI_USAGE } from "../config";
 import { aiUsageDocId, messagePreview, messageUsage, usageIncrement, usageMonth } from "../core/ai-usage";
 import { Block, BlockSchema, blocksToText } from "../core/blocks";
 import { isValidTimeZone } from "../core/dates";
@@ -14,6 +14,8 @@ export interface AskAgentRequest {
   threadId?: string;
   message: string;
   timeZone: string;
+  /** The user's model choice as a key (D-027), e.g. "flash-lite"; the server maps it to a model id. */
+  model?: string;
 }
 
 export type AskAgentChunk = { type: "status"; text: string } | { type: "text"; delta: string };
@@ -27,15 +29,16 @@ export interface AskAgentResult {
 export interface AskAgentDeps {
   db: Firestore;
   /**
-   * Resolves the configured model (lazy, so no credentials are needed until a
-   * question is asked). `modelId.id` (e.g. "vertexai/gemini-3.8-flash") is
-   * recorded with the usage; without it the model reference's name is used.
+   * Resolves the model for the user's choice (`modelKey`, already shape-checked;
+   * missing or unknown means the default). Lazy, so no credentials are needed
+   * until a question is asked. `modelId.id` (e.g. "vertexai/gemini-3.8-flash")
+   * is recorded with the usage; without it the model reference's name is used.
    */
-  runtime: () => Promise<{ ai: Genkit; model: ModelArgument; modelId?: { id: string } }>;
+  runtime: (modelKey?: string) => Promise<{ ai: Genkit; model: ModelArgument; modelId?: { id: string } }>;
   embedQuery: QueryEmbedder;
   now?: () => Date;
   /** Receives run metrics only (never message or transaction content). */
-  onMetrics?: (m: Pick<RunAgentResult, "usage" | "latencyMs" | "usedFallback"> & { tools: string[] }) => void;
+  onMetrics?: (m: Pick<RunAgentResult, "usage" | "latencyMs" | "usedFallback"> & { tools: string[]; model: string }) => void;
 }
 
 function parseRequest(data: unknown): AskAgentRequest {
@@ -51,7 +54,15 @@ function parseRequest(data: unknown): AskAgentRequest {
   if (d.threadId !== undefined && d.threadId !== null && (typeof d.threadId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(d.threadId))) {
     throw new HttpsError("invalid-argument", "Invalid threadId.");
   }
-  return { threadId: (d.threadId as string | undefined) || undefined, message, timeZone: d.timeZone };
+  if (d.model !== undefined && d.model !== null && (typeof d.model !== "string" || !AGENT_MODEL_KEY_PATTERN.test(d.model))) {
+    throw new HttpsError("invalid-argument", "Invalid model.");
+  }
+  return {
+    threadId: (d.threadId as string | undefined) || undefined,
+    message,
+    timeZone: d.timeZone,
+    model: (d.model as string | undefined) || undefined,
+  };
 }
 
 /** "vertexai/gemini-3.8-flash" from a Genkit model reference or name. */
@@ -135,7 +146,7 @@ export async function askAgentHandler(
   let result: RunAgentResult;
   let modelName = "unknown";
   try {
-    const { ai, model, modelId } = await deps.runtime();
+    const { ai, model, modelId } = await deps.runtime(req.model);
     modelName = modelId?.id ?? modelNameOf(model);
     result = await runAgent({
       ai,
@@ -202,6 +213,7 @@ export async function askAgentHandler(
     usage: result.usage,
     latencyMs: result.latencyMs,
     usedFallback: result.usedFallback,
+    model: modelName,
     tools: result.toolCalls.map((t) => t.name),
   });
   return { threadId: threadRef.id, messageId: messageRef.id, blocks: result.blocks };

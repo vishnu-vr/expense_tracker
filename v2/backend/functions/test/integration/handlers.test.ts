@@ -382,6 +382,43 @@ describe("askAgent", () => {
     expect((await db.doc("aiUsage/2026-11_h1").get()).get("questions")).toBe(3);
   });
 
+  it("passes the user's model choice to the runtime and records the model used (D-027)", async () => {
+    const s = scripted([
+      () => [call("respond", { blocks: [{ type: "text", text: "ok" }] })],
+      () => [call("respond", { blocks: [{ type: "text", text: "ok" }] })],
+    ]);
+    const keys: (string | undefined)[] = [];
+    const metrics: string[] = [];
+    const d = {
+      ...deps(s),
+      runtime: async (key?: string) => {
+        keys.push(key);
+        return { ai: s.ai, model: s.model, modelId: { id: key === "flash-lite" ? "vertexai/gemini-3.5-flash-lite" : "vertexai/gemini-3.8-flash" } };
+      },
+      onMetrics: (m: { model: string }) => void metrics.push(m.model),
+    };
+    const { threadId, messageId } = await askAgentHandler(d, "alice", { message: "hi", timeZone: "Asia/Kolkata", model: "flash-lite" }, () => {});
+    expect(keys).toEqual(["flash-lite"]);
+    expect((await db.doc(`homes/h1/aiThreads/${threadId}/messages/${messageId}`).get()).get("usage.model")).toBe("vertexai/gemini-3.5-flash-lite");
+    expect((await db.doc(`homes/h1/aiThreads/${threadId}`).get()).get("lastModel")).toBe("vertexai/gemini-3.5-flash-lite");
+
+    // No choice (older apps): the runtime gets no key and the default is recorded.
+    const second = await askAgentHandler(d, "alice", { threadId, message: "again", timeZone: "Asia/Kolkata" }, () => {});
+    expect(keys).toEqual(["flash-lite", undefined]);
+    expect((await db.doc(`homes/h1/aiThreads/${threadId}/messages/${second.messageId}`).get()).get("usage.model")).toBe("vertexai/gemini-3.8-flash");
+    expect(metrics).toEqual(["vertexai/gemini-3.5-flash-lite", "vertexai/gemini-3.8-flash"]);
+  });
+
+  it("rejects a malformed model choice before reaching the model", async () => {
+    const s = scripted([]);
+    const ask = (model: unknown) => code(askAgentHandler(deps(s), "alice", { message: "hi", timeZone: "Asia/Kolkata", model }, () => {}));
+    expect(await ask("Flash Lite")).toBe("invalid-argument");
+    expect(await ask("x".repeat(33))).toBe("invalid-argument");
+    expect(await ask(42)).toBe("invalid-argument");
+    expect(await ask("vertexai/gemini-3.8-flash")).toBe("invalid-argument"); // raw model ids are never accepted
+    expect(s.requests).toHaveLength(0);
+  });
+
   it("the month rolls over at midnight India time", async () => {
     const s = scripted([() => [call("respond", { blocks: [{ type: "text", text: "ok" }] })]]);
     await askAgentHandler({ ...deps(s), now: () => new Date("2026-10-31T18:45:00Z") }, "alice", { message: "hi", timeZone: "Asia/Kolkata" }, () => {});

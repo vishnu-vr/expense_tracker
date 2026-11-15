@@ -13,7 +13,7 @@ class _RecordingAgent implements AgentRepository {
   final asked = <({String? threadId, String message})>[];
 
   @override
-  Stream<AgentEvent> ask({String? threadId, required String message}) async* {
+  Stream<AgentEvent> ask({String? threadId, required String message, String? model}) async* {
     asked.add((threadId: threadId, message: message));
     yield AgentDone(
       threadId: threadId ?? 'new-thread',

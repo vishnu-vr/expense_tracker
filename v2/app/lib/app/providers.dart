@@ -8,6 +8,7 @@ import '../core/data/demo_repository.dart';
 import '../core/data/firebase/push_service.dart';
 import '../core/data/repositories.dart';
 import '../core/data/session.dart';
+import '../core/domain/agent_models.dart';
 import '../core/domain/default_categories.dart';
 import '../core/domain/home_insights.dart';
 import '../core/domain/models.dart';
@@ -62,6 +63,24 @@ class ThemeModeSetting extends Notifier<ThemeMode> {
 
 final themeModeProvider =
     NotifierProvider<ThemeModeSetting, ThemeMode>(ThemeModeSetting.new);
+
+/// The assistant model key the user picked in Profile (D-027), sent with
+/// every question. An unknown stored key falls back to the default.
+class AgentModelSetting extends Notifier<String> {
+  static const _key = 'agentModel';
+
+  @override
+  String build() =>
+      agentModelOption(ref.watch(sharedPreferencesProvider).getString(_key)).key;
+
+  void set(String key) {
+    state = agentModelOption(key).key;
+    ref.read(sharedPreferencesProvider).setString(_key, state);
+  }
+}
+
+final agentModelProvider =
+    NotifierProvider<AgentModelSetting, String>(AgentModelSetting.new);
 
 final sessionRepositoryProvider =
     Provider<SessionRepository>((ref) => DemoSessionRepository());

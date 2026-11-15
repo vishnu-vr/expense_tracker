@@ -115,14 +115,30 @@ try {
     `${((Date.now() - t0) / 1000).toFixed(1)}s, ${ask.status}${ask.body.error ? ' ' + JSON.stringify(ask.body.error).slice(0, 200) : ''}`);
   for (const b of blocks) console.log('      ', b.type, JSON.stringify(b).slice(0, 220));
   if (ask.body.result?.threadId) {
-    created.push(`homes/${homeId}/aiThreads/${ask.body.result.threadId}`);
-    const thread = await admin('GET', `${FS}/homes/${homeId}/aiThreads/${ask.body.result.threadId}`);
+    const threadId = ask.body.result.threadId;
+    created.push(`homes/${homeId}/aiThreads/${threadId}`);
+    // Follow-up on the cheaper model choice (D-027), same thread.
+    const t1 = Date.now();
+    const lite = await fetch(`${FN}/askAgent`, { method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: { threadId, model: 'flash-lite', message: 'And how many entries was that?', timeZone: 'Asia/Kolkata' } }) }).then(j);
+    check('assistant answered on Flash-Lite', lite.status === 200 && (lite.body.result?.blocks ?? []).length > 0,
+      `${((Date.now() - t1) / 1000).toFixed(1)}s, ${lite.status}${lite.body.error ? ' ' + JSON.stringify(lite.body.error).slice(0, 200) : ''}`);
+    const msgs = await admin('GET', `${FS}/homes/${homeId}/aiThreads/${threadId}/messages?pageSize=20`);
+    const models = (msgs.body.documents ?? [])
+      .map((d) => d.fields?.usage?.mapValue?.fields?.model?.stringValue)
+      .filter(Boolean)
+      .sort();
+    check('each answer records the model that wrote it',
+      models.length === 2 && models[0].endsWith('gemini-3.5-flash-lite') && models[1].endsWith('gemini-3.8-flash'),
+      models.join(', '));
+    const thread = await admin('GET', `${FS}/homes/${homeId}/aiThreads/${threadId}`);
     const u = thread.body.fields?.usage?.mapValue?.fields ?? {};
     const q = Number(u.questions?.integerValue ?? 0);
     const tokens = Number(u.inputTokens?.integerValue ?? 0) + Number(u.outputTokens?.integerValue ?? 0);
-    check('thread records usage', q === 1 && tokens > 0, `${q} question, ${tokens} tokens`);
+    check('thread records usage', q === 2 && tokens > 0, `${q} questions, ${tokens} tokens`);
     const roll = await query('aiUsage', 'homeId', homeId);
-    check('monthly usage rollup written', roll.length === 1 && Number(roll[0].fields?.questions?.integerValue) === 1);
+    check('monthly usage rollup written', roll.length === 1 && Number(roll[0].fields?.questions?.integerValue) === 2);
   }
 } finally {
   await cleanup();

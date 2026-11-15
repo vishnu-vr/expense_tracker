@@ -50,7 +50,33 @@ fills in the rows, so the model cannot invent entries.
 | Embeddings | `gemini-embedding-001`, 768 dims | `backend/functions/src/config.ts` |
 | Claude option | `vertex-model-garden/claude-sonnet-5`, `MODEL_GARDEN_LOCATION` | enabled, but needs a quota increase first (D-022) |
 
-To switch models: change `AGENT_MODEL`, run the eval, compare, redeploy.
+To switch the default model: change `AGENT_MODEL`, run the eval, compare,
+redeploy.
+
+### User choice (D-027)
+
+Each member picks a model in Profile › Assistant. The app sends a key with
+each question; the server maps it through `AGENT_MODEL_CHOICES` in
+`backend/functions/src/config.ts`:
+
+| Key | Label in the app | Model id | Note in the app |
+|---|---|---|---|
+| `flash` (default) | Gemini Flash | `AGENT_MODEL` (`vertexai/gemini-3.8-flash`) | Best answers |
+| `flash-lite` | Gemini Flash-Lite | `vertexai/gemini-3.5-flash-lite` | Cheaper, may miss harder questions |
+
+A missing or unknown key gives the default; a malformed one is rejected. The
+Ask screen shows "Using <label>" under the input. The model actually used is
+recorded on each answer (`usage.model`) and the thread (`lastModel`).
+
+To add a choice:
+1. Run the eval on it (a subset with `--only` first; see operations.md).
+2. Add `{ key, id, label }` to `AGENT_MODEL_CHOICES` (keys are `[a-z0-9-]`,
+   at most 32 characters) and deploy `askAgent`.
+3. Add the same key with a label and one-line note to
+   `app/lib/core/domain/agent_models.dart` and ship a build.
+
+To remove one, drop it from the app first; the server then treats the old
+key as unknown and answers with the default.
 
 ## Evaluating a model
 

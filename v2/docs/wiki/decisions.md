@@ -9,6 +9,29 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-027 · Users choose the assistant model from a server allowlist
+**2026-11-15 · Accepted · owner request**
+
+Each member picks the assistant model in Profile › Assistant: **Gemini
+Flash** (`vertexai/gemini-3.8-flash`, the default, best answers) or **Gemini
+Flash-Lite** (`vertexai/gemini-3.5-flash-lite`, cheaper). The choice is a
+per-device setting (SharedPreferences `agentModel`) sent with each question
+as the optional `model` key of `askAgent`. The app sends a **key**, never a
+model id: the server maps keys to ids through `AGENT_MODEL_CHOICES` in
+`src/config.ts` (`resolveAgentModel`), so providers stay swappable on the
+server without an app release (as in D-007). The default key, a missing key
+and an unknown key all give the configured default (`AGENT_MODEL`), so older
+apps and retired choices keep working; a malformed value is
+`invalid-argument`. Usage already records the model actually used (message
+`usage.model`, thread `lastModel`, the `askAgent complete` log). No monthly
+cap for now. Why: about ₹50 of Gemini cost in a month against a ₹100 budget,
+most of it from eval runs. Published Vertex prices (global, per 1M tokens,
+checked 2026-11-15): Flash $0.75 in / $3.75 out until 31 Dec 2026, then
+$1.50 / $7.50; Flash-Lite $0.30 / $2.50. Rules out: letting the app send raw
+model ids, and choosing the model per household.
+
+---
+
 ## D-026 · Admin dashboard shows entries per household
 **2026-11-14 · Accepted · owner request**
 

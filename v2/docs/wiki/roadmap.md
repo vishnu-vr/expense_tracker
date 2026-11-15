@@ -24,6 +24,7 @@ folder; this page is the working copy.
 | Request a Claude quota increase in Vertex AI (D-022) | Quota requests are made by the project owner in the console |
 | Finish installing Xcode + CocoaPods | iOS build |
 | Play Store SMS permission declaration | Your developer account |
+| Go-ahead for the Flash-Lite eval subset (billed, ~66k input tokens), then deploy `askAgent` and ship build 1.0.0 (6) (D-027) | Billed run and a production deploy |
 | Turn on the Cloud Billing export to BigQuery (dataset `billing_export`, US multi-region; D-024) | Only a billing account admin can, in the console; see operations.md › Billing dashboard |
 
 ## Next up (in order)

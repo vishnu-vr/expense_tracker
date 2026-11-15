@@ -32,6 +32,30 @@ export const EMBEDDING_DIMENSIONS = 768;
 export const DEFAULT_AGENT_MODEL = "vertexai/gemini-3.8-flash";
 export const agentModelId = (): string => env("AGENT_MODEL", DEFAULT_AGENT_MODEL);
 
+/**
+ * Models a user may pick in the app (D-027). The app sends only the `key`;
+ * the id stays on the server so providers can be swapped without an app
+ * release. The first entry is the default and follows `AGENT_MODEL`.
+ */
+export const AGENT_MODEL_CHOICES = [
+  { key: "flash", id: DEFAULT_AGENT_MODEL, label: "Gemini Flash" },
+  { key: "flash-lite", id: "vertexai/gemini-3.5-flash-lite", label: "Gemini Flash-Lite" },
+] as const;
+
+/** Shape of a model key in an `askAgent` request; anything else is rejected. */
+export const AGENT_MODEL_KEY_PATTERN = /^[a-z0-9-]{1,32}$/;
+
+/**
+ * Model id for a user's choice. The default key, a missing key and an
+ * unknown key (for example one an older app still sends after a choice is
+ * removed) all give the configured default, `agentModelId()`.
+ */
+export function resolveAgentModel(key?: string): string {
+  const choice = AGENT_MODEL_CHOICES.find((c) => c.key === key);
+  if (!choice || choice === AGENT_MODEL_CHOICES[0]) return agentModelId();
+  return choice.id;
+}
+
 /** Vertex AI location for Gemini + embeddings. */
 export const vertexLocation = (): string => env("VERTEX_LOCATION", "global");
 /** Vertex AI location for Model Garden (Claude) models. */

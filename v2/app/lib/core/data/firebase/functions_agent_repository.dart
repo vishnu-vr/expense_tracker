@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../agent.dart';
 
@@ -17,18 +18,30 @@ class FunctionsAgentRepository implements AgentRepository {
             if (b is Map) ?AgentBlock.fromJson(Map<String, dynamic>.from(b)),
       ];
 
+  /// The `askAgent` request body (see `backend/SCHEMA.md`).
+  @visibleForTesting
+  static Map<String, Object?> askPayload({
+    String? threadId,
+    required String message,
+    required String timeZone,
+    String? model,
+  }) =>
+      {
+        'threadId': ?threadId,
+        'message': message,
+        'timeZone': timeZone,
+        'model': ?model,
+      };
+
   @override
-  Stream<AgentEvent> ask({String? threadId, required String message}) async* {
+  Stream<AgentEvent> ask({String? threadId, required String message, String? model}) async* {
     final callable = _functions.httpsCallable(
       'askAgent',
       options: HttpsCallableOptions(timeout: const Duration(minutes: 3)),
     );
     var done = false;
-    await for (final response in callable.stream<Object?, Object?>({
-      'threadId': ?threadId,
-      'message': message,
-      'timeZone': timeZone,
-    })) {
+    await for (final response in callable.stream<Object?, Object?>(
+        askPayload(threadId: threadId, message: message, timeZone: timeZone, model: model))) {
       switch (response) {
         case Chunk(:final partialData):
           final chunk = partialData;

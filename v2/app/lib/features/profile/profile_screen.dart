@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../app/providers.dart';
 import '../../core/data/repositories.dart';
 import '../../core/data/session.dart';
+import '../../core/domain/agent_models.dart';
 import '../../core/domain/analysis.dart';
 import '../../core/domain/models.dart';
 import '../../core/format/money.dart';
@@ -54,6 +55,14 @@ class ProfileScreen extends ConsumerWidget {
     } catch (_) {
       if (context.mounted) showToast(context, 'Could not export. Try again.');
     }
+  }
+
+  Future<void> _chooseModel(BuildContext context, WidgetRef ref) async {
+    final key = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => _ModelSheet(selected: ref.read(agentModelProvider)),
+    );
+    if (key != null) ref.read(agentModelProvider.notifier).set(key);
   }
 
   @override
@@ -183,6 +192,15 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
+          const SectionTitle('Assistant'),
+          ListRow(
+            topBorder: false,
+            title: 'Model',
+            subtitle: agentModelOption(ref.watch(agentModelProvider)).label,
+            onTap: () => _chooseModel(context, ref),
+            trailing: Icon(Icons.chevron_right, size: 20, color: p.muted),
+          ),
+          const SizedBox(height: 12),
           const SectionTitle('Manage'),
           nav('Categories', '/categories'),
           nav('Tags', '/tags'),
@@ -280,6 +298,44 @@ class _ExportSheet extends StatelessWidget {
                 if (picked != null && context.mounted) Navigator.pop(context, picked);
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Picks the assistant model (D-027). Same layout as [_ExportSheet].
+class _ModelSheet extends StatelessWidget {
+  const _ModelSheet({required this.selected});
+
+  final String selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Assistant model', style: LedgerText.display(size: 18)),
+            const SizedBox(height: 8),
+            for (final (i, o) in agentModelOptions.indexed)
+              Semantics(
+                selected: o.key == selected,
+                child: ListRow(
+                  topBorder: i > 0,
+                  title: o.label,
+                  subtitle: o.note,
+                  onTap: () => Navigator.pop(context, o.key),
+                  trailing: o.key == selected
+                      ? Icon(Icons.check, size: 20, color: p.ink)
+                      : const SizedBox(width: 20),
+                ),
+              ),
           ],
         ),
       ),

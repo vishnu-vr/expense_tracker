@@ -9,6 +9,7 @@ import { capHistory, runAgent } from "../../src/agent/run";
 import { RESPOND_TOOL, runTool, TOOL_SPECS } from "../../src/agent/tools";
 import { BlockSchema } from "../../src/core/blocks";
 import { chunkText } from "../../src/handlers/ask-agent";
+import { AGENT_MODEL_CHOICES, AGENT_MODEL_KEY_PATTERN, DEFAULT_AGENT_MODEL, resolveAgentModel } from "../../src/config";
 
 type Step = (req: GenerateRequest) => Part[];
 
@@ -238,6 +239,32 @@ describe("configuration helpers", () => {
     expect(parseModelId("claude-sonnet-5").id).toBe("vertex-model-garden/claude-sonnet-5");
     expect(parseModelId("googleai/gemini-3.8-flash").provider).toBe("googleai");
     expect(() => parseModelId("openai/gpt")).toThrow(/Unknown model provider/);
+  });
+  it("resolves model choices from the allowlist (D-027)", () => {
+    const saved = process.env.AGENT_MODEL;
+    try {
+      delete process.env.AGENT_MODEL;
+      expect(resolveAgentModel("flash")).toBe(DEFAULT_AGENT_MODEL);
+      expect(resolveAgentModel("flash-lite")).toBe("vertexai/gemini-3.5-flash-lite");
+      expect(resolveAgentModel()).toBe(DEFAULT_AGENT_MODEL);
+      expect(resolveAgentModel("gpt-9")).toBe(DEFAULT_AGENT_MODEL);
+      // The env override moves the default, not the other choices.
+      process.env.AGENT_MODEL = "vertex-model-garden/claude-sonnet-5";
+      expect(resolveAgentModel("flash")).toBe("vertex-model-garden/claude-sonnet-5");
+      expect(resolveAgentModel(undefined)).toBe("vertex-model-garden/claude-sonnet-5");
+      expect(resolveAgentModel("unknown")).toBe("vertex-model-garden/claude-sonnet-5");
+      expect(resolveAgentModel("flash-lite")).toBe("vertexai/gemini-3.5-flash-lite");
+    } finally {
+      if (saved === undefined) delete process.env.AGENT_MODEL;
+      else process.env.AGENT_MODEL = saved;
+    }
+  });
+  it("every model choice has a valid key and a parseable id", () => {
+    expect(new Set(AGENT_MODEL_CHOICES.map((c) => c.key)).size).toBe(AGENT_MODEL_CHOICES.length);
+    for (const c of AGENT_MODEL_CHOICES) {
+      expect(AGENT_MODEL_KEY_PATTERN.test(c.key)).toBe(true);
+      expect(parseModelId(c.id).id).toBe(c.id);
+    }
   });
   it("system prompt names the caller and lists reference data", () => {
     const p = buildSystemPrompt({ today: "2026-11-10", timeZone: "Asia/Kolkata", callerUid: "u_vikram", data: fixtureHomeData() });

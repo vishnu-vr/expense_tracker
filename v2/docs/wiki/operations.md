@@ -142,8 +142,10 @@ which compiles first (D-021).
 
 ## Run the model eval
 
-Runs the 35 golden questions against a real model (billed, about 6,600 input
-tokens per question). No `gcloud` needed: the token comes from your Firebase
+Runs the 35 golden questions against a real model. **It is billed:** about
+6,600 input tokens per question, so about 230k input tokens per full run
+(most of November's Gemini cost came from two full runs). Prefer `--only`
+with a handful of ids for quick checks. No `gcloud` needed: the token comes from your Firebase
 CLI login and stays in memory.
 ```
 cd v2/backend/functions

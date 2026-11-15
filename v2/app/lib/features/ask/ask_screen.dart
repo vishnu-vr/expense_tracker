@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
 import '../../core/data/agent.dart';
+import '../../core/domain/agent_models.dart';
 import '../../core/format/money.dart';
 import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/common.dart';
@@ -148,7 +149,8 @@ class _AskScreenState extends ConsumerState<AskScreen> {
     var answered = false;
     try {
       await for (final e
-          in ref.read(agentRepositoryProvider).ask(threadId: _threadId, message: message)) {
+          in ref.read(agentRepositoryProvider).ask(
+              threadId: _threadId, message: message, model: ref.read(agentModelProvider))) {
         if (!mounted) return;
         setState(() {
           switch (e) {
@@ -270,31 +272,39 @@ class _AskScreenState extends ConsumerState<AskScreen> {
         SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-            child: Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _input,
-                  minLines: 1,
-                  maxLines: 4,
-                  textCapitalization: TextCapitalization.sentences,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: _send,
-                  decoration: const InputDecoration(hintText: 'Ask about your money'),
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _input,
+                    minLines: 1,
+                    maxLines: 4,
+                    textCapitalization: TextCapitalization.sentences,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: _send,
+                    decoration: const InputDecoration(hintText: 'Ask about your money'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                tooltip: 'Send',
-                onPressed: _busy ? null : () => _send(_input.text),
-                style: IconButton.styleFrom(
-                  backgroundColor: p.ink,
-                  foregroundColor: p.onInk,
-                  disabledBackgroundColor: p.track,
-                  fixedSize: const Size(48, 48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  tooltip: 'Send',
+                  onPressed: _busy ? null : () => _send(_input.text),
+                  style: IconButton.styleFrom(
+                    backgroundColor: p.ink,
+                    foregroundColor: p.onInk,
+                    disabledBackgroundColor: p.track,
+                    fixedSize: const Size(48, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.arrow_upward, size: 20),
                 ),
-                icon: const Icon(Icons.arrow_upward, size: 20),
+              ]),
+              const SizedBox(height: 6),
+              // Which model answers; changed in Profile › Assistant (D-027).
+              Text(
+                'Using ${agentModelOption(ref.watch(agentModelProvider)).label}',
+                style: LedgerText.body(size: 12, color: p.muted),
               ),
             ]),
           ),
