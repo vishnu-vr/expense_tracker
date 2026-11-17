@@ -91,8 +91,8 @@ export const ON_DEVICE_MODEL = {
   file: "models/gemma3-1b-it-int4.litertlm",
   source: "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.litertlm",
   sizeBytes: 584_417_280,
-  /** Filled in when the file is uploaded; empty means "not uploaded yet". */
-  sha256: "",
+  /** Of the uploaded file (2026-11-18); the manifest carries the same value. */
+  sha256: "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",
 } as const;
 
 /**

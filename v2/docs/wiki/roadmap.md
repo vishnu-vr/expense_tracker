@@ -16,8 +16,8 @@ folder; this page is the working copy.
 - Admin billing & usage dashboard live: `getAdminDashboard` deployed, owner is admin, build 1.0.0 (3) distributed (D-024, 2026-11-14).
 - SMS category suggestions (D-032, experimental, build 1.0.0 (11)): default
   Storage bucket (asia-south1) with `storage.rules`, `suggestSmsCategory`
-  deployed, live smoke 24/24 (2026-11-17). On-device Gemma waits for the
-  model file.
+  deployed, live smoke 24/24 (2026-11-17). Gemma model file uploaded
+  2026-11-18; first on-phone run pending.
 - Google sign-in enabled and wired in the app; reaches Google's sign-in screen
   on Android.
 
@@ -32,7 +32,6 @@ folder; this page is the working copy.
 | Go-ahead to deploy the stricter Firestore rule for `source` (the live rules already accept it; D-029) | A production deploy |
 | Go-ahead for the Flash-Lite eval subset (billed, ~66k input tokens), then deploy `askAgent` and ship build 1.0.0 (6) (D-027) | Billed run and a production deploy |
 | Go-ahead for the voice/Malayalam eval subset on Flash and Flash-Lite (billed, 8 questions × 2 models), then deploy `askAgent`, run the manual voice checklist on a real phone, and ship build 1.0.0 (7) (D-028) | Billed run, a production deploy and a real microphone |
-| Download the Gemma model file so it can be uploaded (D-032): sign in to Hugging Face, accept the Gemma terms on `litert-community/Gemma3-1B-IT`, download `gemma3-1b-it-int4.litertlm` (584,417,280 bytes). Then `node scripts/model-storage.mjs upload <file>` (operations.md › On-device model). Until then the on-device option says "Model not available yet" | The official file is gated behind Google's Gemma terms, which only you can accept |
 | Go-ahead to deploy `getAdminDashboard` (shows SMS suggestion counts) and the Firestore rules for `aiRateLimits` (the live rules already deny it by default) (D-032) | Production deploys |
 | Try category suggestions on your S24 Ultra: Cloud vs Gemma on a few unfamiliar shops and replies, and Gemma's speed (testing.md steps 20–24) | A real phone and real payments |
 | Turn on the Cloud Billing export to BigQuery (dataset `billing_export`, US multi-region; D-024) | Only a billing account admin can, in the console; see operations.md › Billing dashboard |

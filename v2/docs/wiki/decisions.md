@@ -51,7 +51,9 @@ Nano is not supported on the owner's Galaxy S24 Ultra. SMS settings gain
   bytes), hosted in the project's default Storage bucket
   (`expense-tracker-v2-5c9fa.firebasestorage.app`, asia-south1) with a
   manifest `models/gemma3-1b-it-int4.json` (`{file, size, sha256}`) so a new
-  upload needs no release. Download: a WorkManager job that runs only on an
+  upload needs no release. Uploaded 2026-11-18 by the owner's download
+  (official file, terms accepted), SHA-256
+  `1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be`. Download: a WorkManager job that runs only on an
   unmetered network with storage not low, as a foreground `dataSync` job with
   progress; Firebase Storage REST with the user's ID token (rules: signed-in
   read of `models/**`, no client writes); resumes with HTTP Range; checks size
