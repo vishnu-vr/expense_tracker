@@ -29,6 +29,26 @@ void main() {
     expect(back.userId, 'u1');
   });
 
+  test('source "sms" round trips; other values and typed entries have none', () {
+    final tx = Transaction(
+      id: '',
+      amount: 1499,
+      categoryId: 'food',
+      date: DateTime(2026, 11, 10, 20, 15),
+      type: TransactionType.expense,
+      note: 'Swiggy · HDFC XX1234',
+      source: 'sms',
+    );
+    final doc = transactionToDoc(tx);
+    expect(doc['source'], 'sms');
+    expect(transactionFromDoc('t', doc)!.fromSms, isTrue);
+    // Without a source the key is left out, so an update keeps the stored marker.
+    final typed = Transaction(
+        id: 't', amount: 1, categoryId: 'food', date: tx.date, type: TransactionType.expense);
+    expect(transactionToDoc(typed).containsKey('source'), isFalse);
+    expect(transactionFromDoc('t', {...doc, 'source': 'other'})!.source, isNull);
+  });
+
   test('reads v1 ISO-string dates and rejects broken documents', () {
     final t = transactionFromDoc('a', {
       'amount': 12.5,

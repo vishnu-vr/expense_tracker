@@ -128,6 +128,15 @@ Future<List<Override>> backendOverrides({required String timeZone}) async {
     adminRepositoryProvider.overrideWithValue(FunctionsAdminRepository(functions)),
     // The phone's own speech recognition and voices (D-028).
     voiceServiceProvider.overrideWithValue(DeviceVoiceService()),
+    // The native SMS auto-add worker writes only to the real project (D-029).
+    if (backendMode == 'firebase')
+      smsFirebaseConfigProvider.overrideWithValue({
+        'apiKey': DefaultFirebaseOptions.android.apiKey,
+        'appId': DefaultFirebaseOptions.android.appId,
+        'projectId': DefaultFirebaseOptions.android.projectId,
+        'messagingSenderId': DefaultFirebaseOptions.android.messagingSenderId,
+        'storageBucket': ?DefaultFirebaseOptions.android.storageBucket,
+      }),
     // Push needs a real project; the emulators have no messaging service.
     if (backendMode == 'firebase')
       pushServiceProvider.overrideWithValue(PushService(FirebaseMessaging.instance, db)),

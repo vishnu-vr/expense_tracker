@@ -154,7 +154,10 @@ service cloud.firestore {
           && data.homeId is string
           && data.tagIds is list
           && !('accountId' in data)
-          && !('embedding' in data);
+          && !('embedding' in data)
+          // How the entry was made: absent when typed in, 'sms' when added
+          // from a bank message (D-029).
+          && (!('source' in data) || data.source in ['sms']);
       }
 
       allow read: if isHomeMember(resource.data.homeId);

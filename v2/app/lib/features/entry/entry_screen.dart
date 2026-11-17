@@ -21,6 +21,9 @@ class EntryScreen extends ConsumerStatefulWidget {
     this.prefillAmount,
     this.prefillNote,
     this.prefillDate,
+    this.prefillCategoryId,
+    this.prefillSource,
+    this.reviewId,
   });
 
   final String? transactionId;
@@ -30,6 +33,13 @@ class EntryScreen extends ConsumerStatefulWidget {
   final double? prefillAmount;
   final String? prefillNote;
   final DateTime? prefillDate;
+  final String? prefillCategoryId;
+
+  /// `sms` for an entry from a detected bank message (D-029).
+  final String? prefillSource;
+
+  /// The review-list item this form came from; removed once saved.
+  final String? reviewId;
 
   @override
   ConsumerState<EntryScreen> createState() => _EntryScreenState();
@@ -58,6 +68,7 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
       _type = widget.prefillType ?? TransactionType.expense;
       if (widget.prefillAmount != null) _amount.text = _plain(widget.prefillAmount!);
       _note.text = widget.prefillNote ?? '';
+      _categoryId = widget.prefillCategoryId;
       _loaded = true;
     }
   }
@@ -133,9 +144,18 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
       userEmail: base?.userEmail,
       homeId: base?.homeId,
       tagIds: _tagIds.toList(),
+      source: base?.source ?? widget.prefillSource,
     );
     try {
       await ref.read(householdRepositoryProvider).saveTransaction(tx);
+      final reviewId = widget.reviewId;
+      if (reviewId != null) {
+        // A local call on the phone, not a server round trip.
+        try {
+          await ref.read(smsDetectionProvider).removeFromQueue(reviewId);
+        } catch (_) {}
+        ref.invalidate(smsReviewQueueProvider);
+      }
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       showToast(context, _isEdit ? 'Entry updated' : 'Entry added');
@@ -265,6 +285,17 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
                 ]),
               ),
               const SizedBox(height: 16),
+            ],
+            if (_original?.fromSms ?? widget.prefillSource == 'sms') ...[
+              Row(children: [
+                Icon(Icons.sms_outlined, size: 16, color: p.muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Added from a bank message',
+                      style: LedgerText.body(size: 13, color: p.muted)),
+                ),
+              ]),
+              const SizedBox(height: 12),
             ],
             Segmented<TransactionType>(
               options: const {

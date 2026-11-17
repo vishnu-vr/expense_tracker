@@ -51,6 +51,7 @@ Subcollections (all read/write by home members unless stated):
 | `userEmail` | string | |
 | `homeId` | string | immutable |
 | `tagIds` | string[] | required (use `[]`) |
+| `source` | `'sms'`? | absent when typed in; `'sms'` when added from a bank message (D-029). Rules accept only `'sms'`. Edits leave it as it is |
 | `createdAt` | Timestamp | set to "now" by the client on create (see note below) |
 | `updatedAt` | Timestamp | |
 

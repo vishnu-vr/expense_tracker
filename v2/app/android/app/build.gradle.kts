@@ -50,5 +50,17 @@ flutter {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+    // Bank SMS auto-add (D-029). The BoM must match the one FlutterFire's
+    // plugins resolve to (firebase_core's FirebaseSDKVersion) so the native
+    // worker and FlutterFire share one SDK, one signed-in user and one cache.
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
+    // Gemini Nano through ML Kit GenAI (needs Android 8.0+; guarded at runtime,
+    // see tools:overrideLibrary in the manifest).
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta5")
     testImplementation("junit:junit:4.13.2")
+    // Real org.json for JVM unit tests (android.jar only has stubs).
+    testImplementation("org.json:json:20250517")
 }

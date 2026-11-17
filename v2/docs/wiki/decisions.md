@@ -9,6 +9,80 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-029 · SMS auto-add: native worker, rules + history first, Nano only suggests, review list
+**2026-11-17 · Accepted · owner request · experimental · refines D-005**
+
+Profile › Bank SMS detection gains **Auto-add confident entries** (off by
+default; needs detection on). With it off, D-005 is unchanged: "Add this
+entry?" and a prefilled form.
+- **Flow.** `SmsReceiver` parses the message on the phone
+  (`SmsParser.parseDetails`: amount, direction, payee, bank from the sender id,
+  account/card last digits, reference number) and drops promotions, reminders
+  ("is due", "will be debited"), payment requests, declined/failed messages and
+  OTPs. Repeats are dropped for 7 days by the SHA-256 of the UPI/reference
+  number or a fingerprint of bank, account, amount, direction and minute
+  (`SeenLog`). The parsed fields go to an expedited WorkManager job
+  (`SmsAutoAddWorker`); the receiver itself has about 10 s.
+- **Confidence rule.** An entry is saved on its own only when the message says
+  money moved (debited, spent, sent, credited…), it has an amount and a payee,
+  and the payee's category comes from (1) the household's history, where a
+  merchant is known when at least 2 entries of that direction carry it and at
+  least 80% of them share one category (counted for the note's merchant part
+  and for the dictionary merchant it names, `buildCategoryTable`), or (2) the
+  built-in map (`builtinMerchantCategories`, one default category per
+  `merchant_dictionary.dart` merchant; payment apps have none). The category
+  must exist and fit the direction, and the phone must be signed in to the
+  real project. Everything else goes to **Review detected entries**
+  (SharedPreferences, parsed fields only, at most 100 items, 30 days) with
+  any category it found preselected. Corrections improve the history because
+  the table is rebuilt from saved entries.
+- **Dart decides, Kotlin looks up.** The rule lives in pure Dart
+  (`core/domain/sms_categories.dart`). The app pushes the table (homeId, uid,
+  known merchants, built-in patterns, categories, Firebase client ids) over
+  `track_expense/sms` 2 s after entries change and clears it on sign-out.
+  `merchantKey()` is implemented on both sides and tested against one shared
+  fixture (`app/test/fixtures/merchant_key_vectors.json`).
+- **Native write.** The worker uses the native Firebase Auth and Firestore
+  SDKs (BoM 35.1.0, the version FlutterFire's plugins resolve to) on the same
+  default app: if the process was started by the SMS, the default app is
+  created from the pushed options, which FlutterFire then reuses. Firestore is
+  left on default settings, because FlutterFire's own (also default) settings
+  are only accepted after start when equal. Writes are queued offline like the
+  app's. Before writing it checks for the same user, direction and amount
+  within ±15 minutes (`homeId` + `date` range, the existing index). The entry
+  is the app's normal shape plus `source: "sms"`, note `Swiggy · HDFC XX1234`.
+  Demo and emulator builds push no Firebase ids, so they only use the review
+  list. If App Check is ever enforced on Firestore, the worker would need its
+  own App Check provider first.
+- **Notifications** are private on the lock screen ("Entry added from a bank
+  message" / "A bank message to review"). "Added ₹1,499 expense · Swiggy →
+  Food" has **Undo** (deletes the entry; owner delete is already allowed) and
+  **Change** (`trackexpense://app/edit/<id>`). Review opens `/sms/review`; Home
+  shows "N detected entries to review".
+- **Gemini Nano** (ML Kit GenAI Prompt API `com.google.mlkit:genai-prompt:1.0.0-beta5`)
+  is integrated, but AICore runs inference only for the top foreground app
+  (`BACKGROUND_USE_BLOCKED`), so it cannot run in the worker. Instead, when the
+  review list opens, Nano suggests a category for up to 5 entries the rules
+  could not place (prompt: payee, direction, category ids; answer accepted only
+  if it is one listed id of that direction; 5 s timeout). It never saves on its
+  own. The library needs Android 8.0 (the app's minSdk is 24): it is merged
+  with `tools:overrideLibrary` and only called on API 26+. The model downloads
+  only on an unmetered network. Profile shows its status ("Not available on
+  this phone" where unsupported).
+- **Privacy (unchanged from D-005).** The message text is never stored,
+  logged, uploaded or passed to the worker; the reference number is kept only
+  as a hash. Nano runs on the phone.
+- **Rules.** `validTransaction` accepts an optional `source` that must be
+  `'sms'`. The live rules have no field allowlist, so they already accept it;
+  the stricter local rule is not deployed yet.
+- Parser templates are written from the common public formats of HDFC, ICICI,
+  SBI, Axis, Kotak and generic UPI wording; no real messages were available.
+- Rules out: a headless Flutter engine in the background (heavier, less
+  reliable), sending message text to the server or a cloud model, letting an
+  uncalibrated model save entries, and SMS on iOS.
+
+---
+
 ## D-028 · Voice mode uses on-device speech around askAgent
 **2026-11-15 · Accepted · owner request**
 
@@ -324,7 +398,7 @@ Mockups: https://claude.ai/artifact/6ADJAJmXeMjoDUKKuHWsqC (A is the chosen
 one). Details: [design-system.md](design-system.md).
 
 ## D-005 · Bank SMS detection stays a suggestion, on-device only
-**2026-11-10 · Accepted · auto-add is a separate, later decision**
+**2026-11-10 · Accepted · auto-add is a separate, later decision (now D-029)**
 
 A Kotlin `BroadcastReceiver` parses incoming bank messages on the phone and
 posts "Add this entry?". Tapping it opens the form prefilled. Message text is

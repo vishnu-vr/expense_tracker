@@ -27,6 +27,7 @@ class HomeScreen extends ConsumerWidget {
     }
 
     final cards = ref.watch(insightCardsProvider).value ?? const <InsightCard>[];
+    final toReview = ref.watch(smsReviewQueueProvider).value?.length ?? 0;
     final headline = _headline(insights, money);
     final others = insights.smartInsights
         .where((c) => c.narrative != headline)
@@ -41,6 +42,26 @@ class HomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
             children: [
               _Header(homeName: home?.name ?? 'Your household', month: monthName(now.month)),
+              if (toReview > 0) ...[
+                const SizedBox(height: 12),
+                // Bank messages SMS auto-add was not sure about (D-029).
+                LedgerCard(
+                  onTap: () => context.push('/sms/review'),
+                  child: Row(children: [
+                    Icon(Icons.sms_outlined, size: 18, color: p.accent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        toReview == 1
+                            ? '1 detected entry to review'
+                            : '$toReview detected entries to review',
+                        style: LedgerText.body(size: 14, weight: 500),
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, color: p.muted),
+                  ]),
+                ),
+              ],
               const SizedBox(height: 16),
               _NetSummary(health: insights.financialHealth, money: money),
               const SizedBox(height: 20),

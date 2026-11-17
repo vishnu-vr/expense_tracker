@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -34,10 +37,26 @@ class TrackExpenseApp extends ConsumerStatefulWidget {
   ConsumerState<TrackExpenseApp> createState() => _TrackExpenseAppState();
 }
 
-class _TrackExpenseAppState extends ConsumerState<TrackExpenseApp> {
+class _TrackExpenseAppState extends ConsumerState<TrackExpenseApp> with WidgetsBindingObserver {
+  Timer? _smsTablePush;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // Keep the SMS auto-add lookup table in step with the entries (D-029),
+      // at most once every 2 seconds while entries are changing.
+      ref.listenManual(smsCategoryTableProvider, fireImmediately: true, (_, table) {
+        // Clear it only on a real sign-out, not while the session is loading.
+        final session = ref.read(sessionProvider).value;
+        if (table == null && (session == null || session.loading || session.ready)) return;
+        _smsTablePush?.cancel();
+        _smsTablePush = Timer(const Duration(seconds: 2), () {
+          ref.read(smsDetectionProvider).pushCategoryTable(table).catchError((_) {});
+        });
+      });
+    }
     final push = ref.read(pushServiceProvider);
     if (push == null) return;
     // Register this device once the user is in a household.
@@ -46,6 +65,19 @@ class _TrackExpenseAppState extends ConsumerState<TrackExpenseApp> {
       if (session != null && session.ready) push.register(session.user!.id);
     });
     push.onOpen((route) => ref.read(routerProvider).push(route));
+  }
+
+  @override
+  void dispose() {
+    _smsTablePush?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Entries may have been detected while the app was in the background.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) ref.invalidate(smsReviewQueueProvider);
   }
 
   @override

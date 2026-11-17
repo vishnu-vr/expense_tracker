@@ -392,9 +392,11 @@ class _LedgerRow extends ConsumerWidget {
       leading: CategoryIcon(category: category),
       title: category?.name ?? 'Uncategorized',
       subtitle: note.isEmpty ? timeOfDay(tx.date) : '${timeOfDay(tx.date)} · $note',
-      below: tags.isEmpty
+      below: tags.isEmpty && !tx.fromSms
           ? null
           : Wrap(spacing: 6, runSpacing: 4, children: [
+              // Added from a bank message (D-029).
+              if (tx.fromSms) Pill('SMS', color: p.muted),
               for (final t in tags) Pill(t.name, dot: colorFromHex(t.color)),
             ]),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [

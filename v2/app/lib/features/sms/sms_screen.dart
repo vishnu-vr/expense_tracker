@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../app/providers.dart';
 
 import '../../core/data/sms_detection.dart';
 import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/common.dart';
-
-final smsDetectionProvider = Provider<SmsDetection>((ref) => const SmsDetection());
 
 class SmsScreen extends ConsumerStatefulWidget {
   const SmsScreen({super.key});
@@ -16,6 +17,7 @@ class SmsScreen extends ConsumerStatefulWidget {
 
 class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserver {
   SmsDetectionStatus? _status;
+  NanoStatus? _nano;
   var _failed = false;
 
   @override
@@ -51,7 +53,25 @@ class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserv
     }
   }
 
-  Future<void> _refresh() => _run((d) => d.status());
+  Future<void> _refresh() async {
+    await _run((d) => d.status());
+    ref.invalidate(smsReviewQueueProvider);
+    if (_status?.autoAdd ?? false) _checkNano();
+  }
+
+  Future<void> _checkNano() async {
+    try {
+      final n = await ref.read(smsDetectionProvider).nanoStatus();
+      if (mounted) setState(() => _nano = n);
+    } catch (_) {
+      if (mounted) setState(() => _nano = NanoStatus.unavailable);
+    }
+  }
+
+  Future<void> _toggleAutoAdd(bool on) async {
+    await _run((d) => d.setAutoAdd(on));
+    if (on) _checkNano();
+  }
 
   Future<void> _toggle(bool on) async {
     if (!on) return _run((d) => d.setEnabled(false));
@@ -79,12 +99,14 @@ class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserv
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                   children: [
                     Text(
-                      'When a bank or UPI message arrives, Track Expense can suggest an entry with the amount filled in. You review and save it; nothing is added on its own.',
+                      s.autoAdd
+                          ? 'When a bank or UPI message arrives, Track Expense adds the entry when it is sure of the category, and asks you to review the rest.'
+                          : 'When a bank or UPI message arrives, Track Expense can suggest an entry with the amount filled in. You review and save it; nothing is added on its own.',
                       style: LedgerText.body(height: 1.45),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Messages are read on this phone only and are never stored or uploaded.',
+                      'Messages are read on this phone only. The message itself is never stored or uploaded; only the amount, date, payee and bank with the last digits of the account are kept, in the entry or the review list.',
                       style: LedgerText.body(size: 13, color: p.muted, height: 1.45),
                     ),
                     const SizedBox(height: 16),
@@ -95,6 +117,39 @@ class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserv
                         trailing: Switch(value: s.enabled, onChanged: _toggle),
                       ),
                     ),
+                    MergeSemantics(
+                      child: ListRow(
+                        title: 'Auto-add confident entries',
+                        subtitle: 'Experimental. Needs detection on.',
+                        onTap: s.enabled ? () => _toggleAutoAdd(!s.autoAdd) : null,
+                        trailing: Switch(
+                          value: s.autoAdd,
+                          onChanged: s.enabled ? _toggleAutoAdd : null,
+                        ),
+                      ),
+                    ),
+                    if (s.autoAdd) ...[
+                      ListRow(
+                        title: 'On-device AI',
+                        subtitle: switch (_nano) {
+                          null => 'Checking…',
+                          NanoStatus.available => 'Ready: suggests categories in the review list',
+                          NanoStatus.downloading => 'Downloading the model',
+                          NanoStatus.downloadable => 'The model downloads on Wi-Fi',
+                          NanoStatus.unavailable => 'Not available on this phone',
+                        },
+                      ),
+                      ListRow(
+                        title: 'Review detected entries',
+                        onTap: () => context.push('/sms/review'),
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text('${ref.watch(smsReviewQueueProvider).value?.length ?? 0}',
+                              style: LedgerText.body(size: 14, color: p.muted, tabular: true)),
+                          const SizedBox(width: 4),
+                          Icon(Icons.chevron_right, color: p.muted),
+                        ]),
+                      ),
+                    ],
                     _Check(label: 'SMS permission', ok: s.smsGranted),
                     _Check(label: 'Notification permission', ok: s.notificationsGranted),
                     if (s.enabled && !s.working) ...[

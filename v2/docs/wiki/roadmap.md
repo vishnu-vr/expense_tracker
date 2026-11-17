@@ -23,7 +23,9 @@ folder; this page is the working copy.
 |---|---|
 | Request a Claude quota increase in Vertex AI (D-022) | Quota requests are made by the project owner in the console |
 | Finish installing Xcode + CocoaPods | iOS build |
-| Play Store SMS permission declaration | Your developer account |
+| Play Store SMS permission declaration (needed before any Play release; D-005, D-029) | Your developer account |
+| 10–20 real bank SMS samples (numbers and names changed) for the auto-add parser tests, your phone model for Gemini Nano, and the manual SMS auto-add checklist on your phone (testing.md, D-029) | Real messages and a real phone signed in to the live project |
+| Go-ahead to deploy the stricter Firestore rule for `source` (the live rules already accept it; D-029) | A production deploy |
 | Go-ahead for the Flash-Lite eval subset (billed, ~66k input tokens), then deploy `askAgent` and ship build 1.0.0 (6) (D-027) | Billed run and a production deploy |
 | Go-ahead for the voice/Malayalam eval subset on Flash and Flash-Lite (billed, 8 questions × 2 models), then deploy `askAgent`, run the manual voice checklist on a real phone, and ship build 1.0.0 (7) (D-028) | Billed run, a production deploy and a real microphone |
 | Turn on the Cloud Billing export to BigQuery (dataset `billing_export`, US multi-region; D-024) | Only a billing account admin can, in the console; see operations.md › Billing dashboard |
@@ -40,14 +42,12 @@ folder; this page is the working copy.
 
 ## Planned features
 
-- **SMS auto-add** with a toggle: see [sms.md](sms.md) for the open
-  questions. Separate plan.
-- **On-device AI spike.** Measure accuracy, latency, download size and device
-  coverage for parsing and categorising one bank SMS with (a) an OS model
-  (Gemini Nano via ML Kit GenAI on Android, Apple's on-device model on iOS)
-  and (b) a bundled small open model. Good fit: one message, short output,
-  private. Poor fit: the multi-step assistant, which stays in the cloud.
-  Package names and device support change fast; re-check docs first.
+- **SMS auto-add** is built and experimental on branch `exp/sms-auto-add`
+  (D-029, [sms.md](sms.md)), distributed as build 1.0.0 (8). Next: tune the
+  templates with real messages, then decide whether it leaves "experimental".
+- **On-device AI.** Gemini Nano suggests categories in the SMS review list
+  (D-029, foreground only). Still to measure: accuracy and device coverage on
+  real phones; Apple's on-device model for iOS has no SMS use.
 - What-if tool for the assistant; category suggestions from embeddings.
 - Talk mode: speak the answer sentence by sentence as it streams (D-028 v1
   waits for the whole answer, about 10 s).

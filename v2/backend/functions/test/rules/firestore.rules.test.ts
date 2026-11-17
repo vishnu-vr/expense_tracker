@@ -252,6 +252,10 @@ describe("transactions", () => {
     await assertFails(setDoc(doc(db("alice"), "transactions/n10"), txDoc("alice", "h1", { amount: -5 })));
     await assertFails(setDoc(doc(db("alice"), "transactions/n11"), txDoc("alice", "h1", { type: "transfer" })));
     await assertFails(setDoc(doc(db("alice"), "transactions/n12"), txDoc("alice", "h1", { tagIds: "trip" })));
+    // Added from a bank message (D-029): only the value "sms" is allowed.
+    await assertSucceeds(setDoc(doc(db("alice"), "transactions/n13"), txDoc("alice", "h1", { source: "sms" })));
+    await assertFails(setDoc(doc(db("alice"), "transactions/n14"), txDoc("alice", "h1", { source: "import" })));
+    await assertFails(setDoc(doc(db("alice"), "transactions/n15"), txDoc("alice", "h1", { source: null })));
   });
   it("only the owner of an entry updates it", async () => {
     await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tA"), { amount: 300, note: "Lunch + tea" }));
@@ -261,6 +265,9 @@ describe("transactions", () => {
     await assertFails(updateDoc(doc(db("alice"), "transactions/tA"), { userId: "bob" }));
     await assertFails(updateDoc(doc(db("alice"), "transactions/tA"), { date: "2026-10-05" }));
     await assertFails(updateDoc(doc(db("alice"), "transactions/tA"), { embedding: [1, 2] }));
+    await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tA"), { source: "sms" }));
+    await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tA"), { note: "Swiggy · HDFC XX1234" })); // keeps source
+    await assertFails(updateDoc(doc(db("alice"), "transactions/tA"), { source: "manual" }));
   });
   it("only the owner of an entry deletes it", async () => {
     await assertFails(deleteDoc(doc(db("bob"), "transactions/tA")));

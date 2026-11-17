@@ -8,11 +8,13 @@ import '../core/data/demo_repository.dart';
 import '../core/data/firebase/push_service.dart';
 import '../core/data/repositories.dart';
 import '../core/data/session.dart';
+import '../core/data/sms_detection.dart';
 import '../core/data/voice.dart';
 import '../core/domain/agent_models.dart';
 import '../core/domain/default_categories.dart';
 import '../core/domain/home_insights.dart';
 import '../core/domain/models.dart';
+import '../core/domain/sms_categories.dart';
 import '../core/domain/voice.dart';
 import '../core/format/money.dart';
 
@@ -248,3 +250,36 @@ final pushServiceProvider = Provider<PushService?>((ref) => null);
 final insightCardsProvider = StreamProvider<List<InsightCard>>(
   (ref) => ref.watch(householdRepositoryProvider).watchInsights(),
 );
+
+// ------------------------------------------------------------ bank SMS
+
+final smsDetectionProvider = Provider<SmsDetection>((ref) => const SmsDetection());
+
+/// Firebase client ids for the native auto-add worker (D-029). Null in demo
+/// and emulator builds, where nothing is written natively and every detected
+/// entry goes to review. `backend.dart` sets it for the real project.
+final smsFirebaseConfigProvider = Provider<Map<String, String>?>((ref) => null);
+
+/// The lookup table pushed to Android; null until signed in to a household.
+final smsCategoryTableProvider = Provider<Map<String, Object?>?>((ref) {
+  final session = ref.watch(sessionProvider).value;
+  final user = session?.user;
+  final txs = ref.watch(transactionsProvider).value;
+  if (user == null || session?.homeId == null || txs == null) return null;
+  return buildCategoryTable(txs, ref.watch(categoriesProvider)).toJson(
+    homeId: session!.homeId,
+    userId: user.id,
+    userEmail: user.email,
+    firebase: ref.watch(smsFirebaseConfigProvider),
+  );
+});
+
+/// Detected entries waiting for review (Android). Empty where unsupported.
+/// Invalidated when the app resumes and after each review action.
+final smsReviewQueueProvider = FutureProvider<List<DetectedEntry>>((ref) async {
+  try {
+    return await ref.watch(smsDetectionProvider).reviewQueue();
+  } catch (_) {
+    return const [];
+  }
+});

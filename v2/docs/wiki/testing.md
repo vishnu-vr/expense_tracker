@@ -7,7 +7,7 @@ on every change; run the slow ones before a deploy or release.
 |---|---|---|---|
 | Dart logic | `cd v2/app && flutter test test/core` | Ported v1 maths, note grouping (byte-for-byte against the original TypeScript), Firestore mapping and repository behaviour (fake Firestore) | seconds |
 | Widget / flow | `cd v2/app && flutter test test/features test/app` | Every screen's main flows on the demo household, routing by session, privacy masking, SMS screen and deep link | seconds |
-| Kotlin | `cd v2/app/android && ./gradlew :app:testDebugUnitTest` | SMS parser cases (OTP ignored, amounts, credit/debit) | ~1 min |
+| Kotlin | `cd v2/app/android && ./gradlew :app:testDebugUnitTest` | SMS parser cases (OTP ignored, amounts, credit/debit), per-bank auto-add templates, promo/reminder rejection, merchant key vectors shared with Dart, confidence decision, 7-day dedupe, duplicate check, review queue limits, Nano answer validation | ~1 min |
 | On-device | `cd v2/app && flutter test integration_test` (emulator or phone connected) | The real app boots, adds an entry, finds it, opens each tab | ~2 min |
 | Backend unit | `cd v2/backend/functions && npm test` | Agent tools, insight detectors, golden answers, proposals, migration transform, agent loop with a scripted model | seconds |
 | Rules + handlers | `cd v2/backend/functions && npm run test:rules:emulator` | Security rules allow/deny, every handler against the Firestore emulator | ~1 min |
@@ -66,6 +66,33 @@ emulator's microphone is unreliable; demo mode uses a scripted fake voice).
    with amounts as digits. On a phone without Malayalam speech, the row and
    the Talk panel say English is used.
 
+## Manual SMS auto-add checklist (D-029)
+
+Run on a real Android phone with a build against the live project
+(`--dart-define=BACKEND=firebase`), signed in. Profile › Bank SMS detection:
+detection on, Auto-add on. Use real bank messages, or `adb emu sms send` on
+an emulator signed in to the live project (see [sms.md](sms.md)).
+
+1. A payment to a well-known merchant (Swiggy, Uber, Amazon…) or one you
+   always file the same way: "Added … · Undo · Change" appears; the entry is
+   in the Ledger with an SMS badge and note "Merchant · BANK XX1234"; the lock
+   screen shows only "Entry added from a bank message".
+2. Undo removes the entry. Change opens it in the edit screen.
+3. A payment to an unknown payee: "Review detected entry"; Home shows "1
+   detected entry to review"; the list shows amount, payee · account, time.
+4. In the review list: Add (with a suggested category) saves it; tapping a
+   row opens the form prefilled; swiping dismisses it.
+5. The same transaction twice (e.g. a bank SMS and a UPI app SMS with the
+   same reference): only one entry.
+6. A payment you already typed in by hand within 15 minutes: no second entry.
+7. Airplane mode, then a message: the entry appears in the Ledger at once and
+   syncs (household notification) when back online.
+8. A promotion, a bill reminder ("due on"), a collect request, an OTP: nothing.
+9. Auto-add off: the old "Add this entry?" suggestion comes back unchanged.
+10. On-device AI row: note the status and the phone model; on a supported
+    phone, open the review list and check unknown payees get a suggested
+    category ("suggested by on-device AI"), never saved by themselves.
+
 ## Known gaps
 
 - `FunctionsAgentRepository` (the streaming client) and
@@ -75,3 +102,8 @@ emulator's microphone is unreliable; demo mode uses a scripted fake voice).
 - `DeviceVoiceService` (the speech plugins) has no automated tests; the Talk
   flow is covered with `FakeVoiceService` and the manual checklist above.
 - Push delivery and the daily insights schedule have not been observed live.
+- SMS auto-add's native Firestore write, Undo and the duplicate check against
+  saved entries have only been tested with unit tests and fakes: the emulator
+  run (receiver → worker → review list, dedupe, promo/OTP rejection, deep
+  link) used a demo build because signing in needs the owner's account.
+  Gemini Nano has not run on a supported phone yet.
