@@ -17,7 +17,14 @@ data class ReviewItem(
     val receivedAt: Long,
     val categoryId: String?,
     val categorySource: String?,
+    /** Salted payee hash for payee memory (D-030); never shown. */
+    val payeeHash: String? = null,
+    /** Words the user typed in a notification reply, kept until it is saved. */
+    val words: String? = null,
 ) {
+    /** The entry note: "Ramesh K · HDFC XX1234" or "gift for amma · Ramesh K". */
+    val note: String? get() = SmsNote.compose(words, merchant, account)
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
         amount?.let { put("amount", it) }
@@ -27,12 +34,14 @@ data class ReviewItem(
         put("receivedAt", receivedAt)
         categoryId?.let { put("categoryId", it) }
         categorySource?.let { put("categorySource", it) }
+        payeeHash?.let { put("payeeHash", it) }
+        words?.let { put("words", it) }
     }
 
     fun toMap(): Map<String, Any?> = mapOf(
         "id" to id, "amount" to amount, "type" to type, "merchant" to merchant,
         "account" to account, "receivedAt" to receivedAt, "categoryId" to categoryId,
-        "categorySource" to categorySource,
+        "categorySource" to categorySource, "words" to words,
     )
 
     companion object {
@@ -45,6 +54,8 @@ data class ReviewItem(
             receivedAt = o.getLong("receivedAt"),
             categoryId = o.optString("categoryId").ifEmpty { null },
             categorySource = o.optString("categorySource").ifEmpty { null },
+            payeeHash = o.optString("payeeHash").ifEmpty { null },
+            words = o.optString("words").ifEmpty { null },
         )
 
         fun from(sms: ParsedSms, receivedAt: Long, suggestion: Placement?) = ReviewItem(
@@ -56,6 +67,7 @@ data class ReviewItem(
             receivedAt = receivedAt,
             categoryId = suggestion?.categoryId,
             categorySource = suggestion?.source?.wire,
+            payeeHash = sms.payeeHash,
         )
     }
 }
@@ -91,6 +103,9 @@ object ReviewQueueCodec {
 
     fun update(items: List<ReviewItem>, id: String, categoryId: String?, source: String?) =
         items.map { if (it.id == id) it.copy(categoryId = categoryId, categorySource = source) else it }
+
+    fun setWords(items: List<ReviewItem>, id: String, words: String?) =
+        items.map { if (it.id == id) it.copy(words = words) else it }
 }
 
 /** The queue in SharedPreferences `sms_detection`. */
@@ -110,6 +125,12 @@ object SmsReviewQueue {
 
     @Synchronized
     fun remove(context: Context, id: String) = save(context, ReviewQueueCodec.remove(all(context), id))
+
+    fun find(context: Context, id: String): ReviewItem? = all(context).firstOrNull { it.id == id }
+
+    @Synchronized
+    fun setWords(context: Context, id: String, words: String?) =
+        save(context, ReviewQueueCodec.setWords(all(context), id, words))
 
     @Synchronized
     fun setSuggestion(context: Context, id: String, categoryId: String?, source: String?) =

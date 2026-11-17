@@ -10,17 +10,8 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import com.google.android.gms.tasks.Task
-import com.google.android.gms.tasks.Tasks
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.QuerySnapshot
-import com.google.firebase.firestore.Source
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Date
-import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 /** An entry already saved, as far as the duplicate check needs it. */
@@ -59,22 +50,27 @@ class SmsAutoAddWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val receivedAt = inputData.getLong(K_AT, System.currentTimeMillis())
         val context = applicationContext
         val table = SmsPrefs.table(context)
+        val memory = PayeeMemory.lookup(context, sms.payeeHash)
 
-        when (val decision = SmsCategoriser.decide(table, sms)) {
-            is Decision.Review -> toReview(context, sms, receivedAt, decision.suggestion)
+        when (val decision = SmsCategoriser.decide(table, sms, memory)) {
+            is Decision.Review -> toReview(context, table, sms, receivedAt, decision.suggestion)
             is Decision.AutoAdd -> {
                 val firebase = NativeFirebase.forTable(context, table)
                 if (firebase == null) {
-                    toReview(context, sms, receivedAt, decision.placement)
+                    toReview(context, table, sms, receivedAt, decision.placement)
                 } else {
                     val db = firebase.second
-                    if (!alreadySaved(db, table, sms, receivedAt)) {
-                        val id = write(db, table, sms, receivedAt, decision.placement)
+                    if (!SmsEntryWriter.alreadySaved(db, table, sms, receivedAt)) {
+                        // A remembered payee brings its last words too: "auto to office · Ramesh K".
+                        val words = memory?.words?.takeIf { decision.placement.source == CategorySource.MEMORY }
+                        val note = SmsNote.compose(words, sms.merchant, sms.account)
+                        val id = SmsEntryWriter.write(db, table, sms.amount!!, sms.type, decision.placement.categoryId, receivedAt, note)
                         if (id == null) {
-                            toReview(context, sms, receivedAt, decision.placement)
+                            toReview(context, table, sms, receivedAt, decision.placement)
                         } else {
+                            PayeeMemory.recordEntry(context, id, sms.payeeHash, sms.merchant, sms.account)
                             val name = table.category(decision.placement.categoryId)?.name ?: ""
-                            SmsNotifications.added(context, id, sms, name, receivedAt)
+                            SmsNotifications.added(context, id, sms.amount, sms.type, sms.merchant, name, SmsNotifications.notificationId(receivedAt))
                         }
                     }
                 }
@@ -83,61 +79,19 @@ class SmsAutoAddWorker(context: Context, params: WorkerParameters) : CoroutineWo
         Result.success()
     }
 
-    private fun toReview(context: Context, sms: ParsedSms, receivedAt: Long, suggestion: Placement?) {
-        SmsReviewQueue.add(context, ReviewItem.from(sms, receivedAt, suggestion))
-        SmsNotifications.review(context, sms, receivedAt)
-    }
-
-    private fun alreadySaved(db: FirebaseFirestore, table: CategoryTable, sms: ParsedSms, receivedAt: Long): Boolean {
-        val query = db.collection("transactions")
-            .whereEqualTo("homeId", table.homeId)
-            .whereGreaterThanOrEqualTo("date", Timestamp(Date(receivedAt - DuplicateCheck.WINDOW_MS)))
-            .whereLessThanOrEqualTo("date", Timestamp(Date(receivedAt + DuplicateCheck.WINDOW_MS)))
-        val snapshot = await(query.get(), 8) ?: await(query.get(Source.CACHE), 3) ?: return false
-        return DuplicateCheck.isDuplicate(saved(snapshot), table.userId!!, sms, receivedAt)
-    }
-
-    private fun saved(snapshot: QuerySnapshot) = snapshot.documents.map { d ->
-        SavedEntry(
-            userId = d.getString("userId"),
-            type = d.getString("type"),
-            amount = d.getDouble("amount"),
-            dateMs = d.getTimestamp("date")?.toDate()?.time ?: 0L,
-        )
-    }
-
-    /** Same fields as the app's own `saveTransaction`, plus `source: "sms"`. */
-    private fun write(db: FirebaseFirestore, table: CategoryTable, sms: ParsedSms, receivedAt: Long, placement: Placement): String? =
-        try {
-            val ref = db.collection("transactions").document()
-            val task = ref.set(
-                hashMapOf(
-                    "amount" to sms.amount,
-                    "categoryId" to placement.categoryId,
-                    "date" to Timestamp(Date(receivedAt)),
-                    "note" to sms.note,
-                    "type" to sms.type,
-                    "tagIds" to emptyList<String>(),
-                    "userId" to table.userId,
-                    "userEmail" to table.userEmail,
-                    "homeId" to table.homeId,
-                    "source" to "sms",
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp(),
-                ),
-            )
-            // Give it a moment to reach the server; offline it stays queued
-            // in Firestore's local cache and syncs the next time it runs.
-            await(task, 10)
-            if (task.isComplete && task.exception != null) null else ref.id
-        } catch (_: Exception) {
-            null
+    /**
+     * Into the review list. When the phone can save on its own, the
+     * notification asks what the payment was for, with category buttons and
+     * Reply (D-030); otherwise it just links to the list.
+     */
+    private fun toReview(context: Context, table: CategoryTable, sms: ParsedSms, receivedAt: Long, suggestion: Placement?) {
+        val item = ReviewItem.from(sms, receivedAt, suggestion)
+        SmsReviewQueue.add(context, item)
+        if (table.canWrite && sms.amount != null) {
+            SmsNotifications.ask(context, item, SmsLabeller.buttons(table, item, emptyList(), hourOf(receivedAt)))
+        } else {
+            SmsNotifications.review(context, sms, receivedAt)
         }
-
-    private fun <T> await(task: Task<T>, seconds: Long): T? = try {
-        Tasks.await(task, seconds, TimeUnit.SECONDS)
-    } catch (_: Exception) {
-        null
     }
 
     companion object {
@@ -149,9 +103,12 @@ class SmsAutoAddWorker(context: Context, params: WorkerParameters) : CoroutineWo
         private const val K_LAST4 = "last4"
         private const val K_REF = "refHash"
         private const val K_DEFINITE = "definite"
+        private const val K_PAYEE = "payeeHash"
         private const val K_AT = "receivedAt"
 
-        /** Parsed fields only. */
+        fun hourOf(ms: Long): Int = java.util.Calendar.getInstance().apply { timeInMillis = ms }.get(java.util.Calendar.HOUR_OF_DAY)
+
+        /** Parsed fields only; the payee only as its salted hash, never [ParsedSms.payeeKey]. */
         fun toData(sms: ParsedSms, receivedAt: Long): Data = workDataOf(
             K_AMOUNT to (sms.amount ?: -1.0),
             K_TYPE to sms.type,
@@ -160,6 +117,7 @@ class SmsAutoAddWorker(context: Context, params: WorkerParameters) : CoroutineWo
             K_LAST4 to sms.last4,
             K_REF to sms.refHash,
             K_DEFINITE to sms.definite,
+            K_PAYEE to sms.payeeHash,
             K_AT to receivedAt,
         )
 
@@ -175,6 +133,7 @@ class SmsAutoAddWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 last4 = data.getString(K_LAST4),
                 refHash = data.getString(K_REF),
                 definite = data.getBoolean(K_DEFINITE, false),
+                payeeHash = data.getString(K_PAYEE),
             )
         }
 

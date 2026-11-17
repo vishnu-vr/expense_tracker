@@ -195,10 +195,15 @@ class SmsTemplatesTest {
     )
 
     @Test
-    fun phoneNumberUpiHandleIsNotKept() {
+    fun phoneNumberUpiHandleIsShownMaskedAndKeyedForMemoryOnly() {
         val p = SmsParser.parseDetails("AD-HDFCBK", "Rs.300.00 debited from A/c XX1234 to VPA 9876543210@ybl (UPI Ref No 123456789012)")!!
-        assertNull(p.merchant)
-        assertNull(p.merchantKey)
+        // Shown masked; the number is only in the in-memory key, hashed before anything is stored (D-030).
+        assertEquals("UPI xxxxx3210", p.merchant)
+        assertEquals("tel:9876543210", p.payeeKey)
+        val stored = p.withHashedPayee("s1")
+        assertNull(stored.payeeKey)
+        assertFalse(stored.toString().contains("9876543210"))
+        assertFalse(stored.note!!.contains("9876543210"))
     }
 
     // ------------------------------------------------------------ rejected

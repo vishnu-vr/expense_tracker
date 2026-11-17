@@ -17,7 +17,8 @@ class SmsScreen extends ConsumerStatefulWidget {
 
 class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserver {
   SmsDetectionStatus? _status;
-  NanoStatus? _nano;
+  NanoState? _nano;
+  var _checkingNano = false;
   var _failed = false;
 
   @override
@@ -60,12 +61,34 @@ class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserv
   }
 
   Future<void> _checkNano() async {
+    if (_checkingNano) return;
+    setState(() => _checkingNano = true);
+    NanoState n;
     try {
-      final n = await ref.read(smsDetectionProvider).nanoStatus();
-      if (mounted) setState(() => _nano = n);
+      n = await ref.read(smsDetectionProvider).nanoStatus();
     } catch (_) {
-      if (mounted) setState(() => _nano = NanoStatus.unavailable);
+      n = const NanoState(NanoStatus.error, 'no answer');
     }
+    if (mounted) {
+      setState(() {
+        _nano = n;
+        _checkingNano = false;
+      });
+    }
+  }
+
+  Future<void> _forgetPayees() async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Forget remembered payees?',
+      message:
+          'Payments to people and shops you labelled before will be asked about again. Saved entries stay as they are.',
+      confirmLabel: 'Forget',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    await _run((d) => d.forgetPayees());
+    if (mounted) showToast(context, 'Remembered payees forgotten');
   }
 
   Future<void> _toggleAutoAdd(bool on) async {
@@ -130,16 +153,6 @@ class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserv
                     ),
                     if (s.autoAdd) ...[
                       ListRow(
-                        title: 'On-device AI',
-                        subtitle: switch (_nano) {
-                          null => 'Checking…',
-                          NanoStatus.available => 'Ready: suggests categories in the review list',
-                          NanoStatus.downloading => 'Downloading the model',
-                          NanoStatus.downloadable => 'The model downloads on Wi-Fi',
-                          NanoStatus.unavailable => 'Not available on this phone',
-                        },
-                      ),
-                      ListRow(
                         title: 'Review detected entries',
                         onTap: () => context.push('/sms/review'),
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -148,6 +161,37 @@ class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserv
                           const SizedBox(width: 4),
                           Icon(Icons.chevron_right, color: p.muted),
                         ]),
+                      ),
+                      MergeSemantics(
+                        child: ListRow(
+                          title: 'Evening reminder',
+                          below: _Note('About 8:30 pm, if detected payments still need a description'),
+                          onTap: () => _run((d) => d.setEveningReminder(!s.evening)),
+                          trailing: Switch(
+                            value: s.evening,
+                            onChanged: (on) => _run((d) => d.setEveningReminder(on)),
+                          ),
+                        ),
+                      ),
+                      ListRow(
+                        title: 'On-device AI',
+                        below: _Note(
+                          _nano?.status.hint ?? 'Checking…',
+                          detail: _nano?.code,
+                        ),
+                        trailing: TextButton(
+                          onPressed: _checkingNano ? null : _checkNano,
+                          child: const Text('Check again'),
+                        ),
+                      ),
+                      ListRow(
+                        title: 'Forget remembered payees',
+                        below: _Note(switch (s.rememberedPayees) {
+                          0 => 'None yet. Payees you label are added on their own next time.',
+                          1 => '1 payee is added on its own with the category you gave.',
+                          final n => '$n payees are added on their own with the categories you gave.',
+                        }),
+                        onTap: s.rememberedPayees == 0 ? null : _forgetPayees,
                       ),
                     ],
                     _Check(label: 'SMS permission', ok: s.smsGranted),
@@ -174,6 +218,26 @@ class _SmsScreenState extends ConsumerState<SmsScreen> with WidgetsBindingObserv
                   ],
                 ),
     );
+  }
+}
+
+/// A muted line under a row title that wraps instead of being cut off.
+class _Note extends StatelessWidget {
+  const _Note(this.text, {this.detail});
+
+  final String text;
+  final String? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(text, style: LedgerText.body(size: 12, color: p.muted, height: 1.35)),
+      if (detail != null) ...[
+        const SizedBox(height: 2),
+        Text(detail!, style: LedgerText.body(size: 11, color: p.muted)),
+      ],
+    ]);
   }
 }
 

@@ -24,7 +24,7 @@ folder; this page is the working copy.
 | Request a Claude quota increase in Vertex AI (D-022) | Quota requests are made by the project owner in the console |
 | Finish installing Xcode + CocoaPods | iOS build |
 | Play Store SMS permission declaration (needed before any Play release; D-005, D-029) | Your developer account |
-| 10–20 real bank SMS samples (numbers and names changed) for the auto-add parser tests, your phone model for Gemini Nano, and the manual SMS auto-add checklist on your phone (testing.md, D-029) | Real messages and a real phone signed in to the live project |
+| 10–20 real bank SMS samples (numbers and names changed) for the auto-add parser tests, your phone model for Gemini Nano, and the manual SMS auto-add checklist on your phone (testing.md, D-029, D-030) | Real messages and a real phone signed in to the live project |
 | Go-ahead to deploy the stricter Firestore rule for `source` (the live rules already accept it; D-029) | A production deploy |
 | Go-ahead for the Flash-Lite eval subset (billed, ~66k input tokens), then deploy `askAgent` and ship build 1.0.0 (6) (D-027) | Billed run and a production deploy |
 | Go-ahead for the voice/Malayalam eval subset on Flash and Flash-Lite (billed, 8 questions × 2 models), then deploy `askAgent`, run the manual voice checklist on a real phone, and ship build 1.0.0 (7) (D-028) | Billed run, a production deploy and a real microphone |
@@ -43,11 +43,14 @@ folder; this page is the working copy.
 ## Planned features
 
 - **SMS auto-add** is built and experimental on branch `exp/sms-auto-add`
-  (D-029, [sms.md](sms.md)), distributed as build 1.0.0 (8). Next: tune the
-  templates with real messages, then decide whether it leaves "experimental".
+  (D-029, D-030, [sms.md](sms.md)), distributed as build 1.0.0 (9) with
+  notification questions, payee memory and the evening catch-up. Next: tune
+  the templates with real messages, then decide whether it leaves
+  "experimental".
 - **On-device AI.** Gemini Nano suggests categories in the SMS review list
-  (D-029, foreground only). Still to measure: accuracy and device coverage on
-  real phones; Apple's on-device model for iOS has no SMS use.
+  (D-029, foreground only); the SMS screen says why it is unavailable
+  (D-030). Galaxy S24 phones are not on Google's Prompt API device list.
+  Still to measure: accuracy and device coverage on real phones; Apple's on-device model for iOS has no SMS use.
 - What-if tool for the assistant; category suggestions from embeddings.
 - Talk mode: speak the answer sentence by sentence as it streams (D-028 v1
   waits for the whole answer, about 10 s).

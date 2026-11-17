@@ -11,9 +11,10 @@ import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/category_icon.dart';
 import '../../core/widgets/common.dart';
 
-/// "Review detected entries" (D-029): bank messages auto-add was not sure
-/// about. Add saves with the suggested category, tapping a row opens the form
-/// prefilled, swiping dismisses.
+/// "Review detected entries" (D-029, D-030): payments auto-add was not sure
+/// about. Each row has quick category chips and a note field, so labelling is
+/// one tap or a few words; tapping the row opens the form prefilled, swiping
+/// dismisses.
 class ReviewScreen extends ConsumerStatefulWidget {
   const ReviewScreen({super.key});
 
@@ -48,33 +49,45 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     ref.invalidate(smsReviewQueueProvider);
   }
 
-  Future<void> _add(DetectedEntry e) async {
+  /// Saves [e] with [categoryId] and the user's [words] (one tap on a
+  /// chip), then lets the phone remember the payee (D-030).
+  Future<void> _add(DetectedEntry e, String categoryId, String words) async {
+    final note = smsNote(words: words, merchant: e.merchant, account: e.account);
     final tx = Transaction(
       id: '',
       amount: e.amount!,
-      categoryId: e.categoryId!,
+      categoryId: categoryId,
       date: e.receivedAt,
       type: e.type,
-      note: e.note,
+      note: note,
       source: 'sms',
     );
+    setState(() => _hidden.add(e.id));
     try {
-      await ref.read(householdRepositoryProvider).saveTransaction(tx);
-      await _remove(e.id);
+      final docId = await ref.read(householdRepositoryProvider).saveTransaction(tx);
+      try {
+        await ref
+            .read(smsDetectionProvider)
+            .labelReviewItem(e.id, categoryId: categoryId, note: note, docId: docId);
+      } catch (_) {}
+      ref.invalidate(smsReviewQueueProvider);
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       showToast(context, 'Entry added');
     } catch (_) {
-      if (mounted) showToast(context, 'Could not save. Try again.');
+      if (mounted) {
+        setState(() => _hidden.remove(e.id));
+        showToast(context, 'Could not save. Try again.');
+      }
     }
   }
 
-  void _open(DetectedEntry e) {
+  void _open(DetectedEntry e, String words) {
     context.push(Uri(path: '/add', queryParameters: {
       'type': e.type.name,
       if (e.amount != null) 'amount': '${e.amount}',
       'date': e.receivedAt.toUtc().toIso8601String(),
-      'note': ?e.note,
+      'note': ?smsNote(words: words, merchant: e.merchant, account: e.account),
       'category': ?e.categoryId,
       'source': 'sms',
       'review': e.id,
@@ -86,6 +99,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final p = context.palette;
     final queue = ref.watch(smsReviewQueueProvider);
     final cats = ref.watch(categoryByIdProvider);
+    final table = ref.watch(smsTableProvider);
     final money = ref.watch(moneyProvider);
     final now = ref.watch(nowProvider);
     final items = [
@@ -113,7 +127,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
                   children: [
                     Text(
-                      'Bank messages auto-add was not sure about. Swipe to dismiss.',
+                      'Payments auto-add was not sure about. Tap a category to add one, with a few words if you like. Swipe to dismiss.',
                       style: LedgerText.body(size: 13, color: p.muted, height: 1.45),
                     ),
                     const SizedBox(height: 8),
@@ -122,10 +136,11 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                         key: ValueKey(e.id),
                         entry: e,
                         category: _category(cats, e),
+                        choices: _choices(cats, table, e),
                         money: money,
                         now: now,
-                        onAdd: () => _add(e),
-                        onOpen: () => _open(e),
+                        onAdd: (categoryId, words) => _add(e, categoryId, words),
+                        onOpen: (words) => _open(e, words),
                         onDismiss: () => _remove(e.id),
                       ),
                   ],
@@ -138,13 +153,28 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final c = cats[e.categoryId];
     return c != null && c.type == e.type ? c : null;
   }
+
+  /// Quick chips: the item's own suggestion, then the household's usual
+  /// categories for a similar amount and time of day (same cells as the
+  /// notification buttons).
+  List<Category> _choices(Map<String, Category> cats, SmsCategoryTable? table, DetectedEntry e) {
+    final ids = <String>{
+      ?e.categoryId,
+      ...?table?.quickSuggestions(e.type, e.amount, e.receivedAt, n: 3),
+    };
+    return [
+      for (final id in ids)
+        if (cats[id] case final c? when c.type == e.type) c,
+    ].take(3).toList();
+  }
 }
 
-class _ReviewRow extends StatelessWidget {
+class _ReviewRow extends StatefulWidget {
   const _ReviewRow({
     super.key,
     required this.entry,
     required this.category,
+    required this.choices,
     required this.money,
     required this.now,
     required this.onAdd,
@@ -154,59 +184,95 @@ class _ReviewRow extends StatelessWidget {
 
   final DetectedEntry entry;
   final Category? category;
+  final List<Category> choices;
   final Money money;
   final DateTime now;
-  final VoidCallback onAdd;
-  final VoidCallback onOpen;
+  final void Function(String categoryId, String words) onAdd;
+  final void Function(String words) onOpen;
   final VoidCallback onDismiss;
+
+  @override
+  State<_ReviewRow> createState() => _ReviewRowState();
+}
+
+class _ReviewRowState extends State<_ReviewRow> {
+  late final _words = TextEditingController(text: widget.entry.words ?? '');
+
+  @override
+  void dispose() {
+    _words.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final e = entry;
-    final when = '${shortDate(e.receivedAt, now)}, ${timeOfDay(e.receivedAt)}';
-    final canAdd = category != null && e.amount != null;
+    final e = widget.entry;
+    final category = widget.category;
+    final when = '${shortDate(e.receivedAt, widget.now)}, ${timeOfDay(e.receivedAt)}';
+    final canAdd = e.amount != null;
     final how = switch (e.categorySource) {
       'nano' => 'suggested by on-device AI',
       'history' => 'from your entries',
-      'builtin' => 'suggested',
+      'memory' => 'as last time',
       _ => 'suggested',
     };
     return Dismissible(
       key: ValueKey('dismiss-${e.id}'),
-      onDismissed: (_) => onDismiss(),
+      onDismissed: (_) => widget.onDismiss(),
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 16),
         color: p.track,
         child: Text('Dismiss', style: LedgerText.body(size: 13, color: p.muted)),
       ),
-      child: ListRow(
-        onTap: onOpen,
-        leading: CategoryIcon(category: category),
-        title: e.merchant ?? (e.type == TransactionType.income ? 'Money received' : 'Payment'),
-        subtitle: [?e.account, when].join(' · '),
-        below: Text(
-          category == null ? 'Tap to pick a category' : '${category!.name} · $how',
-          style: LedgerText.body(size: 12, color: p.muted),
-        ),
-        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ListRow(
+          onTap: () => widget.onOpen(_words.text),
+          leading: CategoryIcon(category: category),
+          title: e.merchant ?? (e.type == TransactionType.income ? 'Money received' : 'Payment'),
+          subtitle: [?e.account, when].join(' · '),
+          below: Text(
+            category == null ? 'What was it for?' : '${category.name} · $how',
+            style: LedgerText.body(size: 12, color: p.muted),
+          ),
+          trailing: Text(
             e.amount == null
                 ? '—'
-                : money.signed(e.type == TransactionType.income ? e.amount! : -e.amount!),
+                : widget.money.signed(e.type == TransactionType.income ? e.amount! : -e.amount!),
             style: LedgerText.body(
               tabular: true,
               color: e.type == TransactionType.income ? p.positive : null,
             ),
           ),
-          const SizedBox(width: 4),
-          TextButton(
-            onPressed: canAdd ? onAdd : null,
-            child: const Text('Add'),
+        ),
+        TextField(
+          controller: _words,
+          maxLength: 80,
+          textCapitalization: TextCapitalization.none,
+          decoration: const InputDecoration(
+            isDense: true,
+            counterText: '',
+            hintText: 'A few words, e.g. auto to office (optional)',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 4, children: [
+          for (final c in widget.choices)
+            ActionChip(
+              avatar: Icon(iconForName(c.icon), size: 16),
+              label: Text(c.name),
+              tooltip: 'Add as ${c.name}',
+              onPressed: canAdd ? () => widget.onAdd(c.id, _words.text) : null,
+            ),
+          ActionChip(
+            label: const Text('Other…'),
+            tooltip: 'Open the full form',
+            onPressed: () => widget.onOpen(_words.text),
           ),
         ]),
-      ),
+        const SizedBox(height: 12),
+      ]),
     );
   }
 }

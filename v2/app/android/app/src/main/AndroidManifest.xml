@@ -53,7 +53,7 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
-        <!-- Undo on an "Added from SMS" notification. Only this app's notifications send it. -->
+        <!-- Undo, category buttons and Reply on SMS notifications. Only this app's notifications send them. -->
         <receiver
             android:name=".SmsActionReceiver"
             android:exported="false" />
@@ -80,5 +80,7 @@
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <!-- Bank SMS (D-030): the "Android AICore" version, to explain why Gemini Nano is unavailable. -->
+        <package android:name="com.google.android.aicore" />
     </queries>
 </manifest>

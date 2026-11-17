@@ -27,8 +27,20 @@ class _FakeSms {
             removed.add(args['id'] as String);
             this.queue.removeWhere((e) => e['id'] == args['id']);
             return this.queue;
+          case 'labelReviewItem':
+            removed.add(args['id'] as String);
+            labels.add(Map<String, Object?>.from(args));
+            this.queue.removeWhere((e) => e['id'] == args['id']);
+            return this.queue;
+          case 'entryEdited':
+            edits.add(Map<String, Object?>.from(args));
+            return null;
+          case 'setEveningReminder':
+            state = {...state, 'evening': args['enabled'] as bool};
+          case 'forgetPayees':
+            state = {...state, 'rememberedPayees': 0};
           case 'nanoStatus':
-            return 'unavailable';
+            return nano.length > 1 ? nano.removeAt(0) : nano.first;
         }
         return state;
       },
@@ -39,6 +51,13 @@ class _FakeSms {
   final List<Map<String, Object?>> queue;
   final calls = <String>[];
   final removed = <String>[];
+  final labels = <Map<String, Object?>>[];
+  final edits = <Map<String, Object?>>[];
+
+  /// Answers to `nanoStatus`, in order; the last one repeats.
+  List<Object?> nano = [
+    {'status': 'unsupported', 'code': 'AICore not installed'},
+  ];
   String? table;
   var state = <String, Object?>{
     'enabled': true,
@@ -124,7 +143,8 @@ void main() {
     await tester.tap(find.text('Auto-add confident entries'));
     await tester.pumpAndSettle();
     expect(fake.calls, containsAllInOrder(['setAutoAdd', 'nanoStatus']));
-    expect(find.text('Not available on this phone'), findsOneWidget);
+    expect(find.text('Not supported on this phone yet'), findsOneWidget);
+    expect(find.text('AICore not installed'), findsOneWidget);
     expect(find.text('Review detected entries'), findsOneWidget);
     expect(find.textContaining('adds the entry when it is sure'), findsOneWidget);
   });
@@ -150,7 +170,7 @@ void main() {
     expect(fake.table, contains('"firebase":null')); // demo mode: nothing written natively
   });
 
-  testWidgets('review: banner on Home, Add saves with an SMS badge, dismiss removes', (tester) async {
+  testWidgets('review: banner on Home, a chip saves with an SMS badge, dismiss removes', (tester) async {
     final fake = _FakeSms(tester, queue: [
       _item('r1', 'Swiggy', 1499, category: 'food'),
       _item('r2', 'Ramesh Stores', 320),
@@ -162,16 +182,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Review detected entries'), findsOneWidget);
     expect(find.text('Food · suggested'), findsOneWidget);
-    expect(find.text('Tap to pick a category'), findsOneWidget);
+    expect(find.text('What was it for?'), findsOneWidget);
     expect(fake.calls, contains('suggestCategories'));
 
-    // No category yet: Add is disabled for Ramesh Stores.
-    final addButtons = find.widgetWithText(TextButton, 'Add');
-    expect(tester.widget<TextButton>(addButtons.last).onPressed, isNull);
-
-    await tester.tap(addButtons.first);
+    // Swiggy's own suggestion is its first chip; one tap saves it.
+    await tester.tap(find.byTooltip('Add as Food').first);
     await tester.pumpAndSettle();
     expect(fake.removed, ['r1']);
+    expect(fake.labels.single, containsPair('categoryId', 'food'));
+    expect(fake.labels.single, containsPair('note', 'Swiggy · HDFC XX1234'));
+    expect(fake.labels.single['docId'], isNotNull);
     expect(find.text('Entry added'), findsOneWidget);
     await toastGone(tester);
 
@@ -188,10 +208,37 @@ void main() {
     expect(find.text('SMS'), findsOneWidget);
     expect(find.textContaining('Swiggy · HDFC XX1234'), findsOneWidget);
 
-    // The entry screen says where it came from.
+    // The entry screen says where it came from; changing it updates the payee memory.
     await tester.tap(find.textContaining('Swiggy · HDFC XX1234'));
     await tester.pumpAndSettle();
     expect(find.text('Added from a bank message'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Grocery'));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Update entry'));
+    expect(fake.edits.single, containsPair('categoryId', 'grocery'));
+    expect(fake.edits.single, containsPair('docId', fake.labels.single['docId']));
+  });
+
+  testWidgets('review: quick chips follow amount and time, words become the note', (tester) async {
+    final fake = _FakeSms(tester, queue: [
+      {..._item('r3', 'UPI xxxxx3210', 150), 'words': 'gift for amma'},
+    ]);
+    await pumpApp(tester);
+    await tester.tap(find.text('1 detected entry to review'));
+    await tester.pumpAndSettle();
+    // The words from a notification reply are prefilled.
+    expect(find.widgetWithText(TextField, 'gift for amma'), findsOneWidget);
+    // Up to three category chips plus Other….
+    final chips = tester.widgetList<ActionChip>(find.byType(ActionChip)).toList();
+    expect(chips.length, inInclusiveRange(2, 4));
+    expect((chips.last.label as Text).data, 'Other…');
+
+    await tester.enterText(find.byType(TextField), 'auto to office');
+    final first = (chips.first.label as Text).data!;
+    await tester.tap(find.byTooltip('Add as $first'));
+    await tester.pumpAndSettle();
+    expect(fake.labels.single['note'], 'auto to office · UPI xxxxx3210');
+    expect(find.text('Nothing to review.'), findsOneWidget);
   });
 
   testWidgets('review: tapping a row opens the form prefilled and saving clears it', (tester) async {
@@ -211,6 +258,8 @@ void main() {
     await tester.tap(find.text('Save entry'));
     await tester.pumpAndSettle();
     expect(fake.removed, ['r2']);
+    // The form's save also teaches the phone this payee.
+    expect(fake.labels.single, containsPair('categoryId', 'grocery'));
     expect(find.text('Nothing to review.'), findsOneWidget);
   });
 
@@ -229,5 +278,36 @@ void main() {
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
     expect(find.text('1 detected entry to review'), findsOneWidget);
+  });
+
+  testWidgets('sms settings: evening reminder, forget payees, AI status with Check again', (tester) async {
+    final fake = _FakeSms(tester);
+    fake.state = {...fake.state, 'autoAdd': true, 'evening': true, 'rememberedPayees': 3};
+    fake.nano = [
+      {'status': 'aicore-update', 'code': 'AICore 0.9'},
+      {'status': 'waiting-for-wifi'},
+    ];
+    await pumpApp(tester);
+    await tester.tap(find.byTooltip('Profile and settings'));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Bank SMS detection'));
+
+    expect(find.text("Update 'Android AICore' in Play Store, then check again"), findsOneWidget);
+    expect(find.text('AICore 0.9'), findsOneWidget);
+    await tapVisible(tester, find.text('Check again'));
+    expect(find.text('Waiting for Wi-Fi to download the model'), findsOneWidget);
+    expect(find.text('AICore 0.9'), findsNothing);
+
+    await tapVisible(tester, find.text('Evening reminder'));
+    expect(fake.calls, contains('setEveningReminder'));
+    expect(fake.state['evening'], false);
+
+    expect(find.textContaining('3 payees are added on their own'), findsOneWidget);
+    await tapVisible(tester, find.text('Forget remembered payees'));
+    expect(find.text('Forget remembered payees?'), findsOneWidget);
+    await tester.tap(find.text('Forget'));
+    await tester.pumpAndSettle();
+    expect(fake.calls, contains('forgetPayees'));
+    expect(find.textContaining('None yet'), findsOneWidget);
   });
 }

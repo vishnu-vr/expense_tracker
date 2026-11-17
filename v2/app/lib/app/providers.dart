@@ -260,13 +260,21 @@ final smsDetectionProvider = Provider<SmsDetection>((ref) => const SmsDetection(
 /// entry goes to review. `backend.dart` sets it for the real project.
 final smsFirebaseConfigProvider = Provider<Map<String, String>?>((ref) => null);
 
+/// The household's SMS lookup table (history, reply words, quick
+/// suggestions); null until the entries have loaded.
+final smsTableProvider = Provider<SmsCategoryTable?>((ref) {
+  final txs = ref.watch(transactionsProvider).value;
+  if (txs == null) return null;
+  return buildCategoryTable(txs, ref.watch(categoriesProvider));
+});
+
 /// The lookup table pushed to Android; null until signed in to a household.
 final smsCategoryTableProvider = Provider<Map<String, Object?>?>((ref) {
   final session = ref.watch(sessionProvider).value;
   final user = session?.user;
-  final txs = ref.watch(transactionsProvider).value;
-  if (user == null || session?.homeId == null || txs == null) return null;
-  return buildCategoryTable(txs, ref.watch(categoriesProvider)).toJson(
+  final table = ref.watch(smsTableProvider);
+  if (user == null || session?.homeId == null || table == null) return null;
+  return table.toJson(
     homeId: session!.homeId,
     userId: user.id,
     userEmail: user.email,

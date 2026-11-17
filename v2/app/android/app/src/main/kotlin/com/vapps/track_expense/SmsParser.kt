@@ -24,7 +24,20 @@ data class ParsedSms(
     val refHash: String?,
     /** True when the message says money actually moved (debited, spent, sent…). */
     val definite: Boolean,
+    /**
+     * Normalised payee identity for payee memory ("tel:9876543210",
+     * "vpa:shop@okhdfc", "name:ramesh k"). It may hold a phone number, so it
+     * only lives in memory: [SmsReceiver] turns it into [payeeHash] (salted)
+     * before anything is queued or stored, and it is never logged.
+     */
+    val payeeKey: String? = null,
+    /** Salted hash of [payeeKey] (D-030); the only form that is stored. */
+    val payeeHash: String? = null,
 ) {
+    /** The same message with the payee identity replaced by its salted hash. */
+    fun withHashedPayee(salt: String): ParsedSms =
+        copy(payeeKey = null, payeeHash = payeeKey?.let { PayeeMemoryCodec.hash(salt, it) })
+
     /** "HDFC XX1234", "A/c XX1234", "HDFC" or null. */
     val account: String?
         get() = when {
@@ -140,7 +153,8 @@ object SmsParser {
         }
         val amount = basic.amount
             ?: bareAmount.find(body)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()?.takeIf { it > 0 }
-        val merchant = extractMerchant(body, type)
+        val payee = extractPayee(body, type)
+        val merchant = payee?.display
         return ParsedSms(
             amount = amount,
             type = type,
@@ -150,6 +164,7 @@ object SmsParser {
             last4 = extractLast4(body),
             refHash = extractRef(body)?.let(::hash),
             definite = definite,
+            payeeKey = payee?.key,
         )
     }
 
@@ -267,7 +282,17 @@ object SmsParser {
 
     private val amountLike = Regex("^(rs\\.?|inr|₹)\\s*\\d", RegexOption.IGNORE_CASE)
 
-    fun extractMerchant(body: String, type: String): String? {
+    /**
+     * Who was paid (or who paid). [display] is what the note and the
+     * notification show; [key] is the normalised identity for payee memory
+     * (D-030), which for a phone-number UPI handle holds the number and so is
+     * hashed before it is kept anywhere.
+     */
+    data class Payee(val display: String, val key: String)
+
+    fun extractMerchant(body: String, type: String): String? = extractPayee(body, type)?.display
+
+    fun extractPayee(body: String, type: String): Payee? {
         val patterns = if (type == "income") incomeMerchant else expenseMerchant
         for (p in patterns) {
             for (m in p.findAll(body)) {
@@ -280,23 +305,33 @@ object SmsParser {
         return null
     }
 
-    private fun clean(raw: String): String? {
+    private val vpa = Regex("^[A-Za-z0-9._\\-]+@[A-Za-z][A-Za-z0-9.\\-]*$")
+
+    private fun clean(raw: String): Payee? {
         var s = raw.trim()
         stop.find(s)?.let { s = s.substring(0, it.range.first) }
         s = s.trim().trimEnd('.', '-', '*', '/').trim()
-        if (s.length < 2 || s.length > 40) return null
+        if (s.length < 2 || s.length > 60) return null
         if (notPayee.containsMatchIn(s) || amountLike.containsMatchIn(s)) return null
         if (!s.any { it.isLetter() }) return null
-        // A UPI address: keep the readable handle; drop numeric (phone) handles.
         if (s.contains('@')) {
-            val handle = s.substringBefore('@')
-            if (handle.count { it.isDigit() } >= 6) return null
-            val words = handle.split(Regex("[^A-Za-z0-9]+")).filter { w -> w.isNotEmpty() && w.any { it.isLetter() } }
+            val address = s.lowercase(Locale.ROOT)
+            if (!vpa.matches(address)) return null
+            val handle = address.substringBefore('@')
+            val digits = handle.filter { it.isDigit() }
+            // A phone-number handle: usable as a (hashed) memory key, shown masked.
+            if (digits.length >= 10 && handle.count { it.isLetter() } == 0) {
+                return Payee("UPI xxxxx${digits.takeLast(4)}", "tel:${digits.takeLast(10)}")
+            }
+            if (digits.length >= 6) return null
+            val words = handle.split(Regex("[^a-z0-9]+")).filter { w -> w.isNotEmpty() && w.any { it.isLetter() } }
             if (words.isEmpty()) return null
-            s = words.joinToString(" ")
+            return Payee(titleCase(words.joinToString(" ")), "vpa:$address")
         }
+        if (s.length > 40) return null
         if (s.count { it.isDigit() } >= 6) return null
-        return titleCase(s)
+        val name = titleCase(s)
+        return Payee(name, "name:${MerchantKey.of(name) ?: return null}")
     }
 
     /** "SWIGGY" → "Swiggy", "amazon pay in" → "Amazon Pay In"; mixed case is kept. */

@@ -33,7 +33,9 @@ class SmsReceiver : BroadcastReceiver() {
         val receivedAt = parts[0].timestampMillis.takeIf { it > 0 } ?: System.currentTimeMillis()
 
         if (SmsPrefs.isAutoAdd(context)) {
-            val sms = SmsParser.parseDetails(sender, body) ?: return
+            // The payee identity (it may be a phone number) is hashed with this
+            // install's salt here, before anything is queued or stored (D-030).
+            val sms = SmsParser.parseDetails(sender, body)?.withHashedPayee(PayeeMemory.salt(context)) ?: return
             if (sms.amount != null) {
                 if (SmsPrefs.seenBefore(context, sms, receivedAt, System.currentTimeMillis())) return
                 SmsAutoAddWorker.enqueue(context, sms, receivedAt)

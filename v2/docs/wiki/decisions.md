@@ -9,6 +9,85 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-030 · SMS auto-add asks a human: notification questions, payee memory, evening catch-up
+**2026-11-17 · Accepted · owner request · experimental · refines D-029**
+
+Many UPI payments go to people (an auto driver's phone-number UPI id), so
+neither rules nor AI can know what they were for. Auto-add now asks.
+- **Ask in the notification.** A payment that goes to the review list posts
+  "₹150 to Ramesh K — what was this for?" (lock screen: "A payment to
+  describe") with up to two category buttons and **Reply** (RemoteInput),
+  when the phone can save natively (signed in to the real project, an amount).
+  Otherwise the old "Review detected entry" link stays.
+  - **Buttons** come from quick suggestions Dart computes and exports in the
+    table (`buildQuickSuggestions`): for every amount band (<100, 100–300,
+    300–1k, 1k–3k, 3k–10k, 10k+) × day-part (5–11, 11–16, 16–21, 21–5) the
+    household's categories score 3 for the same band and part, 2 for the same
+    band, 1 for the neighbouring band at the same part; gaps are filled from
+    the most-used categories (starter list food/grocery/transportation for a
+    new household). The item's own guess (e.g. built-in, money not clearly
+    moved) goes first. One tap saves through the same native write as
+    auto-add (`SmsEntryWriter`, `source: "sms"`, note "Ramesh K · HDFC
+    XX1234"), removes the item and turns the notification into "Added … ·
+    Undo · Change".
+  - **Reply.** The words become the note, first: "auto to office · Ramesh
+    K" (payee, or the account when there is no payee; `smsNote` /
+    `SmsNote.compose`). The category is guessed from the words without Nano
+    (it cannot run in the background, D-029): each word votes through the
+    household's own note words (`buildWordCategories`: 2+ notes, 80% in one
+    category, stop words and digits skipped), else a built-in keyword list
+    (`builtinKeywordCategories`, expense only, only for categories the
+    household has); the whole text also votes through the merchant
+    dictionary. Saved only when all votes agree; otherwise the notification
+    becomes "Which category for 'gift for amma'?" with the voted (then
+    suggested) categories, and the item keeps the words so the review list
+    shows them prefilled. Ignoring it leaves the item in the list as before.
+- **Payee memory (on the phone only).** Labelling a payment (button, reply,
+  a chip or the form from the review list) stores `hash → {category, type,
+  last words, time, entry id}` in SharedPreferences `sms_detection`. The key
+  is the first 32 hex characters of SHA-256(salt | normalised payee): `tel:`
+  + the last 10 digits of a phone-number UPI handle, `vpa:` + a named UPI
+  address, or `name:` + the merchant key. The salt is 16 random bytes made
+  once per install. `SmsReceiver` hashes the payee before anything is
+  queued, so phone numbers never reach WorkManager, the review list or the
+  memory; they are shown as "UPI xxxxx1234" (the parser used to drop such
+  payees). The next payment to a remembered payee is saved with that
+  category and words when auto-add is on, ahead of history and built-ins
+  (still needs money moved, an amount, a valid category and a signed-in
+  phone). Editing an SMS entry in the app updates the memory (the phone keeps
+  entry id → payee hash for 90 days, at most 300); Undo drops the memory
+  that entry created; **Forget remembered payees** on the SMS screen clears
+  it. At most 500 payees.
+- **Evening catch-up.** A daily WorkManager job at about 20:30 local time
+  (one unique job per evening, rescheduled by itself and whenever the SMS
+  screen opens) posts "3 payments need a description", opening
+  `/sms/review`, when detection, auto-add and the reminder are on, it runs
+  between 20:00 and 23:00, nothing was shown that day, and the list has items
+  with an amount from the last 7 days. **Evening reminder** toggle on the SMS
+  screen, on by default.
+- **Review list.** Each item has a note field (prefilled with reply words)
+  and up to three category chips (its own guess, then the same quick
+  suggestions) plus "Other…" for the form: one tap or a few words.
+- **Gemini Nano status.** Profile shows why it is not available: available,
+  downloadable, waiting for Wi-Fi, downloading, not supported (with the
+  "Android AICore" version or "AICore not installed"), AICore needs an update
+  (`NEEDS_SYSTEM_UPDATE`, `AICORE_INCOMPATIBLE`, AICore 601), still setting up
+  (AICore 606), no space, busy (`BUSY`, quota, background), Android too old,
+  or error with a numeric code, never an exception message. "Check again"
+  re-checks. Per the ML Kit GenAI device list (checked 2026-11-17) the Prompt
+  API supports Samsung from the Galaxy S25 series on; the S24 series is not
+  listed, so "Not supported on this phone yet" is expected there.
+  `genai-prompt` 1.0.0-beta5 is still the latest.
+- **Privacy.** Unchanged for messages. The table now also carries single
+  note words the household uses consistently (not whole notes), on the phone
+  only. Typed reply words are kept only in the review item until saved, and
+  never logged.
+- Rules out: storing phone numbers or raw UPI ids, cloud or background AI for
+  replies, syncing payee memory between phones (each phone learns its own;
+  the household's history still syncs through entries).
+
+---
+
 ## D-029 · SMS auto-add: native worker, rules + history first, Nano only suggests, review list
 **2026-11-17 · Accepted · owner request · experimental · refines D-005**
 
@@ -67,8 +146,8 @@ entry?" and a prefilled form.
   if it is one listed id of that direction; 5 s timeout). It never saves on its
   own. The library needs Android 8.0 (the app's minSdk is 24): it is merged
   with `tools:overrideLibrary` and only called on API 26+. The model downloads
-  only on an unmetered network. Profile shows its status ("Not available on
-  this phone" where unsupported).
+  only on an unmetered network. Profile shows its status (precise reasons
+  since D-030).
 - **Privacy (unchanged from D-005).** The message text is never stored,
   logged, uploaded or passed to the worker; the reference number is kept only
   as a hash. Nano runs on the phone.

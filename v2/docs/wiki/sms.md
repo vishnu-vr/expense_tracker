@@ -5,12 +5,13 @@ Two modes, both off by default, in Profile › Bank SMS detection:
 | Mode | What happens | Decision |
 |---|---|---|
 | Suggest (detection on) | "Add this entry?" notification; the form opens prefilled; you pick a category and save | D-005 |
-| Auto-add (also on, **experimental**) | Confident entries are saved by themselves with Undo/Change; the rest go to Review detected entries | D-029 |
+| Auto-add (also on, **experimental**) | Confident entries are saved by themselves with Undo/Change; the rest go to Review detected entries and the notification asks "what was this for?" | D-029, D-030 |
 
 The message text is never logged, stored, uploaded or passed on. Auto-add
 keeps only the parsed fields: amount, direction, time, payee, bank and the
 last digits of the account (the UPI/reference number only as a hash, to drop
-repeats).
+repeats). Payee memory keys are salted hashes; phone numbers are never stored
+and are shown as "UPI xxxxx1234" (D-030).
 
 ## Parts
 
@@ -20,15 +21,19 @@ repeats).
 | Parser: suggestion `parse`, auto-add `parseDetails` (templates) | `…/SmsParser.kt` |
 | Merchant key (same as Dart) | `…/MerchantKey.kt` ↔ `app/lib/core/domain/sms_categories.dart`, vectors in `app/test/fixtures/merchant_key_vectors.json` |
 | Toggles, table, 7-day dedupe (`SeenLog`) | `…/SmsPrefs.kt` (SharedPreferences `sms_detection`) |
-| Lookup table + confidence decision | `…/CategoryTable.kt` (`SmsCategoriser`) |
+| Lookup table + confidence decision, quick suggestions, reply guess, note rule | `…/CategoryTable.kt` (`SmsCategoriser`, `QuickSuggest`, `ReplyCategoriser`, `SmsNote`) |
+| Payee memory (salted hashes, entry → payee for edits) | `…/PayeeMemory.kt` |
+| Notification answers (one-tap, Reply) | `…/SmsLabeller.kt` (`LabelLogic`) |
+| Native entry write (worker and notification actions) | `…/SmsEntryWriter.kt` |
+| Evening catch-up (about 20:30) | `…/SmsCatchUpWorker.kt` (`CatchUp`) |
 | Auto-add worker (native Firebase, duplicate check, write) | `…/SmsAutoAddWorker.kt`, `…/NativeFirebase.kt` |
 | Review list (parsed fields, 100 items, 30 days) | `…/SmsReviewQueue.kt` |
-| Notifications (private on the lock screen), Undo | `…/SmsNotifications.kt`, `…/SmsActionReceiver.kt` |
-| Gemini Nano (foreground only) | `…/NanoCategoriser.kt` |
+| Notifications (private on the lock screen), Undo, category buttons, Reply | `…/SmsNotifications.kt`, `…/SmsActionReceiver.kt` |
+| Gemini Nano (foreground only) and its status (`NanoStatusMapper`) | `…/NanoCategoriser.kt` |
 | Platform channel `track_expense/sms` | `…/MainActivity.kt` ↔ `app/lib/core/data/sms_detection.dart` |
-| Table builder and confidence rule (pure Dart) | `app/lib/core/domain/sms_categories.dart` |
+| Table builder, confidence rule, quick suggestions, reply words, note rule (pure Dart) | `app/lib/core/domain/sms_categories.dart` |
 | Settings / review screens | `app/lib/features/sms/sms_screen.dart`, `review_screen.dart` (`/sms/review`) |
-| Kotlin tests | `app/android/app/src/test/…/SmsParserTest.kt`, `SmsTemplatesTest.kt`, `AutoAddLogicTest.kt` |
+| Kotlin tests | `app/android/app/src/test/…/SmsParserTest.kt`, `SmsTemplatesTest.kt`, `AutoAddLogicTest.kt`, `HumanInTheLoopTest.kt` |
 
 ## Auto-add flow
 
@@ -36,20 +41,31 @@ repeats).
 SMS → SmsReceiver: detection + auto-add on, RECEIVE_SMS granted
     → parseDetails: not a completed transaction (promo, "is due", request,
       declined, OTP)? drop.   No amount? fall back to "Add this entry?"
+    → payee identity (tel:/vpa:/name:) → salted hash; the raw value is dropped
     → SeenLog: same reference hash or fingerprint in 7 days? drop
     → expedited SmsAutoAddWorker (parsed fields only)
 Worker → SmsCategoriser with the table the app pushed:
-         history ("expense:swiggy" → food) → canonical merchant's history
-         → built-in default → none
+         remembered payee (D-030) → history ("expense:swiggy" → food)
+         → canonical merchant's history → built-in default → none
        → confident (money moved + amount + payee + rules category + signed in)?
            yes: same user/direction/amount within ±15 min already saved? stop.
                 else write `transactions` with source "sms", note
                 "Swiggy · HDFC XX1234"; notify "Added ₹1,499 expense ·
                 Swiggy → Food" [Undo] [Change → /edit/<id>]
-           no:  add to the review list; notify "Review detected entry" → /sms/review
+           no:  add to the review list; notify "₹150 to Ramesh K — what was
+                this for?" [Transportation] [Food] [Reply] (D-030), or
+                "Review detected entry" → /sms/review when it cannot save
+Buttons → save natively, remember the payee, "Added … · Undo · Change"
+Reply   → words → category from household words / keywords / merchants;
+          all agree: save with note "auto to office · Ramesh K";
+          else "Which category for 'auto'?" + buttons, words kept in the list
+20:30   → "3 payments need a description" → /sms/review (Evening reminder)
 App   → Home banner "N detected entries to review"; the review list asks
         Gemini Nano (if available) for categories of payees the rules could
-        not place; Add saves, tapping opens the form prefilled, swipe dismisses.
+        not place; each row has a note field and quick category chips (one
+        tap saves and remembers the payee), "Other…" or tapping opens the
+        form prefilled, swipe dismisses. Editing an SMS entry later updates
+        the payee memory; "Forget remembered payees" clears it.
 ```
 
 The app pushes the table 2 s after entries change while signed in, and
@@ -62,7 +78,8 @@ ICICI (UPI "debited …; X credited", card "spent using … on X", credit), SBI
 (UPI "debited by … trf to", "credited by", "has a debit by transfer", card
 "spent … at"), Axis (multi-line UPI/P2M, card, UPI/P2A credit), Kotak (UPI
 sent/received, card), generic ("paid Rs … to X via UPI", "towards X",
-account-to-account). Payees that are phone-number UPI handles are not kept.
+account-to-account). Payees that are phone-number UPI handles are shown as
+"UPI xxxxx1234" and used only as a hashed memory key.
 
 Parser rules shared with suggestions (from v1, two fixes): a message passes
 if it has a transaction word (debit, credit, UPI, a/c, txn…) or a currency
@@ -81,12 +98,35 @@ adb emu sms send HDFCBK "Get up to Rs.5000 cashback on your HDFC Credit Card. Cl
 ```
 
 The emulator console sends one line only (no multi-line Axis messages).
+
+Notification questions (D-030) need a table that can write. In a demo build
+you can push a test table with fake Firebase ids into `sms_detection.xml`
+(kill the app process first with `adb shell run-as com.vapps.track_expense
+kill <pid>`, not force-stop); answers then end in "Could not save the entry",
+which still shows the whole flow. Send a payment to a phone-number handle:
+
+```
+adb emu sms send HDFCBK "Rs.150.00 debited from A/c XX1234 on 17-11-26 to VPA 9876543210@ybl (UPI Ref No 555566667777). Not you? Call 18002586161"
+```
+
+Expand it in the shade (`adb shell cmd statusbar expand-notifications`) and
+use the buttons or Reply. Force the evening job with `adb shell cmd
+jobscheduler run -f -n androidx.work.systemjobscheduler com.vapps.track_expense <id>`
+(the id is in `adb shell dumpsys jobscheduler`).
 Signed in to the real project, the first (Swiggy, a built-in merchant) is
 added with Undo/Change; sending it again adds nothing. The second (unknown
 payee) lands in the review list. The promotion is ignored. In a demo build
 all detected entries go to the review list. Inspect the review list with
 `adb shell run-as com.vapps.track_expense cat shared_prefs/sms_detection.xml`.
 Full checklist: [testing.md](testing.md#manual-sms-auto-add-checklist-d-029).
+
+## Gemini Nano status
+
+Profile › Bank SMS detection › On-device AI shows why it is or is not
+available, with "Check again" (D-030). Galaxy S24 series phones are not on
+the ML Kit GenAI Prompt API device list (Samsung starts at the Galaxy S25),
+so they show "Not supported on this phone yet". The small line under it is
+the "Android AICore" version, or "AICore not installed".
 
 ## Play Store
 

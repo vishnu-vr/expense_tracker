@@ -46,6 +46,8 @@ object SmsPrefs {
     private const val AUTO_ADD = "auto_add"
     private const val TABLE = "category_table"
     private const val SEEN = "seen"
+    private const val EVENING = "evening_catch_up"
+    private const val LAST_CATCH_UP = "last_catch_up_day"
     private const val LAST_HASH = "last_hash"
     private const val LAST_AT = "last_at"
     private const val DEDUPE_WINDOW_MS = 30_000L
@@ -63,6 +65,16 @@ object SmsPrefs {
     fun isAutoAdd(context: Context) = prefs(context).getBoolean(AUTO_ADD, false)
 
     fun setAutoAdd(context: Context, on: Boolean) = prefs(context).edit().putBoolean(AUTO_ADD, on).apply()
+
+    /** Evening catch-up reminder (D-030). On by default; only acts while auto-add is on. */
+    fun isEveningOn(context: Context) = prefs(context).getBoolean(EVENING, true)
+
+    fun setEveningOn(context: Context, on: Boolean) = prefs(context).edit().putBoolean(EVENING, on).apply()
+
+    /** The day ("2026-11-17") the catch-up last notified, so it shows at most once a day. */
+    fun lastCatchUpDay(context: Context): String? = prefs(context).getString(LAST_CATCH_UP, null)
+
+    fun setLastCatchUpDay(context: Context, day: String) = prefs(context).edit().putString(LAST_CATCH_UP, day).apply()
 
     fun table(context: Context): CategoryTable = CategoryTable.decode(prefs(context).getString(TABLE, null))
 

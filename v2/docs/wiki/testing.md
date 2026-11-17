@@ -66,7 +66,7 @@ emulator's microphone is unreliable; demo mode uses a scripted fake voice).
    with amounts as digits. On a phone without Malayalam speech, the row and
    the Talk panel say English is used.
 
-## Manual SMS auto-add checklist (D-029)
+## Manual SMS auto-add checklist (D-029, D-030)
 
 Run on a real Android phone with a build against the live project
 (`--dart-define=BACKEND=firebase`), signed in. Profile › Bank SMS detection:
@@ -89,9 +89,28 @@ an emulator signed in to the live project (see [sms.md](sms.md)).
    syncs (household notification) when back online.
 8. A promotion, a bill reminder ("due on"), a collect request, an OTP: nothing.
 9. Auto-add off: the old "Add this entry?" suggestion comes back unchanged.
-10. On-device AI row: note the status and the phone model; on a supported
+10. On-device AI row: note the status, the small line under it (AICore
+    version or code) and the phone model; tap "Check again". On a supported
     phone, open the review list and check unknown payees get a suggested
     category ("suggested by on-device AI"), never saved by themselves.
+11. Pay a person by UPI (phone-number id): the notification reads "₹… to UPI
+    xxxxx1234 — what was this for?" (or the bank's name for them) with two
+    category buttons and Reply; the lock screen shows only "A payment to
+    describe". Tap a button: "Added …" with Undo/Change; the entry has the
+    SMS badge and note "UPI xxxxx1234 · BANK XX1234".
+12. Pay the same person again: it is added on its own with the same category.
+13. Reply "auto to office" to another one: saved as Transportation with note
+    "auto to office · …". Reply "for ramu": the notification asks "Which
+    category for 'for ramu'?" with buttons; ignore it and the review list
+    shows "for ramu" in the note field.
+14. In the review list, type a few words and tap a chip: saved with the words
+    first in the note. Change the category of an SMS entry in the Ledger, then
+    pay that payee again: the new category is used.
+15. "Forget remembered payees": the count goes to none and the next payment
+    to a remembered person is asked about again.
+16. Leave an item unlabelled and wait for 20:30: "1 payment needs a
+    description" opens the review list; turning Evening reminder off stops
+    it.
 
 ## Known gaps
 
@@ -106,4 +125,7 @@ an emulator signed in to the live project (see [sms.md](sms.md)).
   saved entries have only been tested with unit tests and fakes: the emulator
   run (receiver → worker → review list, dedupe, promo/OTP rejection, deep
   link) used a demo build because signing in needs the owner's account.
-  Gemini Nano has not run on a supported phone yet.
+  Gemini Nano has not run on a supported phone yet. The D-030 notification
+  questions, reply guess, payee memory and evening job were run on the
+  emulator with a fake table, so every save ended in "Could not save the
+  entry"; a real save from a notification has not been observed.

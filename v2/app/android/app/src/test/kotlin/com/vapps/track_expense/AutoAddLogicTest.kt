@@ -194,15 +194,19 @@ class AutoAddLogicTest {
 
     @Test
     fun unsupportedNanoNeverAnswers() = kotlinx.coroutines.runBlocking {
-        assertEquals("unavailable", UnsupportedNano.status())
+        assertEquals(NanoState(NanoStatusMapper.ANDROID_TOO_OLD), UnsupportedNano.status())
         assertNull(UnsupportedNano.categorise("Swiggy", "expense", cats))
     }
 
     @Test
     fun workerDataRoundTrip() {
         val p = SmsParser.parseDetails("AD-HDFCBK", "Rs.1,499.00 debited from A/c XX1234 to VPA swiggy@icici (UPI Ref No 123456789012).")!!
-        val data = SmsAutoAddWorker.toData(p, 1_700_000_000_000L)
-        assertEquals(p, SmsAutoAddWorker.fromData(data))
+        val hashed = p.withHashedPayee("salt")
+        val data = SmsAutoAddWorker.toData(hashed, 1_700_000_000_000L)
+        assertEquals(hashed, SmsAutoAddWorker.fromData(data))
+        // The payee travels only as its salted hash.
+        assertNull(hashed.payeeKey)
+        assertFalse(data.keyValueMap.values.any { it.toString().contains("swiggy@icici") })
         // Only parsed fields travel to the worker.
         assertFalse(data.keyValueMap.values.any { it.toString().contains("debited") })
     }

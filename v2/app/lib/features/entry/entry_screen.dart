@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -147,14 +149,20 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
       source: base?.source ?? widget.prefillSource,
     );
     try {
-      await ref.read(householdRepositoryProvider).saveTransaction(tx);
+      final docId = await ref.read(householdRepositoryProvider).saveTransaction(tx);
       final reviewId = widget.reviewId;
+      final sms = ref.read(smsDetectionProvider);
+      // Local calls on the phone, not server round trips. The phone remembers
+      // the payee's category (D-030).
       if (reviewId != null) {
-        // A local call on the phone, not a server round trip.
         try {
-          await ref.read(smsDetectionProvider).removeFromQueue(reviewId);
+          await sms.labelReviewItem(reviewId, categoryId: tx.categoryId, note: tx.note, docId: docId);
         } catch (_) {}
         ref.invalidate(smsReviewQueueProvider);
+      } else if (_isEdit && tx.fromSms) {
+        unawaited(sms
+            .entryEdited(docId, categoryId: tx.categoryId, type: tx.type.name, note: tx.note)
+            .catchError((_) {}));
       }
       if (!mounted) return;
       HapticFeedback.mediumImpact();
