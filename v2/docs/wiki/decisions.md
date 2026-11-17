@@ -9,6 +9,79 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-032 · Category suggestions: Cloud or a downloaded on-device model, always approved by the owner
+**2026-11-17 · Accepted · owner request · experimental · refines D-029, D-030, D-031**
+
+SMS auto-add could not place unfamiliar shops or vague replies, and Gemini
+Nano is not supported on the owner's Galaxy S24 Ultra. SMS settings gain
+**Category suggestions**: **Off** (default), **Cloud**, **On-device: Gemma 3
+1B**, or **Gemini Nano** (listed only on phones that support it).
+- **What is asked.** Only payees that rules, history and payee memory cannot
+  place, and reply words whose guess was unclear. Only the payee name or the
+  reply words (at most 80 characters) are used; phone-number payees ("UPI
+  xxxxx1234") are never sent. Never the SMS, amount, account or date.
+- **AI never saves.** An entry whose category came from a model (Cloud, Gemma
+  or Nano) waits in Review detected entries as "Suggested by AI · <model>"
+  (`ReviewItem.categorySource = "ai"`, `aiModel`). Notification: "₹420 to BLUE
+  TOKAI — AI suggests Food" with **Approve**, **Change** (the form,
+  prefilled) and **Reply**. The review list has **Approve** on each AI row and
+  **Approve all AI suggestions (N)** with a confirmation naming the count.
+  Approve is a user-confirmed save (`SmsSave.NOTIFICATION_ANSWER` natively, the
+  app's own save in the list): no `autoAdded`, the entry shows **SMS**, and it
+  teaches payee memory, so that payee needs no AI next time. Rules, history
+  and payee-memory saves are unchanged (D-031). Totals, budgets, insights and
+  assistant tools are unchanged.
+- **Cloud.** New callable `suggestSmsCategory` (asia-south1, signed in,
+  member of a home): `{ items: [{ text ≤ 80, type, kind? }] ≤ 5, model? }` →
+  `{ suggestions: (id|null)[], model }`. The server loads the household's
+  categories, asks the model for one id per numbered line and keeps only ids
+  that exist for the item's direction; the phone checks again. D-027 keys,
+  but **Flash-Lite is the default** here (missing or unknown key →
+  Flash-Lite). The text is never logged (counts, model and tokens only).
+  Usage goes into `aiUsage` as `smsSuggestions`, `smsInputTokens`,
+  `smsOutputTokens` (apart from the assistant's counts; admin dashboard shows
+  them in the assistant section). At most 100 calls per user per India-time
+  day (`aiRateLimits/{day}_{uid}`, server only, counted before the model
+  runs) → `resource-exhausted`. The worker calls it with the native
+  `firebase-functions` SDK (same BoM).
+- **On-device Gemma.** Google's current on-device LLM runtime for Android is
+  **LiteRT-LM** (`com.google.ai.edge.litertlm:litertlm-android` 0.19.1; the
+  MediaPipe LLM Inference API is the older path). Model: Gemma 3 1B IT int4,
+  `gemma3-1b-it-int4.litertlm` from `litert-community/Gemma3-1B-IT` (584,417,280
+  bytes), hosted in the project's default Storage bucket
+  (`expense-tracker-v2-5c9fa.firebasestorage.app`, asia-south1) with a
+  manifest `models/gemma3-1b-it-int4.json` (`{file, size, sha256}`) so a new
+  upload needs no release. Download: a WorkManager job that runs only on an
+  unmetered network with storage not low, as a foreground `dataSync` job with
+  progress; Firebase Storage REST with the user's ID token (rules: signed-in
+  read of `models/**`, no client writes); resumes with HTTP Range; checks size
+  and SHA-256 before the file is used; app-private `files/models/`; Delete
+  removes it and turns the setting Off. Inference: CPU backend, loaded
+  lazily per batch (only with ≥ 4 GB RAM and ≥ 1 GB free), one model at a
+  time, freed after use, 45 s budget; same prompt and answer check as Nano
+  (`NanoPrompt`, which now also accepts the category's exact name).
+  Gemma is provided under and subject to the Gemma Terms of Use
+  (ai.google.dev/gemma/terms); the notice is on the download option.
+- **Where it runs.** Cloud and Gemma run in the background worker (and the
+  reply path via a small expedited `SmsSuggestWorker`, outside the
+  notification receiver's 10 s); Nano only while the review list is open
+  (AICore blocks background use). With Off, the review list no longer asks
+  Nano by itself (this replaces the always-on Nano suggestion of D-029). Any
+  failure, timeout, missing file, low memory, rate limit or no network means
+  no suggestion, and the old "what was this for?" question.
+- **Interface.** Kotlin `CategorySuggester` with `NoSuggester`,
+  `CloudSuggester`, `GemmaSuggester`, `NanoSuggester`; `Suggesters.effective`
+  picks what can run (pure, tested).
+- **Costs.** Flash-Lite at about 300 input and 10 output tokens per call is
+  well under a paisa. The model download is about 0.58 GB of Storage egress
+  per install (about ₹5–8 at Google's published Asia egress rates); Storage
+  at rest is a few rupees a month.
+- Rules out: sending SMS text or amounts to any model, saving AI-categorised
+  entries without approval, bundling the model in the APK, and ungated
+  third-party copies of the model.
+
+---
+
 ## D-031 · Auto-added entries are marked until their owner checks them
 **2026-11-17 · Accepted · owner request · experimental · refines D-029, D-030**
 

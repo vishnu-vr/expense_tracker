@@ -3,10 +3,12 @@
 //   node scripts/smoke-live.mjs [projectId]        (default: expense-tracker-v2-5c9fa)
 //
 // Checks: sign-up, security rules (allow + deny), the transaction trigger
-// (notification + embedding), that clients cannot read embeddings, and one
-// real askAgent answer (a small, billed model call).
+// (notification + embedding), that clients cannot read embeddings, one
+// real askAgent answer (a small, billed model call), one SMS category
+// suggestion for a made-up payee (D-032), and the Storage rules for models/.
 // Creates one auth user, users/{uid}, homes/{id}, 3 transactions and their
-// side effects, then deletes all of it. Needs `firebase login` with access to
+// side effects (incl. aiUsage and the user's aiRateLimits counter), then
+// deletes all of it. Needs `firebase login` with access to
 // the project. Reads the public API key from app/lib/firebase_options.dart.
 import { readFileSync } from 'node:fs';
 const P = process.argv.slice(2).find((a) => !a.startsWith('--')) ?? 'expense-tracker-v2-5c9fa';
@@ -106,6 +108,40 @@ try {
   const clientEmb = await as('GET', `transactionEmbeddings/${txId}`);
   check('clients cannot read embeddings', clientEmb.status === 403);
 
+  // SMS category suggestion (D-032): a made-up payee name only, never a message.
+  const t2 = Date.now();
+  const sug = await fetch(`${FN}/suggestSmsCategory`, { method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { items: [{ text: 'BLUE TOKAI COFFEE', type: 'expense' }, { text: 'auto to office', type: 'expense', kind: 'words' }] } }) }).then(j);
+  const ids = sug.body.result?.suggestions ?? [];
+  check('SMS category suggestion answered', sug.status === 200 && ids.length === 2 && sug.body.result?.model === 'Gemini Flash-Lite',
+    `${((Date.now() - t2) / 1000).toFixed(1)}s, ${sug.status}, ${JSON.stringify(ids)}${sug.body.error ? ' ' + JSON.stringify(sug.body.error).slice(0, 200) : ''}`);
+  check('SMS suggestion picks plausible categories', ids[0] === 'food' && ids[1] === 'transportation', JSON.stringify(ids));
+  const badSug = await fetch(`${FN}/suggestSmsCategory`, { method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { items: [{ text: 'x'.repeat(81), type: 'expense' }] } }) }).then(j);
+  check('SMS suggestion rejects long text', badSug.status === 400, `${badSug.status}`);
+  const anonSug = await fetch(`${FN}/suggestSmsCategory`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { items: [{ text: 'BLUE TOKAI COFFEE', type: 'expense' }] } }) }).then(j);
+  check('SMS suggestion needs sign-in', anonSug.status === 401, `${anonSug.status}`);
+  const limits = await query('aiRateLimits', 'uid', uid);
+  check('SMS suggestion counted per user per day', limits.length === 1 && Number(limits[0].fields?.smsSuggestCalls?.integerValue) === 1, // one call (2 items); the rejected one is not counted
+    `${limits.length} docs`);
+  const sugRoll = await query('aiUsage', 'homeId', homeId);
+  check('SMS suggestions counted in the rollup', Number(sugRoll[0]?.fields?.smsSuggestions?.integerValue) === 2,
+    `${sugRoll[0]?.fields?.smsSuggestions?.integerValue ?? 0} items`);
+
+  // Storage rules (D-032): signed-in users may read models/ (404 = allowed, not uploaded), nobody else.
+  const bucket = readFileSync(new URL('../../app/lib/firebase_options.dart', import.meta.url), 'utf8').match(/storageBucket: '([^']+)'/)[1];
+  const manifestUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent('models/gemma3-1b-it-int4.json')}?alt=media`;
+  const signedIn = await fetch(manifestUrl, { headers: { Authorization: `Firebase ${token}` } });
+  check('Storage: signed-in users may read models/', signedIn.status === 200 || signedIn.status === 404, `${signedIn.status}`);
+  const signedOut = await fetch(manifestUrl);
+  check('Storage: signed-out reads are denied', signedOut.status === 403 || signedOut.status === 401, `${signedOut.status}`);
+  const upload = await fetch(`https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodeURIComponent('models/smoke.txt')}`, {
+    method: 'POST', headers: { Authorization: `Firebase ${token}`, 'Content-Type': 'text/plain' }, body: 'x' });
+  check('Storage: clients cannot upload', upload.status === 403, `${upload.status}`);
+
   const t0 = Date.now();
   const ask = await fetch(`${FN}/askAgent`, { method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -138,7 +174,8 @@ try {
     const tokens = Number(u.inputTokens?.integerValue ?? 0) + Number(u.outputTokens?.integerValue ?? 0);
     check('thread records usage', q === 2 && tokens > 0, `${q} questions, ${tokens} tokens`);
     const roll = await query('aiUsage', 'homeId', homeId);
-    check('monthly usage rollup written', roll.length === 1 && Number(roll[0].fields?.questions?.integerValue) === 2);
+    check('monthly usage rollup written', roll.length === 1 && Number(roll[0].fields?.questions?.integerValue) === 2
+      && Number(roll[0].fields?.smsSuggestions?.integerValue) === 2);
   }
 } finally {
   await cleanup();
@@ -179,6 +216,7 @@ async function cleanup() {
   const users = (await admin('POST', `https://identitytoolkit.googleapis.com/v1/projects/${P}/accounts:query`,
     { returnUserInfo: true })).body.userInfo ?? [];
   for (const u of users.filter((u) => u.email?.endsWith('@example.invalid'))) {
+    for (const r of await query('aiRateLimits', 'uid', u.localId)) await del(path(r));
     await del(`users/${u.localId}`);
     await admin('POST', `https://identitytoolkit.googleapis.com/v1/projects/${P}/accounts:delete`, { localId: u.localId });
   }

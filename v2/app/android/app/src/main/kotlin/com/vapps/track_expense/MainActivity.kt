@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : FlutterActivity() {
     private var pendingPermissionResult: MethodChannel.Result? = null
@@ -90,7 +91,20 @@ class MainActivity : FlutterActivity() {
                         call.argument<String>("id")?.let { SmsReviewQueue.remove(this, it) }
                         result.success(SmsReviewQueue.all(this).map { it.toMap() })
                     }
-                    "suggestCategories" -> scope.launch { result.success(suggestWithNano()) }
+                    "suggestCategories" -> scope.launch { result.success(suggestWithAi()) }
+                    // Category suggestions (D-032): Off, Cloud, Gemma on the phone or Gemini Nano.
+                    "setAiMode" -> {
+                        SmsPrefs.setAiMode(this, AiMode.fromWire(call.argument<String>("mode")))
+                        result.success(status())
+                    }
+                    "setCloudModel" -> {
+                        SmsPrefs.setCloudModel(this, call.argument<String>("model"))
+                        result.success(status())
+                    }
+                    "gemmaStatus" -> scope.launch { result.success(gemma { }) }
+                    "gemmaDownload" -> scope.launch { result.success(gemma { GemmaModel.download(this@MainActivity) }) }
+                    "gemmaCancel" -> scope.launch { result.success(gemma { GemmaModel.cancel(this@MainActivity) }) }
+                    "gemmaDelete" -> scope.launch { result.success(gemma { GemmaModel.delete(this@MainActivity) }) }
                     "nanoStatus" -> scope.launch { result.success(nano.downloadIfUnmetered().toMap()) }
                     "requestPermissions" -> requestPermissions(result)
                     "openAppSettings" -> {
@@ -113,19 +127,29 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Gemini Nano runs only while the app is in the foreground, so payees the
-     * rules could not place get a suggested category when the review list is
-     * open. A suggestion only preselects; the user still taps Add.
+     * The review list is open: the chosen model (D-032; Gemini Nano only
+     * runs in the foreground) suggests categories for up to 5 entries the
+     * rules could not place or whose reply words were unclear. A suggestion
+     * only preselects; the user approves it.
      */
-    private suspend fun suggestWithNano(): List<Map<String, Any?>> {
-        val categories = SmsPrefs.table(this).categories
-        if (categories.isEmpty()) return SmsReviewQueue.all(this).map { it.toMap() }
-        val open = SmsReviewQueue.all(this).filter { it.categoryId == null && it.merchant != null }
-        for (item in open.take(5)) {
-            val id = nano.categorise(item.merchant!!, item.type, categories) ?: continue
-            SmsReviewQueue.setSuggestion(this, item.id, id, CategorySource.NANO.wire)
+    private suspend fun suggestWithAi(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+        val table = SmsPrefs.table(this@MainActivity)
+        val open = AiSuggest.candidates(SmsReviewQueue.all(this@MainActivity))
+        if (table.categories.isNotEmpty() && open.isNotEmpty()) {
+            val suggester = Suggesters.create(this@MainActivity, table, foreground = true) { nano }
+            for (item in AiSuggest.apply(open, table.categories, suggester)) {
+                if (item.isAiSuggestion && open.none { it === item }) {
+                    SmsReviewQueue.setSuggestion(this@MainActivity, item.id, item.categoryId, item.categorySource, item.aiModel)
+                }
+            }
         }
-        return SmsReviewQueue.all(this).map { it.toMap() }
+        SmsReviewQueue.all(this@MainActivity).map { it.toMap() }
+    }
+
+    /** Runs [action] off the main thread, then returns the on-device model's state. */
+    private suspend fun gemma(action: () -> Unit): Map<String, Any?> = withContext(Dispatchers.IO) {
+        action()
+        GemmaModel.status(this@MainActivity)
     }
 
     private fun granted(permission: String) =
@@ -136,6 +160,8 @@ class MainActivity : FlutterActivity() {
         "autoAdd" to SmsPrefs.isAutoAdd(this),
         "evening" to SmsPrefs.isEveningOn(this),
         "rememberedPayees" to PayeeMemory.count(this),
+        "aiMode" to SmsPrefs.aiMode(this).wire,
+        "cloudModel" to SmsPrefs.cloudModel(this),
         "smsGranted" to granted(Manifest.permission.RECEIVE_SMS),
         "notificationsGranted" to
             (Build.VERSION.SDK_INT < 33 || granted(Manifest.permission.POST_NOTIFICATIONS)),

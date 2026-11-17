@@ -479,6 +479,7 @@ class DetectedEntry {
     this.categoryId,
     this.categorySource,
     this.words,
+    this.aiModel,
   });
 
   final String id;
@@ -491,11 +492,17 @@ class DetectedEntry {
   /// Suggested category, if any.
   final String? categoryId;
 
-  /// `history`, `builtin`, `memory` or `nano` (on-device AI).
+  /// `history`, `builtin`, `memory`, or `ai` / `nano` (a model's suggestion, D-032).
   final String? categorySource;
 
   /// What the user typed in a notification reply, if anything.
   final String? words;
+
+  /// The model behind an AI suggestion, e.g. "Gemini Flash-Lite".
+  final String? aiModel;
+
+  /// The category came from AI and waits for the user's approval (D-032).
+  bool get isAiSuggestion => categoryId != null && (categorySource == 'ai' || categorySource == 'nano');
 
   /// "Swiggy · HDFC XX1234", or "auto to office · Ramesh K" with [words].
   String? get note => smsNote(words: words, merchant: merchant, account: account);
@@ -516,6 +523,7 @@ class DetectedEntry {
       categoryId: raw['categoryId'] as String?,
       categorySource: raw['categorySource'] as String?,
       words: raw['words'] as String?,
+      aiModel: raw['aiModel'] as String? ?? (raw['categorySource'] == 'nano' ? 'Gemini Nano' : null),
     );
   }
 }

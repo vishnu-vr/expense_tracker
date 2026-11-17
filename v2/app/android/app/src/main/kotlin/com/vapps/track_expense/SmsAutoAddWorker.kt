@@ -84,13 +84,17 @@ class SmsAutoAddWorker(context: Context, params: WorkerParameters) : CoroutineWo
      * notification asks what the payment was for, with category buttons and
      * Reply (D-030); otherwise it just links to the list.
      */
-    private fun toReview(context: Context, table: CategoryTable, sms: ParsedSms, receivedAt: Long, suggestion: Placement?) {
-        val item = ReviewItem.from(sms, receivedAt, suggestion)
+    private suspend fun toReview(context: Context, table: CategoryTable, sms: ParsedSms, receivedAt: Long, suggestion: Placement?) {
+        val plain = ReviewItem.from(sms, receivedAt, suggestion)
+        // Nothing placed it: the chosen model may suggest a category (D-032).
+        // It only preselects; the entry waits for the user's Approve.
+        val item = if (suggestion == null) AiSuggest.one(context, table, plain) ?: plain else plain
         SmsReviewQueue.add(context, item)
-        if (table.canWrite && sms.amount != null) {
-            SmsNotifications.ask(context, item, SmsLabeller.buttons(table, item, emptyList(), hourOf(receivedAt)))
-        } else {
-            SmsNotifications.review(context, sms, receivedAt)
+        when {
+            table.canWrite && sms.amount != null && item.isAiSuggestion -> SmsNotifications.askAi(context, item)
+            table.canWrite && sms.amount != null ->
+                SmsNotifications.ask(context, item, SmsLabeller.buttons(table, item, emptyList(), hourOf(receivedAt)))
+            else -> SmsNotifications.review(context, sms, receivedAt)
         }
     }
 

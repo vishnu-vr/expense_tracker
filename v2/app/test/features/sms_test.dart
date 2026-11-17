@@ -41,6 +41,21 @@ class _FakeSms {
             state = {...state, 'rememberedPayees': 0};
           case 'nanoStatus':
             return nano.length > 1 ? nano.removeAt(0) : nano.first;
+          case 'setAiMode':
+            state = {...state, 'aiMode': args['mode'] as String};
+          case 'setCloudModel':
+            state = {...state, 'cloudModel': args['model'] as String};
+          case 'gemmaStatus':
+            return gemma.length > 1 ? gemma.removeAt(0) : gemma.first;
+          case 'gemmaDownload':
+            gemma = [...gemmaAfterDownload];
+            return gemma.length > 1 ? gemma.removeAt(0) : gemma.first;
+          case 'gemmaCancel' || 'gemmaDelete':
+            if (call.method == 'gemmaDelete' && state['aiMode'] == 'gemma') state = {...state, 'aiMode': 'off'};
+            gemma = [
+              {'state': 'not-downloaded', 'total': 584417280},
+            ];
+            return gemma.first;
         }
         return state;
       },
@@ -58,6 +73,16 @@ class _FakeSms {
   List<Object?> nano = [
     {'status': 'unsupported', 'code': 'AICore not installed'},
   ];
+  /// Answers to `gemmaStatus`, in order; the last one repeats.
+  List<Object?> gemma = [
+    {'state': 'not-downloaded', 'total': 584417280},
+  ];
+
+  /// What `gemmaStatus` answers after `gemmaDownload`.
+  List<Object?> gemmaAfterDownload = [
+    {'state': 'downloading', 'done': 245500000, 'total': 584417280},
+    {'state': 'ready', 'done': 584417280, 'total': 584417280},
+  ];
   String? table;
   var state = <String, Object?>{
     'enabled': true,
@@ -65,6 +90,19 @@ class _FakeSms {
     'smsGranted': true,
     'notificationsGranted': true,
   };
+}
+
+Map<String, Object?> _aiItem(String id, String merchant, double amount, String category, {String model = 'Gemini Flash-Lite'}) => {
+      ..._item(id, merchant, amount),
+      'categoryId': category,
+      'categorySource': 'ai',
+      'aiModel': model,
+    };
+
+Future<void> _openSmsSettings(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Profile and settings'));
+  await tester.pumpAndSettle();
+  await tapVisible(tester, find.text('Bank SMS detection'));
 }
 
 Map<String, Object?> _item(String id, String? merchant, double amount, {String? category}) => {
@@ -138,7 +176,8 @@ void main() {
     await tester.tap(find.byTooltip('Profile and settings'));
     await tester.pumpAndSettle();
     await tapVisible(tester, find.text('Bank SMS detection'));
-    expect(find.text('On-device AI'), findsNothing);
+    expect(find.text('Gemini Nano'), findsNothing);
+    expect(find.text('CATEGORY SUGGESTIONS'), findsNothing);
 
     await tester.tap(find.text('Auto-add confident entries'));
     await tester.pumpAndSettle();
@@ -295,13 +334,16 @@ void main() {
     expect(find.text("Update 'Android AICore' in Play Store, then check again"), findsOneWidget);
     expect(find.text('AICore 0.9'), findsOneWidget);
     await tapVisible(tester, find.text('Check again'));
-    expect(find.text('Waiting for Wi-Fi to download the model'), findsOneWidget);
+    // Now supported (only waiting for Wi-Fi): Nano becomes a choice (D-032).
+    expect(find.textContaining('Waiting for Wi-Fi to download the model'), findsOneWidget);
     expect(find.text('AICore 0.9'), findsNothing);
 
+    await tester.scrollUntilVisible(find.text('Evening reminder'), -250, scrollable: find.byType(Scrollable).first);
     await tapVisible(tester, find.text('Evening reminder'));
     expect(fake.calls, contains('setEveningReminder'));
     expect(fake.state['evening'], false);
 
+    await tester.scrollUntilVisible(find.textContaining('3 payees are added on their own'), 250, scrollable: find.byType(Scrollable).first);
     expect(find.textContaining('3 payees are added on their own'), findsOneWidget);
     await tapVisible(tester, find.text('Forget remembered payees'));
     expect(find.text('Forget remembered payees?'), findsOneWidget);
@@ -309,5 +351,144 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.calls, contains('forgetPayees'));
     expect(find.textContaining('None yet'), findsOneWidget);
+  });
+
+  testWidgets('category suggestions: Off by default, Cloud with Flash-Lite or Flash, Nano only where supported (D-032)',
+      (tester) async {
+    final fake = _FakeSms(tester);
+    fake.state = {...fake.state, 'autoAdd': true};
+    await pumpApp(tester);
+    await _openSmsSettings(tester);
+
+    await tester.scrollUntilVisible(find.text('CATEGORY SUGGESTIONS'), 250, scrollable: find.byType(Scrollable).first);
+    expect(find.textContaining('never saved by itself'), findsOneWidget);
+    expect(tester.getSemantics(find.text('Off')), isSemantics(isChecked: true, isInMutuallyExclusiveGroup: true));
+    expect(tester.getSemantics(find.text('Cloud')), isSemantics(isChecked: false));
+    // Nano is not supported on this phone: a status line with Check again, not a choice.
+    expect(find.text('Not supported on this phone yet'), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_unchecked), findsNWidgets(2)); // Cloud and Gemma
+
+    await tapVisible(tester, find.text('Cloud'));
+    expect(fake.state['aiMode'], 'cloud');
+    expect(find.text('Sends only the payee name or your reply words, never the SMS.'), findsOneWidget);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Flash-Lite')).selected, isTrue);
+    await tapVisible(tester, find.widgetWithText(ChoiceChip, 'Flash'));
+    expect(fake.calls, contains('setCloudModel'));
+    expect(fake.state['cloudModel'], 'flash');
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Flash')).selected, isTrue);
+
+    await tapVisible(tester, find.text('Off'));
+    expect(fake.state['aiMode'], 'off');
+    expect(find.byType(ChoiceChip), findsNothing);
+  });
+
+  testWidgets('category suggestions: Gemini Nano is a choice when the phone supports it', (tester) async {
+    final fake = _FakeSms(tester);
+    fake.state = {...fake.state, 'autoAdd': true};
+    fake.nano = [
+      {'status': 'available'},
+    ];
+    await pumpApp(tester);
+    await _openSmsSettings(tester);
+    await tapVisible(tester, find.text('Gemini Nano'));
+    expect(fake.state['aiMode'], 'nano');
+    expect(find.textContaining('while the review list is open'), findsOneWidget);
+  });
+
+  testWidgets('on-device Gemma: download on Wi-Fi with progress, ready, delete with confirmation, terms notice',
+      (tester) async {
+    final fake = _FakeSms(tester);
+    fake.state = {...fake.state, 'autoAdd': true};
+    await pumpApp(tester);
+    await _openSmsSettings(tester);
+
+    await tapVisible(tester, find.text('On-device: Gemma 3 1B'));
+    expect(fake.state['aiMode'], 'gemma');
+    expect(find.text('Nothing leaves the phone.'), findsOneWidget);
+    expect(find.text('Not downloaded. About 557 MB, on Wi-Fi.'), findsOneWidget);
+    expect(find.text('Suggestions start once the model is on the phone.'), findsOneWidget);
+    expect(find.textContaining('Gemma Terms of Use found at ai.google.dev/gemma/terms'), findsOneWidget);
+
+    await tapVisible(tester, find.text('Download on Wi-Fi'));
+    expect(fake.calls, contains('gemmaDownload'));
+    expect(find.text('Downloading: 42% of 557 MB'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.text('Cancel download'), findsOneWidget);
+
+    // The screen checks again while downloading.
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.text('Ready on this phone (557 MB)'), findsOneWidget);
+    expect(find.text('Suggestions start once the model is on the phone.'), findsNothing);
+
+    await tapVisible(tester, find.text('Delete'));
+    expect(find.text('Delete the on-device model?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Delete').last);
+    await tester.pumpAndSettle();
+    expect(fake.calls, contains('gemmaDelete'));
+    expect(fake.state['aiMode'], 'off');
+    expect(find.text('Not downloaded. About 557 MB, on Wi-Fi.'), findsOneWidget);
+  });
+
+  testWidgets('on-device Gemma: "Model not available yet" offers no download', (tester) async {
+    final fake = _FakeSms(tester);
+    fake.state = {...fake.state, 'autoAdd': true, 'aiMode': 'gemma'};
+    fake.gemma = [
+      {'state': 'not-available', 'total': 584417280},
+    ];
+    await pumpApp(tester);
+    await _openSmsSettings(tester);
+    await tester.scrollUntilVisible(find.text('Model not available yet'), 250, scrollable: find.byType(Scrollable).first);
+    expect(find.text('Download on Wi-Fi'), findsNothing);
+  });
+
+  testWidgets('review: AI suggestions are labelled, saved only on Approve, and Approve all confirms the count',
+      (tester) async {
+    final fake = _FakeSms(tester, queue: [
+      _aiItem('r1', 'BLUE TOKAI COFFEE', 420, 'food'),
+      _aiItem('r2', 'UBER INDIA', 310, 'transportation', model: 'Gemma 3 1B'),
+      _aiItem('r3', 'CHAAYOS', 180, 'food'),
+      _item('r4', 'Ramesh Stores', 320),
+    ]);
+    await pumpApp(tester, size: const Size(390, 1800));
+    await tester.tap(find.text('4 detected entries to review'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Food · Suggested by AI · Gemini Flash-Lite'), findsNWidgets(2));
+    expect(find.text('Transportation · Suggested by AI · Gemma 3 1B'), findsOneWidget);
+    expect(find.text('What was it for?'), findsOneWidget);
+    // Opening the list saves nothing by itself.
+    expect(fake.labels, isEmpty);
+    expect(find.widgetWithText(FilledButton, 'Approve'), findsNWidgets(3));
+
+    // Approve one: a normal confirmed save that teaches payee memory.
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve').first);
+    await tester.pumpAndSettle();
+    expect(fake.labels.single, containsPair('id', 'r1'));
+    expect(fake.labels.single, containsPair('categoryId', 'food'));
+    await toastGone(tester);
+
+    await tester.tap(find.text('Approve all AI suggestions (2)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Approve 2 AI suggestions?'), findsOneWidget);
+    await tester.tap(find.text('Approve 2'));
+    await tester.pumpAndSettle();
+    expect(fake.labels.map((l) => l['id']), ['r1', 'r2', 'r3']);
+    expect(fake.labels.map((l) => l['categoryId']), ['food', 'transportation', 'food']);
+    expect(find.text('2 entries added'), findsOneWidget);
+    expect(find.text('Ramesh Stores'), findsOneWidget);
+    expect(find.textContaining('Approve all'), findsNothing);
+    await toastGone(tester);
+
+    // Approved entries are the user's own: "SMS", never "Auto".
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ledger'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('BLUE TOKAI COFFEE · HDFC XX1234'));
+    await tester.pumpAndSettle();
+    expect(find.text('Added from a bank message'), findsOneWidget);
+    expect(find.text('Looks right'), findsNothing);
+    expect(find.textContaining('Not checked yet'), findsNothing);
   });
 }

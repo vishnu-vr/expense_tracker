@@ -48,6 +48,8 @@ object SmsPrefs {
     private const val SEEN = "seen"
     private const val EVENING = "evening_catch_up"
     private const val LAST_CATCH_UP = "last_catch_up_day"
+    private const val AI_MODE = "ai_mode"
+    private const val CLOUD_MODEL = "ai_cloud_model"
     private const val LAST_HASH = "last_hash"
     private const val LAST_AT = "last_at"
     private const val DEDUPE_WINDOW_MS = 30_000L
@@ -75,6 +77,16 @@ object SmsPrefs {
     fun lastCatchUpDay(context: Context): String? = prefs(context).getString(LAST_CATCH_UP, null)
 
     fun setLastCatchUpDay(context: Context, day: String) = prefs(context).edit().putString(LAST_CATCH_UP, day).apply()
+
+    /** "Category suggestions" (D-032): off (default), cloud, gemma or nano. */
+    fun aiMode(context: Context): AiMode = AiMode.fromWire(prefs(context).getString(AI_MODE, null))
+
+    fun setAiMode(context: Context, mode: AiMode) = prefs(context).edit().putString(AI_MODE, mode.wire).apply()
+
+    /** The D-027 model key for Cloud suggestions; Flash-Lite unless the user picked Flash. */
+    fun cloudModel(context: Context): String = CloudModel.clean(prefs(context).getString(CLOUD_MODEL, null))
+
+    fun setCloudModel(context: Context, key: String?) = prefs(context).edit().putString(CLOUD_MODEL, CloudModel.clean(key)).apply()
 
     fun table(context: Context): CategoryTable = CategoryTable.decode(prefs(context).getString(TABLE, null))
 

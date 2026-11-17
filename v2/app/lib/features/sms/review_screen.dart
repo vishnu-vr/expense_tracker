@@ -32,8 +32,9 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     _suggest();
   }
 
-  /// On-device AI only runs while the app is open, so ask it now for
-  /// entries the rules could not place.
+  /// Ask the chosen model (D-032; Gemini Nano only runs while the app is
+  /// open) for entries the rules could not place. Its answers wait here for
+  /// the user's approval.
   Future<void> _suggest() async {
     try {
       await ref.read(smsDetectionProvider).suggestCategories();
@@ -51,7 +52,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
   /// Saves [e] with [categoryId] and the user's [words] (one tap on a
   /// chip), then lets the phone remember the payee (D-030).
-  Future<void> _add(DetectedEntry e, String categoryId, String words) async {
+  Future<void> _add(DetectedEntry e, String categoryId, String words, {bool toast = true}) async {
     final note = smsNote(words: words, merchant: e.merchant, account: e.account);
     final tx = Transaction(
       id: '',
@@ -71,7 +72,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             .labelReviewItem(e.id, categoryId: categoryId, note: note, docId: docId);
       } catch (_) {}
       ref.invalidate(smsReviewQueueProvider);
-      if (!mounted) return;
+      if (!mounted || !toast) return;
       HapticFeedback.mediumImpact();
       showToast(context, 'Entry added');
     } catch (_) {
@@ -81,6 +82,30 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       }
     }
   }
+
+  /// "Approve all AI suggestions": each is saved as the user's own entry
+  /// (no Auto marker) and teaches payee memory, after a confirmation with the count.
+  Future<void> _approveAll(List<DetectedEntry> ai, Map<String, String> words) async {
+    final n = ai.length;
+    final ok = await confirmDialog(
+      context,
+      title: n == 1 ? 'Approve 1 AI suggestion?' : 'Approve $n AI suggestions?',
+      message: n == 1
+          ? 'The entry is added with the category the AI suggested. You can change it later.'
+          : 'The $n entries are added with the categories the AI suggested. You can change any of them later.',
+      confirmLabel: n == 1 ? 'Approve 1' : 'Approve $n',
+    );
+    if (!ok || !mounted) return;
+    for (final e in ai) {
+      await _add(e, e.categoryId!, words[e.id] ?? e.words ?? '', toast: false);
+    }
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+    showToast(context, n == 1 ? '1 entry added' : '$n entries added');
+  }
+
+  /// The words typed into each row's field, so "Approve all" keeps them.
+  final _typed = <String, String>{};
 
   void _open(DetectedEntry e, String words) {
     context.push(Uri(path: '/add', queryParameters: {
@@ -106,6 +131,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       for (final e in queue.value ?? const <DetectedEntry>[])
         if (!_hidden.contains(e.id)) e,
     ];
+    final ai = [
+      for (final e in items)
+        if (e.isAiSuggestion && e.amount != null && _category(cats, e) != null) e,
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -127,9 +156,20 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
                   children: [
                     Text(
-                      'Payments auto-add was not sure about. Tap a category to add one, with a few words if you like. Swipe to dismiss.',
+                      'Payments auto-add was not sure about. Tap a category to add one, with a few words if you like. AI suggestions wait for your Approve. Swipe to dismiss.',
                       style: LedgerText.body(size: 13, color: p.muted, height: 1.45),
                     ),
+                    if (ai.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _approveAll(ai, _typed),
+                          icon: const Icon(Icons.done_all, size: 18),
+                          label: Text('Approve all AI suggestions (${ai.length})'),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     for (final e in items)
                       _ReviewRow(
@@ -140,6 +180,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                         money: money,
                         now: now,
                         onAdd: (categoryId, words) => _add(e, categoryId, words),
+                        onWords: (words) => _typed[e.id] = words,
                         onOpen: (words) => _open(e, words),
                         onDismiss: () => _remove(e.id),
                       ),
@@ -180,6 +221,7 @@ class _ReviewRow extends StatefulWidget {
     required this.onAdd,
     required this.onOpen,
     required this.onDismiss,
+    required this.onWords,
   });
 
   final DetectedEntry entry;
@@ -190,6 +232,7 @@ class _ReviewRow extends StatefulWidget {
   final void Function(String categoryId, String words) onAdd;
   final void Function(String words) onOpen;
   final VoidCallback onDismiss;
+  final ValueChanged<String> onWords;
 
   @override
   State<_ReviewRow> createState() => _ReviewRowState();
@@ -212,7 +255,7 @@ class _ReviewRowState extends State<_ReviewRow> {
     final when = '${shortDate(e.receivedAt, widget.now)}, ${timeOfDay(e.receivedAt)}';
     final canAdd = e.amount != null;
     final how = switch (e.categorySource) {
-      'nano' => 'suggested by on-device AI',
+      _ when e.isAiSuggestion => 'Suggested by AI · ${e.aiModel ?? 'AI'}',
       'history' => 'from your entries',
       'memory' => 'as last time',
       _ => 'suggested',
@@ -248,6 +291,7 @@ class _ReviewRowState extends State<_ReviewRow> {
         ),
         TextField(
           controller: _words,
+          onChanged: widget.onWords,
           maxLength: 80,
           textCapitalization: TextCapitalization.none,
           decoration: const InputDecoration(
@@ -258,6 +302,12 @@ class _ReviewRowState extends State<_ReviewRow> {
         ),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 4, children: [
+          // An AI suggestion is saved only when approved (D-032).
+          if (e.isAiSuggestion && category != null)
+            FilledButton.tonal(
+              onPressed: canAdd ? () => widget.onAdd(category.id, _words.text) : null,
+              child: const Text('Approve'),
+            ),
           for (final c in widget.choices)
             ActionChip(
               avatar: Icon(iconForName(c.icon), size: 16),

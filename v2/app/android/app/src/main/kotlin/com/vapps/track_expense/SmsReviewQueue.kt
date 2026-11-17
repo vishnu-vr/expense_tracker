@@ -21,7 +21,16 @@ data class ReviewItem(
     val payeeHash: String? = null,
     /** Words the user typed in a notification reply, kept until it is saved. */
     val words: String? = null,
+    /**
+     * The model that suggested [categoryId] when [categorySource] is "ai"
+     * (D-032), e.g. "Gemini Flash-Lite". Such an entry is only ever saved
+     * when the user approves it.
+     */
+    val aiModel: String? = null,
 ) {
+    /** The category came from a model (Cloud, Gemma or Nano) and waits for approval. */
+    val isAiSuggestion: Boolean get() = categoryId != null && (categorySource == AI_SOURCE || categorySource == CategorySource.NANO.wire)
+
     /** The entry note: "Ramesh K · HDFC XX1234" or "gift for amma · Ramesh K". */
     val note: String? get() = SmsNote.compose(words, merchant, account)
 
@@ -36,15 +45,20 @@ data class ReviewItem(
         categorySource?.let { put("categorySource", it) }
         payeeHash?.let { put("payeeHash", it) }
         words?.let { put("words", it) }
+        aiModel?.let { put("aiModel", it) }
     }
 
     fun toMap(): Map<String, Any?> = mapOf(
         "id" to id, "amount" to amount, "type" to type, "merchant" to merchant,
         "account" to account, "receivedAt" to receivedAt, "categoryId" to categoryId,
         "categorySource" to categorySource, "words" to words,
+        "aiModel" to (aiModel ?: if (categorySource == CategorySource.NANO.wire) "Gemini Nano" else null),
     )
 
     companion object {
+        /** [categorySource] of a model's suggestion (D-032). */
+        const val AI_SOURCE = "ai"
+
         fun fromJson(o: JSONObject) = ReviewItem(
             id = o.getString("id"),
             amount = if (o.has("amount")) o.getDouble("amount") else null,
@@ -56,6 +70,7 @@ data class ReviewItem(
             categorySource = o.optString("categorySource").ifEmpty { null },
             payeeHash = o.optString("payeeHash").ifEmpty { null },
             words = o.optString("words").ifEmpty { null },
+            aiModel = o.optString("aiModel").ifEmpty { null },
         )
 
         fun from(sms: ParsedSms, receivedAt: Long, suggestion: Placement?) = ReviewItem(
@@ -101,8 +116,8 @@ object ReviewQueueCodec {
 
     fun remove(items: List<ReviewItem>, id: String) = items.filterNot { it.id == id }
 
-    fun update(items: List<ReviewItem>, id: String, categoryId: String?, source: String?) =
-        items.map { if (it.id == id) it.copy(categoryId = categoryId, categorySource = source) else it }
+    fun update(items: List<ReviewItem>, id: String, categoryId: String?, source: String?, aiModel: String? = null) =
+        items.map { if (it.id == id) it.copy(categoryId = categoryId, categorySource = source, aiModel = aiModel) else it }
 
     fun setWords(items: List<ReviewItem>, id: String, words: String?) =
         items.map { if (it.id == id) it.copy(words = words) else it }
@@ -133,8 +148,8 @@ object SmsReviewQueue {
         save(context, ReviewQueueCodec.setWords(all(context), id, words))
 
     @Synchronized
-    fun setSuggestion(context: Context, id: String, categoryId: String?, source: String?) =
-        save(context, ReviewQueueCodec.update(all(context), id, categoryId, source))
+    fun setSuggestion(context: Context, id: String, categoryId: String?, source: String?, aiModel: String? = null) =
+        save(context, ReviewQueueCodec.update(all(context), id, categoryId, source, aiModel))
 
     private fun save(context: Context, items: List<ReviewItem>) {
         prefs(context).edit().putString(KEY, ReviewQueueCodec.encode(items)).apply()

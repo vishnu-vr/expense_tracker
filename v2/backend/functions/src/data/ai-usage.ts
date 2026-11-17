@@ -22,5 +22,8 @@ export async function readAssistantUsage(db: Firestore, month: string): Promise<
       inputTokens: countOf(d.get("inputTokens")),
       outputTokens: countOf(d.get("outputTokens")),
       modelCalls: countOf(d.get("modelCalls")),
+      smsSuggestions: countOf(d.get("smsSuggestions")),
+      smsInputTokens: countOf(d.get("smsInputTokens")),
+      smsOutputTokens: countOf(d.get("smsOutputTokens")),
     }));
 }

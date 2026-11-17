@@ -61,7 +61,15 @@ describe("assistant usage helpers", () => {
         { homeId: "h4", homeName: "Tie", questions: 5, inputTokens: 20000, outputTokens: 800 },
         { homeId: "h1", homeName: "Sharma", questions: 4, inputTokens: 20000, outputTokens: 800 },
       ],
+      sms: { suggestions: 0, inputTokens: 0, outputTokens: 0 },
     });
+    // SMS category suggestions (D-032) are summed apart; the assistant's counts do not change.
+    const withSms = shapeAssistantUsage([
+      { homeId: "h1", homeName: "Sharma", questions: 4, inputTokens: 20000, outputTokens: 800, modelCalls: 9, smsSuggestions: 3, smsInputTokens: 600, smsOutputTokens: 12 },
+      { homeId: "h5", homeName: "Only SMS", questions: 0, inputTokens: 0, outputTokens: 0, modelCalls: 0, smsSuggestions: 2, smsInputTokens: 400, smsOutputTokens: -1 },
+    ]);
+    expect(withSms).toMatchObject({ questions: 4, inputTokens: 20000, outputTokens: 800, activeHouseholds: 1, sms: { suggestions: 5, inputTokens: 1000, outputTokens: 12 } });
+    expect(withSms.byHousehold.map((h) => h.homeId)).toEqual(["h1"]);
     expect(shapeAssistantUsage([])).toMatchObject({ available: true, questions: 0, activeHouseholds: 0, byHousehold: [] });
   });
 });

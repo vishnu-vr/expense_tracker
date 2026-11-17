@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- SMS auto-add (D-029): expedited work runs as a short foreground service on Android 11 and older. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- On-device model download (D-032): a user-started foreground download with progress. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Talk to the assistant (D-028): the phone's speech recogniser. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -57,6 +59,11 @@
         <receiver
             android:name=".SmsActionReceiver"
             android:exported="false" />
+        <!-- WorkManager's foreground service runs the model download (D-032). -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

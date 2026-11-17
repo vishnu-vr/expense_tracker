@@ -58,6 +58,9 @@ object SmsLabeller {
                 val updated = item.copy(words = outcome.words)
                 val buttons = buttons(table, updated, outcome.candidates, SmsAutoAddWorker.hourOf(item.receivedAt))
                 SmsNotifications.ask(context, updated, buttons)
+                // Unclear words: the chosen model may suggest a category in the
+                // background (D-032); it then asks "AI suggests …" with Approve.
+                if (outcome.words != null && SmsPrefs.aiMode(context) != AiMode.OFF) SmsSuggestWorker.enqueue(context, item.id)
             }
             is LabelOutcome.Save -> {
                 item!!
@@ -77,6 +80,46 @@ object SmsLabeller {
                 val name = table.category(outcome.categoryId)?.name ?: ""
                 SmsNotifications.added(context, id, item.amount!!, item.type, item.merchant, name, notification)
             }
+        }
+    }
+}
+
+/**
+ * Asks the chosen model about one review item's reply words, off the
+ * notification receiver's short time budget (D-032). On an answer the item
+ * becomes an AI suggestion and the notification offers Approve / Change /
+ * Reply; otherwise nothing changes.
+ */
+class SmsSuggestWorker(context: android.content.Context, params: androidx.work.WorkerParameters) :
+    androidx.work.CoroutineWorker(context, params) {
+
+    override suspend fun getForegroundInfo(): androidx.work.ForegroundInfo =
+        androidx.work.ForegroundInfo(4205, SmsNotifications.working(applicationContext))
+
+    override suspend fun doWork(): Result {
+        val context = applicationContext
+        val id = inputData.getString(K_ITEM) ?: return Result.success()
+        val item = SmsReviewQueue.find(context, id) ?: return Result.success()
+        val table = SmsPrefs.table(context)
+        val suggested = AiSuggest.one(context, table, item) ?: return Result.success()
+        // The user may have answered meanwhile: only update an item that is still waiting, with the same words.
+        val now = SmsReviewQueue.find(context, id) ?: return Result.success()
+        if (now.words != item.words) return Result.success()
+        SmsReviewQueue.setSuggestion(context, id, suggested.categoryId, suggested.categorySource, suggested.aiModel)
+        if (table.canWrite && now.amount != null) SmsNotifications.askAi(context, now.copy(categoryId = suggested.categoryId, categorySource = suggested.categorySource, aiModel = suggested.aiModel))
+        return Result.success()
+    }
+
+    companion object {
+        private const val K_ITEM = "itemId"
+
+        fun enqueue(context: android.content.Context, itemId: String) {
+            val request = androidx.work.OneTimeWorkRequestBuilder<SmsSuggestWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .setInputData(androidx.work.workDataOf(K_ITEM to itemId))
+                .build()
+            androidx.work.WorkManager.getInstance(context)
+                .enqueueUniqueWork("sms-suggest-$itemId", androidx.work.ExistingWorkPolicy.REPLACE, request)
         }
     }
 }

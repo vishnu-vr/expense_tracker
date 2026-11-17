@@ -37,6 +37,13 @@ object NativeFirebase {
         }
     }
 
+    /** The default app when it is signed in as [table]'s user (for Functions and Storage, D-032), else null. */
+    fun appFor(context: Context, table: CategoryTable): FirebaseApp? {
+        val config = table.firebase ?: return null
+        val app = app(context, config) ?: return null
+        return app.takeIf { FirebaseAuth.getInstance(it).currentUser?.uid == table.userId }
+    }
+
     /** Auth and Firestore for [table]'s user, or null when the phone is signed in as someone else. */
     fun forTable(context: Context, table: CategoryTable): Pair<FirebaseAuth, FirebaseFirestore>? {
         val config = table.firebase ?: return null

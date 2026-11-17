@@ -29,12 +29,17 @@ and are shown as "UPI xxxxx1234" (D-030).
 | Auto-add worker (native Firebase, duplicate check, write) | `…/SmsAutoAddWorker.kt`, `…/NativeFirebase.kt` |
 | Review list (parsed fields, 100 items, 30 days) | `…/SmsReviewQueue.kt` |
 | Notifications (private on the lock screen), Undo, category buttons, Reply | `…/SmsNotifications.kt`, `…/SmsActionReceiver.kt` |
-| Gemini Nano (foreground only) and its status (`NanoStatusMapper`) | `…/NanoCategoriser.kt` |
+| Gemini Nano (foreground only) and its status (`NanoStatusMapper`); shared prompt and answer check (`NanoPrompt`) | `…/NanoCategoriser.kt` |
+| Category suggestions (D-032): `AiMode`, `CategorySuggester` (None, Cloud, Gemma, Nano), `Suggesters`, `AiSuggest` | `…/CategorySuggester.kt` |
+| Gemma 3 1B on the phone (LiteRT-LM), memory gate | `…/OnDeviceLlm.kt` |
+| Model download (manifest, resume, SHA-256), states, `GemmaDownloadWorker` | `…/GemmaModel.kt` |
+| AI on unclear reply words, off the receiver (`SmsSuggestWorker`) | `…/SmsLabeller.kt` |
+| Cloud suggestions callable | `backend/functions/src/handlers/suggest-sms-category.ts`, `src/core/sms-suggest.ts` |
 | Platform channel `track_expense/sms` | `…/MainActivity.kt` ↔ `app/lib/core/data/sms_detection.dart` |
 | Table builder, confidence rule, quick suggestions, reply words, note rule (pure Dart) | `app/lib/core/domain/sms_categories.dart` |
 | Settings / review screens | `app/lib/features/sms/sms_screen.dart`, `review_screen.dart` (`/sms/review`) |
 | Auto-added entries to check (pure Dart), Ledger filter, Looks right, Home line | `app/lib/core/domain/auto_added.dart`, `features/ledger/ledger_screen.dart`, `features/entry/entry_screen.dart`, `features/home/home_screen.dart` |
-| Kotlin tests | `app/android/app/src/test/…/SmsParserTest.kt`, `SmsTemplatesTest.kt`, `AutoAddLogicTest.kt`, `HumanInTheLoopTest.kt`, `AutoAddedMarkerTest.kt` |
+| Kotlin tests | `app/android/app/src/test/…/SmsParserTest.kt`, `SmsTemplatesTest.kt`, `AutoAddLogicTest.kt`, `HumanInTheLoopTest.kt`, `AutoAddedMarkerTest.kt`, `CategoryAiTest.kt` |
 
 ## Auto-add flow
 
@@ -63,8 +68,8 @@ Reply   → words → category from household words / keywords / merchants;
           else "Which category for 'auto'?" + buttons, words kept in the list
 20:30   → "3 payments need a description" → /sms/review (Evening reminder)
 App   → Home banner "N detected entries to review"; the review list asks
-        Gemini Nano (if available) for categories of payees the rules could
-        not place; each row has a note field and quick category chips (one
+        the chosen model (D-032) for categories of payees the rules could
+        not place (it never saves; AI rows have Approve); each row has a note field and quick category chips (one
         tap saves and remembers the payee), "Other…" or tapping opens the
         form prefilled, swipe dismisses. Editing an SMS entry later updates
         the payee memory; "Forget remembered payees" clears it.
@@ -72,6 +77,45 @@ App   → auto-added entries show an "Auto" badge (confirmed ones "SMS");
         Home "N auto-added entries to check" (yours, last 30 days) opens the
         Ledger's "Auto-added" filter; "Looks right" on the entry, or saving
         an edit, clears the marker (D-031)
+```
+
+## Category suggestions (D-032)
+
+SMS settings › **Category suggestions** (shown with auto-add on):
+
+| Option | What it uses | Notes |
+|---|---|---|
+| Off (default) | Rules, history, payee memory only | |
+| Cloud | `suggestSmsCategory` on Gemini Flash-Lite (default) or Flash | "Sends only the payee name or your reply words, never the SMS." Works in the background; needs network |
+| On-device: Gemma 3 1B | LiteRT-LM on the CPU, model downloaded once (557 MB) | "Nothing leaves the phone." Download on Wi-Fi with progress, Cancel, Delete; "Model not available yet" until the file is in the bucket. Needs ≥ 4 GB RAM and 1 GB free at the time |
+| Gemini Nano | ML Kit Prompt API | Listed only where supported; runs only while the review list is open |
+
+Whatever the model says only preselects a category, labelled **Suggested by
+AI · <model>**. Nothing it suggests is saved until the user approves:
+
+```
+Worker: Review, nothing placed it, payee is a name → chosen model (Cloud/Gemma)
+        → answer: review item {categorySource: "ai", aiModel}
+          notify "₹420 to BLUE TOKAI — AI suggests Food"
+          [Approve] (= the category button: user-confirmed, no Auto marker,
+          payee memory learns it) [Change] (form prefilled) [Reply]
+        → no answer / failure: the D-030 question as before
+Reply unclear → SmsSuggestWorker asks about the words → same AI notification
+Review list  → asks the chosen model (Nano too) for up to 5 open items;
+               AI rows have Approve; "Approve all AI suggestions (N)" asks
+               "Approve N AI suggestions?" first
+```
+
+Gemma is provided under and subject to the Gemma Terms of Use found at
+ai.google.dev/gemma/terms (shown on the download option).
+
+To test the download by hand, upload the model first (operations.md ›
+On-device model), pick Gemma, tap **Download on Wi-Fi** (the emulator's
+network counts as unmetered), watch the progress notification, then send an
+unknown payee:
+
+```
+adb emu sms send HDFCBK "Rs.420.00 debited from A/c XX1234 on 17-11-26 to VPA bluetokai@okicici (UPI Ref No 444455556666). Not you? Call 18002586161"
 ```
 
 ## Auto-added marker (D-031)

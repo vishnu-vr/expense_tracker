@@ -164,6 +164,75 @@ object SmsNotifications {
         manager.notify(id, builder.build())
     }
 
+    /** Title of an AI suggestion waiting for approval (D-032). Pure. */
+    fun aiTitle(amount: Double?, type: String, merchant: String?, words: String?, categoryName: String): String {
+        val money = amount?.let(::money) ?: "A payment"
+        val who = when {
+            merchant != null -> if (type == "income") " from $merchant" else " to $merchant"
+            words != null -> " for '${words.take(40)}'"
+            else -> if (type == "income") " received" else ""
+        }
+        return "$money$who — AI suggests $categoryName"
+    }
+
+    /** "Suggested by AI · Gemini Flash-Lite. Approve, change or reply." Pure. */
+    fun aiText(model: String?, account: String?): String =
+        listOfNotNull("Suggested by AI · ${model ?: "AI"}", account).joinToString(" · ") + ". Approve, change or reply."
+
+    /**
+     * The form prefilled with an item ([path] `/add`), as the review list's
+     * "Other…" opens it; saving there removes the item and teaches payee memory.
+     */
+    fun formQuery(item: ReviewItem): Map<String, String> = buildMap {
+        put("type", item.type)
+        item.amount?.let { put("amount", it.toString()) }
+        put(
+            "date",
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                .format(java.util.Date(item.receivedAt)),
+        )
+        item.note?.let { put("note", it) }
+        item.categoryId?.let { put("category", it) }
+        put("source", "sms")
+        put("review", item.id)
+    }
+
+    /**
+     * "₹420 to BLUE TOKAI — AI suggests Food" with Approve, Change and Reply
+     * (D-032). Nothing is saved until the user taps Approve (a user-confirmed
+     * save, no Auto marker). Private on the lock screen.
+     */
+    fun askAi(context: Context, item: ReviewItem) {
+        if (!canNotify(context)) return
+        val table = SmsPrefs.table(context)
+        val category = table.category(item.categoryId) ?: return ask(context, item, SmsLabeller.buttons(table, item, emptyList(), SmsAutoAddWorker.hourOf(item.receivedAt)))
+        val manager = manager(context)
+        val id = notificationId(item.receivedAt)
+        val change = link(context, "/add", id, formQuery(item))
+        val reply = RemoteInput.Builder(SmsActionReceiver.KEY_REPLY).setLabel("What was it for?").build()
+        val builder = NotificationCompat.Builder(context, SUGGESTIONS)
+            .setSmallIcon(R.drawable.ic_stat_entry)
+            .setContentTitle(aiTitle(item.amount, item.type, item.merchant, item.words, category.name))
+            .setContentText(aiText(item.aiModel, item.account))
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion(context, SUGGESTIONS, "A payment to approve"))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .setContentIntent(link(context, "/sms/review", id))
+            .addAction(0, "Approve", action(context, SmsActionReceiver.PICK, item.id, id, 0, category.id, mutable = false))
+            .addAction(0, "Change", change)
+            .addAction(
+                NotificationCompat.Action.Builder(0, "Reply", action(context, SmsActionReceiver.REPLY, item.id, id, 9, null, mutable = true))
+                    .addRemoteInput(reply)
+                    .setAllowGeneratedReplies(false)
+                    .build(),
+            )
+        manager.notify(id, builder.build())
+    }
+
     private fun action(context: Context, kind: String, itemId: String, notification: Int, index: Int, categoryId: String?, mutable: Boolean): PendingIntent {
         val intent = Intent(context, SmsActionReceiver::class.java)
             .setAction(kind)

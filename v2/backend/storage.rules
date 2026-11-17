@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Cloud Storage for Firebase (D-032). The only content is the on-device
+// model the app can download (`models/`): signed-in users may read it;
+// nobody writes from a client (uploads go through the admin API, see
+// docs/wiki/operations.md › On-device model). Everything else is closed.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /models/{file=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

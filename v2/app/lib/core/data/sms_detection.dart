@@ -12,6 +12,8 @@ class SmsDetectionStatus {
     this.autoAdd = false,
     this.evening = true,
     this.rememberedPayees = 0,
+    this.aiMode = CategoryAiMode.off,
+    this.cloudModel = 'flash-lite',
   });
 
   final bool enabled;
@@ -27,8 +29,88 @@ class SmsDetectionStatus {
   /// How many payees this phone remembers a category for (D-030).
   final int rememberedPayees;
 
+  /// "Category suggestions" (D-032). Off by default.
+  final CategoryAiMode aiMode;
+
+  /// D-027 model key for Cloud suggestions: `flash-lite` (default) or `flash`.
+  final String cloudModel;
+
   /// Suggestions only appear when all three are true.
   bool get working => enabled && smsGranted && notificationsGranted;
+}
+
+/// Who suggests categories for payees the rules cannot place (D-032).
+/// Mirrors `AiMode` in Kotlin.
+enum CategoryAiMode {
+  off('off'),
+  cloud('cloud'),
+  gemma('gemma'),
+  nano('nano');
+
+  const CategoryAiMode(this.wire);
+  final String wire;
+
+  static CategoryAiMode fromWire(Object? raw) =>
+      values.where((v) => v.wire == raw).firstOrNull ?? off;
+}
+
+/// The downloadable on-device model (Gemma 3 1B). Mirrors `GemmaStatus` in Kotlin.
+enum GemmaStatus {
+  notDownloaded('not-downloaded'),
+  waitingForWifi('waiting-for-wifi'),
+  queued('queued'),
+  downloading('downloading'),
+  verifying('verifying'),
+  ready('ready'),
+  notAvailable('not-available'),
+  noSpace('no-space'),
+  signIn('sign-in'),
+  failed('failed');
+
+  const GemmaStatus(this.wire);
+  final String wire;
+
+  /// A download is queued or running: the screen keeps checking.
+  bool get busy => this == waitingForWifi || this == queued || this == downloading || this == verifying;
+}
+
+class GemmaState {
+  const GemmaState(this.status, {this.done = 0, this.total = 0, this.model = 'Gemma 3 1B'});
+
+  final GemmaStatus status;
+  final int done;
+  final int total;
+  final String model;
+
+  /// 0–1 while downloading.
+  double get progress => total > 0 ? (done / total).clamp(0, 1).toDouble() : 0;
+
+  static GemmaState fromWire(Object? raw) {
+    final m = raw is Map ? raw : const {};
+    return GemmaState(
+      GemmaStatus.values.where((v) => v.wire == m['state']).firstOrNull ?? GemmaStatus.notDownloaded,
+      done: (m['done'] as num?)?.toInt() ?? 0,
+      total: (m['total'] as num?)?.toInt() ?? 0,
+      model: m['model'] is String ? m['model'] as String : 'Gemma 3 1B',
+    );
+  }
+
+  /// "About 557 MB" for [bytes].
+  static String size(int bytes) => '${(bytes / (1024 * 1024)).round()} MB';
+
+  /// One line for the settings screen.
+  String get hint => switch (status) {
+        GemmaStatus.notDownloaded => 'Not downloaded. About ${size(total)}, on Wi-Fi.',
+        GemmaStatus.waitingForWifi => 'Waiting for Wi-Fi to download',
+        GemmaStatus.queued => 'Starting the download…',
+        GemmaStatus.downloading => 'Downloading: ${(progress * 100).floor()}% of ${size(total)}',
+        GemmaStatus.verifying => 'Checking the downloaded file…',
+        GemmaStatus.ready => 'Ready on this phone (${size(total)})',
+        GemmaStatus.notAvailable => 'Model not available yet',
+        GemmaStatus.noSpace => 'Not enough free storage for the model',
+        GemmaStatus.signIn => 'Sign in to download the model',
+        GemmaStatus.failed => 'Download failed. Try again on Wi-Fi.',
+      };
 }
 
 /// Gemini Nano on this phone, for suggesting categories in the review list.
@@ -101,6 +183,8 @@ class SmsDetection {
       autoAdd: m['autoAdd'] == true,
       evening: m['evening'] != false,
       rememberedPayees: (m['rememberedPayees'] as num?)?.toInt() ?? 0,
+      aiMode: CategoryAiMode.fromWire(m['aiMode']),
+      cloudModel: m['cloudModel'] == 'flash' ? 'flash' : 'flash-lite',
     );
   }
 
@@ -169,8 +253,26 @@ class SmsDetection {
         'note': note,
       });
 
-  /// Asks on-device AI for categories of entries the rules could not place.
-  /// Only works while the app is in the foreground.
+  /// Category suggestions: Off, Cloud, on-device Gemma or Gemini Nano (D-032).
+  Future<SmsDetectionStatus> setAiMode(CategoryAiMode mode) async =>
+      _parse(await _channel.invokeMethod('setAiMode', {'mode': mode.wire}));
+
+  /// The Cloud model key: `flash-lite` or `flash` (D-027 keys).
+  Future<SmsDetectionStatus> setCloudModel(String key) async =>
+      _parse(await _channel.invokeMethod('setCloudModel', {'model': key}));
+
+  Future<GemmaState> gemmaStatus() async => GemmaState.fromWire(await _channel.invokeMethod('gemmaStatus'));
+
+  /// Queues the download; it runs on Wi-Fi (unmetered) only.
+  Future<GemmaState> gemmaDownload() async => GemmaState.fromWire(await _channel.invokeMethod('gemmaDownload'));
+
+  Future<GemmaState> gemmaCancel() async => GemmaState.fromWire(await _channel.invokeMethod('gemmaCancel'));
+
+  /// Deletes the model; the setting falls back to Off.
+  Future<GemmaState> gemmaDelete() async => GemmaState.fromWire(await _channel.invokeMethod('gemmaDelete'));
+
+  /// Asks the chosen model for categories of entries the rules could not
+  /// place (or whose reply words were unclear). Suggestions wait for approval.
   Future<List<DetectedEntry>> suggestCategories() async =>
       _entries(await _channel.invokeMethod('suggestCategories'));
 

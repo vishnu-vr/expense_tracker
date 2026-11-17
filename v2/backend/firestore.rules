@@ -199,6 +199,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ------------------------------------------------------- aiRateLimits
+    // Daily per-user call counters, `{YYYY-MM-DD}_{uid}` (D-032). Written by
+    // suggestSmsCategory. Server-only (also denied without this match).
+    match /aiRateLimits/{docId} {
+      allow read, write: if false;
+    }
+
     // -------------------------------------------------------- notifications
     // Created by the onTransactionWritten trigger. A member may only add
     // their own uid to `readBy`.

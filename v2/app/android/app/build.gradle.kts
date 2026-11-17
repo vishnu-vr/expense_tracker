@@ -56,10 +56,14 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    // SMS category suggestions, Cloud (D-032): the suggestSmsCategory callable from the worker.
+    implementation("com.google.firebase:firebase-functions")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     // Gemini Nano through ML Kit GenAI (needs Android 8.0+; guarded at runtime,
     // see tools:overrideLibrary in the manifest).
     implementation("com.google.mlkit:genai-prompt:1.0.0-beta5")
+    // Gemma 3 1B on the phone (D-032): Google's LiteRT-LM runtime for .litertlm models.
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.1")
     testImplementation("junit:junit:4.13.2")
     // Real org.json for JVM unit tests (android.jar only has stubs).
     testImplementation("org.json:json:20250517")

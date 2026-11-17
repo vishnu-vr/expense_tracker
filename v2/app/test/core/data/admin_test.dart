@@ -126,6 +126,15 @@ void main() {
     expect(a.byHousehold.last.questions, 3);
     expect(AdminDashboard.fromJson(const {}).assistant.available, isFalse);
     expect(AdminDashboard.fromJson(const {}).assistant.byHousehold, isEmpty);
+    // SMS category suggestions (D-032) are their own numbers; older backends send none.
+    expect(a.smsSuggestions, 0);
+    final sms = AdminDashboard.fromJson({
+      'assistant': {
+        'available': true,
+        'sms': {'suggestions': 12, 'inputTokens': 2400, 'outputTokens': 60},
+      },
+    }).assistant;
+    expect([sms.smsSuggestions, sms.smsInputTokens, sms.smsOutputTokens], [12, 2400, 60]);
   });
 
   test('parses the households section and tolerates a missing one', () {

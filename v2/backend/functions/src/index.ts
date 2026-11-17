@@ -33,6 +33,7 @@ import { exportTransactionsCsvHandler } from "./handlers/export-csv";
 import { generateAllInsights } from "./handlers/insights";
 import { joinHomeHandler } from "./handlers/join-home";
 import { leaveHomeHandler } from "./handlers/leave-home";
+import { suggestSmsCategoryHandler } from "./handlers/suggest-sms-category";
 import { sendNotificationPush } from "./handlers/notifications";
 import { syncTransactionEmbedding, writeTransactionNotification } from "./handlers/transactions";
 
@@ -75,6 +76,22 @@ export const askAgent = onCall<unknown, Promise<AskAgentResult>, AskAgentChunk>(
       request.data,
       (chunk) => response?.sendChunk(chunk),
     ),
+);
+
+/**
+ * suggestSmsCategory({items: [{text, type, kind?}], model?}) -> {suggestions: (id|null)[], model}
+ * Category ids for payee names or reply words from SMS auto-add (D-032). Logs counts only.
+ */
+export const suggestSmsCategory = onCall({ ...callable, timeoutSeconds: 30, memory: "512MiB" }, (request) =>
+  suggestSmsCategoryHandler(
+    {
+      db: getFirestore(),
+      runtime: (modelId) => getAgentRuntime(modelId),
+      onMetrics: (m) => logger.info("suggestSmsCategory complete", m),
+    },
+    requireUid(request),
+    request.data,
+  ),
 );
 
 /** confirmProposal({threadId, proposalId, accept}) -> {proposalId, status, appliedCount, skippedTransactionIds} */

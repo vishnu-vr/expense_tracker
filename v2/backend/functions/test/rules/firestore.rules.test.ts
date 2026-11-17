@@ -324,6 +324,18 @@ describe("aiUsage", () => {
   });
 });
 
+describe("aiRateLimits", () => {
+  it("is server-only: a user cannot read or reset their own daily counter (D-032)", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "aiRateLimits/2026-11-17_alice"), { day: "2026-11-17", uid: "alice", smsSuggestCalls: 100 });
+    });
+    await assertFails(getDoc(doc(db("alice"), "aiRateLimits/2026-11-17_alice")));
+    await assertFails(setDoc(doc(db("alice"), "aiRateLimits/2026-11-17_alice"), { day: "2026-11-17", uid: "alice", smsSuggestCalls: 0 }));
+    await assertFails(deleteDoc(doc(db("alice"), "aiRateLimits/2026-11-17_alice")));
+    await assertFails(getDocs(collection(db("alice"), "aiRateLimits")));
+  });
+});
+
 describe("notifications", () => {
   it("members read their household's notifications only", async () => {
     await assertSucceeds(getDoc(doc(db("bob"), "notifications/n1")));

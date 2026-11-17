@@ -240,4 +240,39 @@ void main() {
       expect(v.hint, isNotEmpty);
     }
   });
+
+  test('category suggestions: setting, AI entries and the on-device model state (D-032)', () {
+    expect(CategoryAiMode.fromWire(null), CategoryAiMode.off);
+    expect(CategoryAiMode.fromWire('gemma'), CategoryAiMode.gemma);
+    expect(CategoryAiMode.fromWire('junk'), CategoryAiMode.off);
+
+    final ai = DetectedEntry.fromMap({
+      'id': 'r1',
+      'type': 'expense',
+      'receivedAt': 1,
+      'merchant': 'BLUE TOKAI',
+      'categoryId': 'food',
+      'categorySource': 'ai',
+      'aiModel': 'Gemini Flash-Lite',
+    })!;
+    expect(ai.isAiSuggestion, isTrue);
+    expect(ai.aiModel, 'Gemini Flash-Lite');
+    final nano = DetectedEntry.fromMap({'id': 'r2', 'receivedAt': 1, 'categoryId': 'food', 'categorySource': 'nano'})!;
+    expect(nano.isAiSuggestion, isTrue);
+    expect(nano.aiModel, 'Gemini Nano');
+    expect(DetectedEntry.fromMap({'id': 'r3', 'receivedAt': 1, 'categoryId': 'food', 'categorySource': 'builtin'})!.isAiSuggestion,
+        isFalse);
+    expect(DetectedEntry.fromMap({'id': 'r4', 'receivedAt': 1, 'categorySource': 'ai'})!.isAiSuggestion, isFalse);
+
+    final g = GemmaState.fromWire({'state': 'downloading', 'done': 292208640, 'total': 584417280});
+    expect(g.status.busy, isTrue);
+    expect(g.progress, 0.5);
+    expect(g.hint, 'Downloading: 50% of 557 MB');
+    expect(GemmaState.fromWire(null).status, GemmaStatus.notDownloaded);
+    expect(GemmaState.fromWire({'state': 'not-available'}).hint, 'Model not available yet');
+    expect(GemmaState.fromWire({'state': 'ready', 'total': 584417280}).status.busy, isFalse);
+    for (final v in GemmaStatus.values) {
+      expect(GemmaState(v, total: 1).hint, isNotEmpty);
+    }
+  });
 }

@@ -40,15 +40,15 @@ interface NanoCategoriser {
     /** Starts the model download when it is downloadable and the network is unmetered. */
     suspend fun downloadIfUnmetered(): NanoState
 
-    /** A category id from [categories], or null for no answer. Times out after 5 s. */
-    suspend fun categorise(merchant: String, type: String, categories: List<CategoryOption>): String?
+    /** A category id from [categories], or null for no answer. Times out after 5 s. [words]: [text] is a reply, not a payee. */
+    suspend fun categorise(text: String, type: String, categories: List<CategoryOption>, words: Boolean = false): String?
 }
 
 /** Phones below Android 8.0: the ML Kit GenAI library needs API 26. */
 object UnsupportedNano : NanoCategoriser {
     override suspend fun status() = NanoState(NanoStatusMapper.ANDROID_TOO_OLD)
     override suspend fun downloadIfUnmetered() = status()
-    override suspend fun categorise(merchant: String, type: String, categories: List<CategoryOption>): String? = null
+    override suspend fun categorise(text: String, type: String, categories: List<CategoryOption>, words: Boolean): String? = null
 }
 
 /**
@@ -119,23 +119,35 @@ object NanoStatusMapper {
     private fun aiCoreCode(version: String?) = if (version == null) "AICore not installed" else "AICore $version"
 }
 
-/** The prompt and the answer check. Pure, for unit tests. */
+/**
+ * The prompt and the answer check, shared by the on-device models (Gemini
+ * Nano and Gemma, D-029, D-032). Pure, for unit tests.
+ */
 object NanoPrompt {
-    fun build(merchant: String, type: String, categories: List<CategoryOption>): String {
+    /**
+     * [text] is a payee name, or with [words] true the user's own reply
+     * ("auto to office"). Never the message itself.
+     */
+    fun build(text: String, type: String, categories: List<CategoryOption>, words: Boolean = false): String {
         val ids = categories.filter { it.type == type }.joinToString(", ") { it.id }
+        val what = if (words) "The user said it was for: ${text.take(80)}" else "Payee: ${text.take(60)}"
         return "Classify a bank payment for a household expense tracker.\n" +
-            "Payee: ${merchant.take(60)}\n" +
+            "$what\n" +
             "Direction: $type\n" +
             "Categories: $ids\n" +
             "Answer with exactly one category id from the list and nothing else. " +
             "If unsure, answer none."
     }
 
-    /** The answer is accepted only when it is one of the listed ids of the right type. */
+    /**
+     * The answer is accepted only when it is one of the listed ids (or that
+     * category's exact name; small models often answer "Food") of the right
+     * type, optionally after "category:". Anything longer is no answer.
+     */
     fun parse(answer: String?, type: String, categories: List<CategoryOption>): String? {
-        val cleaned = answer?.trim()?.lowercase()?.trim('.', '"', '\'', '`', ' ', '\n')
-            ?.removePrefix("category:")?.trim() ?: return null
-        return categories.firstOrNull { it.type == type && it.id.lowercase() == cleaned }?.id
+        val cleaned = answer?.trim()?.lowercase()?.trim('.', '"', '\'', '`', ' ', '\n', '*')
+            ?.removePrefix("category:")?.trim()?.trim('.', '"', '\'', '`', ' ', '*') ?: return null
+        return categories.firstOrNull { it.type == type && (it.id.lowercase() == cleaned || it.name.lowercase() == cleaned) }?.id
     }
 }
 
@@ -183,12 +195,12 @@ private class MlKitNano(private val context: Context) : NanoCategoriser {
         return NanoState(NanoStatusMapper.DOWNLOADING)
     }
 
-    override suspend fun categorise(merchant: String, type: String, categories: List<CategoryOption>): String? {
+    override suspend fun categorise(text: String, type: String, categories: List<CategoryOption>, words: Boolean): String? {
         if (status().status != NanoStatusMapper.AVAILABLE) return null
         return try {
             withTimeoutOrNull(5_000) {
                 val response = model.generateContent(
-                    generateContentRequest(TextPart(NanoPrompt.build(merchant, type, categories))) {
+                    generateContentRequest(TextPart(NanoPrompt.build(text, type, categories, words))) {
                         temperature = 0f
                         topK = 1
                     },

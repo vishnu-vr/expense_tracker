@@ -539,6 +539,13 @@ class _AssistantUsage extends StatelessWidget {
       const SizedBox(height: 8),
       Text('${_count.format(a.modelCalls)} model calls',
           style: LedgerText.body(size: 12, color: p.muted, tabular: true)),
+      if (a.smsSuggestions > 0) ...[
+        const SizedBox(height: 4),
+        Text(
+          'SMS category suggestions: ${_count.format(a.smsSuggestions)} · in\u00a0${_count.format(a.smsInputTokens)} · out\u00a0${_count.format(a.smsOutputTokens)} tokens',
+          style: LedgerText.body(size: 12, color: p.muted, tabular: true),
+        ),
+      ],
       const SizedBox(height: 16),
       Text('BY HOUSEHOLD', style: LedgerText.eyebrow(p.muted)),
       if (a.byHousehold.isEmpty)

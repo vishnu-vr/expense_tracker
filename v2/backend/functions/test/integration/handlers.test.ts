@@ -16,6 +16,8 @@ import { generateAllInsights, generateInsightsForHome } from "../../src/handlers
 import { joinHomeHandler } from "../../src/handlers/join-home";
 import { leaveHomeHandler } from "../../src/handlers/leave-home";
 import { sendNotificationPush } from "../../src/handlers/notifications";
+import { suggestSmsCategoryHandler } from "../../src/handlers/suggest-sms-category";
+import { SMS_SUGGEST } from "../../src/config";
 import { syncTransactionEmbedding, writeTransactionNotification } from "../../src/handlers/transactions";
 
 /**
@@ -505,6 +507,114 @@ describe("askAgent", () => {
   });
 });
 
+describe("suggestSmsCategory (D-032)", () => {
+  /** A text-only model that answers [answer] and records each prompt. */
+  function textModel(answer: string | (() => string)) {
+    const ai = genkit({});
+    const prompts: string[] = [];
+    const name = `test/sms-${Math.random().toString(36).slice(2)}`;
+    ai.defineModel({ name }, async (req): Promise<GenerateResponseData> => {
+      prompts.push(JSON.stringify(req.messages));
+      return {
+        message: { role: "model", content: [{ text: typeof answer === "string" ? answer : answer() }] },
+        finishReason: "stop",
+        usage: { inputTokens: 120, outputTokens: 6 },
+      };
+    });
+    return { ai, model: name, prompts };
+  }
+  const NOW = new Date("2026-11-17T10:00:00Z");
+  const smsDeps = (m: ReturnType<typeof textModel>, extra: Record<string, unknown> = {}) => ({
+    db,
+    runtime: async (id: string) => (models.push(id), { ai: m.ai, model: m.model }),
+    now: () => NOW,
+    ...extra,
+  });
+  let models: string[] = [];
+  beforeEach(() => { models = []; });
+
+  it("suggests the household's own categories only, of the item's direction, on Flash-Lite by default", async () => {
+    const m = textModel("1: pets\n2: food\n3: none");
+    const res = await suggestSmsCategoryHandler(smsDeps(m), "alice", {
+      items: [{ text: "HEADS UP FOR TAILS", type: "expense" }, { text: "ACME PAYROLL", type: "income" }, { text: "Ramesh K", type: "expense" }],
+    });
+    // `pets` is h1's custom category; `food` is not an income category.
+    expect(res).toEqual({ suggestions: ["pets", null, null], model: "Gemini Flash-Lite" });
+    expect(models).toEqual(["vertexai/gemini-3.5-flash-lite"]);
+    expect(m.prompts[0]).toContain("pets (Pets)");
+    expect(m.prompts[0]).toContain("salary (Salary)");
+
+    await suggestSmsCategoryHandler(smsDeps(textModel("1: food")), "alice", { items: [{ text: "auto to office", type: "expense", kind: "words" }], model: "flash" });
+    expect(models[1]).toBe("vertexai/gemini-3.8-flash");
+  });
+
+  it("counts usage in the monthly rollup apart from the assistant's", async () => {
+    await db.doc("aiUsage/2026-11_h1").set({ month: "2026-11", homeId: "h1", questions: 2, inputTokens: 900, outputTokens: 50, modelCalls: 3 });
+    const m = textModel("1: food\n2: food");
+    await suggestSmsCategoryHandler(smsDeps(m), "alice", { items: [{ text: "BLUE TOKAI", type: "expense" }, { text: "CHAAYOS", type: "expense" }] });
+    await suggestSmsCategoryHandler(smsDeps(m), "bob", { items: [{ text: "THIRD WAVE", type: "expense" }] });
+    const roll = (await db.doc("aiUsage/2026-11_h1").get()).data()!;
+    expect(roll).toMatchObject({ questions: 2, inputTokens: 900, outputTokens: 50, modelCalls: 3, smsSuggestions: 3, smsInputTokens: 240, smsOutputTokens: 12 });
+    const rows = await readAssistantUsage(db, "2026-11");
+    expect(rows.find((r) => r.homeId === "h1")).toMatchObject({ questions: 2, smsSuggestions: 3, smsInputTokens: 240 });
+  });
+
+  it("rejects bad input, users without a home, and spoofed home pointers before the model runs", async () => {
+    const m = textModel("1: food");
+    const ask = (uid: string, data: unknown) => code(suggestSmsCategoryHandler(smsDeps(m), uid, data));
+    expect(await ask("alice", { items: [] })).toBe("invalid-argument");
+    expect(await ask("alice", { items: [{ text: "x".repeat(81), type: "expense" }] })).toBe("invalid-argument");
+    expect(await ask("alice", { items: Array.from({ length: 6 }, () => ({ text: "a", type: "expense" })) })).toBe("invalid-argument");
+    expect(await ask("alice", { items: [{ text: "a", type: "expense" }], model: "vertexai/x" })).toBe("invalid-argument");
+    expect(await ask("dave", { items: [{ text: "a", type: "expense" }] })).toBe("failed-precondition");
+    await db.doc("users/carol").update({ homeId: "h1" });
+    expect(await ask("carol", { items: [{ text: "a", type: "expense" }] })).toBe("permission-denied");
+    expect(m.prompts).toHaveLength(0);
+  });
+
+  it("allows a daily number of calls per user (India-time day), then resource-exhausted", async () => {
+    await db.doc(`aiRateLimits/2026-11-17_alice`).set({ day: "2026-11-17", uid: "alice", smsSuggestCalls: SMS_SUGGEST.dailyCallsPerUser - 1 });
+    const m = textModel("1: food");
+    const one = { items: [{ text: "BLUE TOKAI", type: "expense" }] };
+    expect((await suggestSmsCategoryHandler(smsDeps(m), "alice", one)).suggestions).toEqual(["food"]);
+    expect(await code(suggestSmsCategoryHandler(smsDeps(m), "alice", one))).toBe("resource-exhausted");
+    expect(m.prompts).toHaveLength(1);
+    // Bob has his own allowance; the next India day starts again (18 Nov 00:10 IST).
+    expect(await code(suggestSmsCategoryHandler(smsDeps(m), "bob", one))).toBe("ok");
+    const tomorrow = smsDeps(m, { now: () => new Date("2026-11-17T18:40:00Z") });
+    expect(await code(suggestSmsCategoryHandler(tomorrow, "alice", one))).toBe("ok");
+    expect((await db.doc("aiRateLimits/2026-11-18_alice").get()).get("smsSuggestCalls")).toBe(1);
+  });
+
+  it("never logs or returns the text, and a model failure is a generic error", async () => {
+    const metrics: unknown[] = [];
+    const logged: string[] = [];
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((k) => {
+      const original = console[k];
+      console[k] = (...args: unknown[]) => void logged.push(args.map(String).join(" "));
+      return () => { console[k] = original; };
+    });
+    try {
+      const secret = "SECRET PAYEE 9876";
+      const res = await suggestSmsCategoryHandler(smsDeps(textModel("1: food"), { onMetrics: (x: unknown) => void metrics.push(x) }), "alice", {
+        items: [{ text: secret, type: "expense" }],
+      });
+      expect(JSON.stringify(res)).not.toContain(secret);
+      expect(metrics).toEqual([expect.objectContaining({ items: 1, answered: 1, model: "vertexai/gemini-3.5-flash-lite", inputTokens: 120, outputTokens: 6 })]);
+      expect(JSON.stringify(metrics)).not.toContain(secret);
+
+      const broken = textModel(() => { throw new Error(`model echoed ${secret}`); });
+      const err: any = await suggestSmsCategoryHandler(smsDeps(broken), "alice", { items: [{ text: secret, type: "expense" }] }).catch((e) => e);
+      expect(err.code).toBe("unavailable");
+      expect(err.message).toBe("No suggestion right now.");
+      expect(JSON.stringify(err.details ?? {})).not.toContain(secret);
+      expect(logged.join("\n")).not.toContain(secret);
+    } finally {
+      spies.forEach((restore) => restore());
+    }
+  });
+});
+
 describe("getAdminDashboard: assistant usage from the aiUsage rollup", () => {
   it("reads the month's rollup with household names, never thread content", async () => {
     await db.doc("aiUsage/2026-11_h1").set({ month: "2026-11", homeId: "h1", questions: 3, inputTokens: 900, outputTokens: 60, modelCalls: 5 });
@@ -536,6 +646,7 @@ describe("getAdminDashboard: assistant usage from the aiUsage rollup", () => {
         { homeId: "h2", homeName: "Carol", questions: 1, inputTokens: 4000, outputTokens: 10 },
         { homeId: "h1", homeName: "Alice & Bob", questions: 3, inputTokens: 900, outputTokens: 60 },
       ],
+      sms: { suggestions: 0, inputTokens: 0, outputTokens: 0 },
     });
   });
 });
