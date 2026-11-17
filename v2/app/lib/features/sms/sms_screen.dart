@@ -375,10 +375,15 @@ class _CategorySuggestions extends StatelessWidget {
                 TextButton(onPressed: onDelete, child: const Text('Delete'))
               else if (g.status.busy)
                 TextButton(onPressed: onCancel, child: const Text('Cancel download'))
-              else if (g.status != GemmaStatus.notAvailable)
+              else
                 TextButton(
                   onPressed: onDownload,
-                  child: Text(g.status == GemmaStatus.failed ? 'Try again' : 'Download on Wi-Fi'),
+                  child: Text(switch (g.status) {
+                    GemmaStatus.failed => 'Try again',
+                    // Asks the bucket again: the model may have been uploaded since.
+                    GemmaStatus.notAvailable || GemmaStatus.signIn || GemmaStatus.noSpace => 'Check again',
+                    _ => 'Download on Wi-Fi',
+                  }),
                 ),
             ]),
           ],

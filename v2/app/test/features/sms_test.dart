@@ -430,7 +430,7 @@ void main() {
     expect(find.text('Not downloaded. About 557 MB, on Wi-Fi.'), findsOneWidget);
   });
 
-  testWidgets('on-device Gemma: "Model not available yet" offers no download', (tester) async {
+  testWidgets('on-device Gemma: "Model not available yet" offers Check again, not a download', (tester) async {
     final fake = _FakeSms(tester);
     fake.state = {...fake.state, 'autoAdd': true, 'aiMode': 'gemma'};
     fake.gemma = [
@@ -440,6 +440,9 @@ void main() {
     await _openSmsSettings(tester);
     await tester.scrollUntilVisible(find.text('Model not available yet'), 250, scrollable: find.byType(Scrollable).first);
     expect(find.text('Download on Wi-Fi'), findsNothing);
+    // Check again asks the bucket again (the model may have been uploaded since).
+    await tapVisible(tester, find.text('Check again').first);
+    expect(fake.calls, contains('gemmaDownload'));
   });
 
   testWidgets('review: AI suggestions are labelled, saved only on Approve, and Approve all confirms the count',
