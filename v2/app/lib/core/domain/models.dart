@@ -16,6 +16,7 @@ class Transaction {
     this.homeId,
     this.tagIds = const [],
     this.source,
+    this.autoAdded = false,
   });
 
   final String id;
@@ -35,6 +36,12 @@ class Transaction {
 
   bool get fromSms => source == 'sms';
 
+  /// Saved by the phone from a bank message without asking anyone (rules,
+  /// history or a remembered payee; D-031) and not yet checked by its owner.
+  /// Cleared by "Looks right" or by editing the entry. Firestore field
+  /// `autoAdded`.
+  final bool autoAdded;
+
   bool get isExpense => type == TransactionType.expense;
   bool get isIncome => type == TransactionType.income;
 
@@ -50,6 +57,7 @@ class Transaction {
     String? homeId,
     List<String>? tagIds,
     String? source,
+    bool? autoAdded,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -63,6 +71,7 @@ class Transaction {
       homeId: homeId ?? this.homeId,
       tagIds: tagIds ?? this.tagIds,
       source: source ?? this.source,
+      autoAdded: autoAdded ?? this.autoAdded,
     );
   }
 }

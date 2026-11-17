@@ -32,7 +32,11 @@ abstract class HouseholdRepository {
   Future<void> dismissInsight(String id);
 
   /// Creates when [tx] has an empty id, otherwise updates. Returns the id.
+  /// An update with `autoAdded` false clears the marker (D-031).
   Future<String> saveTransaction(Transaction tx);
+
+  /// "Looks right": the owner checked an auto-added entry (D-031).
+  Future<void> markChecked(String id);
   Future<void> deleteTransaction(String id);
 
   Future<void> saveCategory(Category category);

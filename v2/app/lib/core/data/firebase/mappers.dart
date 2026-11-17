@@ -37,12 +37,14 @@ Transaction? transactionFromDoc(String id, Map<String, dynamic> d) {
     homeId: d['homeId'] as String?,
     tagIds: stringList(d['tagIds']),
     source: d['source'] == 'sms' ? 'sms' : null,
+    autoAdded: d['autoAdded'] == true,
   );
 }
 
 /// Fields the owner may write. Ownership fields and timestamps are added by
 /// the repository. `source` is written only when set, so editing an entry
-/// added from SMS keeps its marker.
+/// added from SMS keeps its marker. `autoAdded` is written only when true
+/// (D-031); the repository removes it on an update that clears it.
 Map<String, dynamic> transactionToDoc(Transaction t) => {
       'amount': t.amount,
       'categoryId': t.categoryId,
@@ -51,6 +53,7 @@ Map<String, dynamic> transactionToDoc(Transaction t) => {
       'type': t.type.name,
       'tagIds': t.tagIds,
       if (t.source != null) 'source': t.source,
+      if (t.autoAdded) 'autoAdded': true,
     };
 
 Category categoryFromDoc(String id, Map<String, dynamic> d) => Category(

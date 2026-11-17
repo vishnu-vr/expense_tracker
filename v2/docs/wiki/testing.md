@@ -66,7 +66,7 @@ emulator's microphone is unreliable; demo mode uses a scripted fake voice).
    with amounts as digits. On a phone without Malayalam speech, the row and
    the Talk panel say English is used.
 
-## Manual SMS auto-add checklist (D-029, D-030)
+## Manual SMS auto-add checklist (D-029, D-030, D-031)
 
 Run on a real Android phone with a build against the live project
 (`--dart-define=BACKEND=firebase`), signed in. Profile › Bank SMS detection:
@@ -75,8 +75,8 @@ an emulator signed in to the live project (see [sms.md](sms.md)).
 
 1. A payment to a well-known merchant (Swiggy, Uber, Amazon…) or one you
    always file the same way: "Added … · Undo · Change" appears; the entry is
-   in the Ledger with an SMS badge and note "Merchant · BANK XX1234"; the lock
-   screen shows only "Entry added from a bank message".
+   in the Ledger with an **Auto** badge (D-031) and note "Merchant · BANK
+   XX1234"; the lock screen shows only "Entry added from a bank message".
 2. Undo removes the entry. Change opens it in the edit screen.
 3. A payment to an unknown payee: "Review detected entry"; Home shows "1
    detected entry to review"; the list shows amount, payee · account, time.
@@ -111,6 +111,16 @@ an emulator signed in to the live project (see [sms.md](sms.md)).
 16. Leave an item unlabelled and wait for 20:30: "1 payment needs a
     description" opens the review list; turning Evening reminder off stops
     it.
+17. Auto-added marker (D-031): after step 1 Home shows "1 auto-added entry
+    to check"; tapping it opens the Ledger with **Auto-added · 1** on, listing
+    only that entry. Entries saved from a notification button, a reply or the
+    review list show **SMS**, not Auto, and are not counted.
+18. Open the auto-added entry: the card "Saved automatically from a bank
+    message…" with **Looks right**. Tap it: "Marked as checked", the badge
+    becomes SMS, the Home line goes away. For another auto-added entry,
+    change something and tap Update entry: the marker is cleared too.
+19. On a housemate's phone the entry shows the Auto badge and "Not checked
+    yet" without Looks right, and is not in their Home count or filter.
 
 ## Known gaps
 
@@ -128,4 +138,6 @@ an emulator signed in to the live project (see [sms.md](sms.md)).
   Gemini Nano has not run on a supported phone yet. The D-030 notification
   questions, reply guess, payee memory and evening job were run on the
   emulator with a fake table, so every save ended in "Could not save the
-  entry"; a real save from a notification has not been observed.
+  entry"; a real save from a notification has not been observed. The
+  `autoAdded` marker (D-031) is covered by Kotlin, mapper, repository and
+  widget tests only.

@@ -63,7 +63,7 @@ object SmsLabeller {
                 item!!
                 val firebase = NativeFirebase.forTable(context, table)
                 val id = firebase?.let {
-                    SmsEntryWriter.write(it.second, table, item.amount ?: return@let null, item.type, outcome.categoryId, item.receivedAt, outcome.note, waitSeconds = 5)
+                    SmsEntryWriter.write(it.second, table, item.amount ?: return@let null, item.type, outcome.categoryId, item.receivedAt, outcome.note, SmsSave.NOTIFICATION_ANSWER, waitSeconds = 5)
                 }
                 if (id == null) {
                     // Keep it (with the words) for the review list.

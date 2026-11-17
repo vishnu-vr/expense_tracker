@@ -9,6 +9,42 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-031 · Auto-added entries are marked until their owner checks them
+**2026-11-17 · Accepted · owner request · experimental · refines D-029, D-030**
+
+Entries the phone saved by itself must be findable later for review; until
+now every SMS entry had the same "SMS" badge.
+- **Field.** `transactions.autoAdded: true`, written only by a fully
+  automatic save (`SmsAutoAddWorker`: rules, history or payee memory; Kotlin
+  `SmsSave.AUTO_ADD`). Notification category buttons and Reply
+  (`SmsSave.NOTIFICATION_ANSWER`) and the review list are the user's own
+  answer and write no marker. Written only when true, so older entries and
+  typed ones need no migration. App model: `Transaction.autoAdded`.
+- **Clearing.** **Looks right** on the entry screen
+  (`HouseholdRepository.markChecked`, a fire-and-forget update that deletes
+  the field) or saving an edit (the update deletes it) clears it. Only the
+  entry's owner can (update is owner-only); housemates see the badge and
+  "Saved automatically from a bank message. Not checked yet." without the
+  button.
+- **UI.** Ledger badge **Auto** (accent green text and dot, the palette's one
+  accent; warning/danger stay reserved for budgets) for unchecked auto-added
+  entries, **SMS** for confirmed or checked ones. Ledger chip **Auto-added ·
+  N** (shown only when you have some, or while on) filters the period to your
+  own unchecked auto-added entries; empty state "No auto-added entries to
+  check in this period." with "Show <month>" (where the newest is) or "Show
+  all entries". Home: "N auto-added entries to check" / "1 auto-added entry to
+  check", in one card with "N detected entries to review" when both apply;
+  counts your own entries from the **last 30 days** (`autoAddedCheckDays`)
+  and opens the Ledger's filter at the newest one's month.
+- **Rules (local, not deployed).** `autoAdded` is an optional bool, `true`
+  only together with `source: 'sms'`; on update it may be removed or set to
+  false but never turned to `true`. The live rules have no field allowlist,
+  so they already accept the field.
+- Rules out: a separate review queue on the server, letting housemates clear
+  someone else's marker, and counting other members' entries on Home.
+
+---
+
 ## D-030 · SMS auto-add asks a human: notification questions, payee memory, evening catch-up
 **2026-11-17 · Accepted · owner request · experimental · refines D-029**
 

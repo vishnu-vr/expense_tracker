@@ -5,7 +5,7 @@ Two modes, both off by default, in Profile › Bank SMS detection:
 | Mode | What happens | Decision |
 |---|---|---|
 | Suggest (detection on) | "Add this entry?" notification; the form opens prefilled; you pick a category and save | D-005 |
-| Auto-add (also on, **experimental**) | Confident entries are saved by themselves with Undo/Change; the rest go to Review detected entries and the notification asks "what was this for?" | D-029, D-030 |
+| Auto-add (also on, **experimental**) | Confident entries are saved by themselves with Undo/Change and marked **Auto** until checked; the rest go to Review detected entries and the notification asks "what was this for?" | D-029, D-030, D-031 |
 
 The message text is never logged, stored, uploaded or passed on. Auto-add
 keeps only the parsed fields: amount, direction, time, payee, bank and the
@@ -24,7 +24,7 @@ and are shown as "UPI xxxxx1234" (D-030).
 | Lookup table + confidence decision, quick suggestions, reply guess, note rule | `…/CategoryTable.kt` (`SmsCategoriser`, `QuickSuggest`, `ReplyCategoriser`, `SmsNote`) |
 | Payee memory (salted hashes, entry → payee for edits) | `…/PayeeMemory.kt` |
 | Notification answers (one-tap, Reply) | `…/SmsLabeller.kt` (`LabelLogic`) |
-| Native entry write (worker and notification actions) | `…/SmsEntryWriter.kt` |
+| Native entry write (worker and notification actions; `SmsSave` decides the `autoAdded` marker) | `…/SmsEntryWriter.kt` |
 | Evening catch-up (about 20:30) | `…/SmsCatchUpWorker.kt` (`CatchUp`) |
 | Auto-add worker (native Firebase, duplicate check, write) | `…/SmsAutoAddWorker.kt`, `…/NativeFirebase.kt` |
 | Review list (parsed fields, 100 items, 30 days) | `…/SmsReviewQueue.kt` |
@@ -33,7 +33,8 @@ and are shown as "UPI xxxxx1234" (D-030).
 | Platform channel `track_expense/sms` | `…/MainActivity.kt` ↔ `app/lib/core/data/sms_detection.dart` |
 | Table builder, confidence rule, quick suggestions, reply words, note rule (pure Dart) | `app/lib/core/domain/sms_categories.dart` |
 | Settings / review screens | `app/lib/features/sms/sms_screen.dart`, `review_screen.dart` (`/sms/review`) |
-| Kotlin tests | `app/android/app/src/test/…/SmsParserTest.kt`, `SmsTemplatesTest.kt`, `AutoAddLogicTest.kt`, `HumanInTheLoopTest.kt` |
+| Auto-added entries to check (pure Dart), Ledger filter, Looks right, Home line | `app/lib/core/domain/auto_added.dart`, `features/ledger/ledger_screen.dart`, `features/entry/entry_screen.dart`, `features/home/home_screen.dart` |
+| Kotlin tests | `app/android/app/src/test/…/SmsParserTest.kt`, `SmsTemplatesTest.kt`, `AutoAddLogicTest.kt`, `HumanInTheLoopTest.kt`, `AutoAddedMarkerTest.kt` |
 
 ## Auto-add flow
 
@@ -49,7 +50,8 @@ Worker → SmsCategoriser with the table the app pushed:
          → canonical merchant's history → built-in default → none
        → confident (money moved + amount + payee + rules category + signed in)?
            yes: same user/direction/amount within ±15 min already saved? stop.
-                else write `transactions` with source "sms", note
+                else write `transactions` with source "sms",
+                autoAdded true (D-031), note
                 "Swiggy · HDFC XX1234"; notify "Added ₹1,499 expense ·
                 Swiggy → Food" [Undo] [Change → /edit/<id>]
            no:  add to the review list; notify "₹150 to Ramesh K — what was
@@ -66,7 +68,21 @@ App   → Home banner "N detected entries to review"; the review list asks
         tap saves and remembers the payee), "Other…" or tapping opens the
         form prefilled, swipe dismisses. Editing an SMS entry later updates
         the payee memory; "Forget remembered payees" clears it.
+App   → auto-added entries show an "Auto" badge (confirmed ones "SMS");
+        Home "N auto-added entries to check" (yours, last 30 days) opens the
+        Ledger's "Auto-added" filter; "Looks right" on the entry, or saving
+        an edit, clears the marker (D-031)
 ```
+
+## Auto-added marker (D-031)
+
+Only a fully automatic save (rules, history or a remembered payee, nobody
+asked) writes `autoAdded: true`. A notification category button, a Reply and
+the review list (chip or form) are the user's own answer: no marker, the
+entry shows **SMS**. The marker stays until the entry's owner taps **Looks
+right** on the entry screen or saves an edit; housemates see the **Auto**
+badge and "Not checked yet" but no button, and the Home count and Ledger
+filter only list your own entries.
 
 The app pushes the table 2 s after entries change while signed in, and
 clears it on sign-out. Demo and emulator builds push no Firebase ids, so

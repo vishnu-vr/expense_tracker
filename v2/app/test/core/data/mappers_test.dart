@@ -49,6 +49,27 @@ void main() {
     expect(transactionFromDoc('t', {...doc, 'source': 'other'})!.source, isNull);
   });
 
+  test('autoAdded round trips; written only when true, anything else reads false (D-031)', () {
+    final tx = Transaction(
+      id: '',
+      amount: 1499,
+      categoryId: 'shopping',
+      date: DateTime(2026, 11, 9, 18),
+      type: TransactionType.expense,
+      source: 'sms',
+      autoAdded: true,
+    );
+    final doc = transactionToDoc(tx);
+    expect(doc['autoAdded'], isTrue);
+    final back = transactionFromDoc('t', doc)!;
+    expect(back.autoAdded, isTrue);
+    expect(back.fromSms, isTrue);
+    final checked = transactionToDoc(back.copyWith(autoAdded: false));
+    expect(checked.containsKey('autoAdded'), isFalse);
+    expect(transactionFromDoc('t', {...doc, 'autoAdded': 'yes'})!.autoAdded, isFalse);
+    expect(transactionFromDoc('t', {...doc}..remove('autoAdded'))!.autoAdded, isFalse);
+  });
+
   test('reads v1 ISO-string dates and rejects broken documents', () {
     final t = transactionFromDoc('a', {
       'amount': 12.5,

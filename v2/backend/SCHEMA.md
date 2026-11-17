@@ -52,6 +52,7 @@ Subcollections (all read/write by home members unless stated):
 | `homeId` | string | immutable |
 | `tagIds` | string[] | required (use `[]`) |
 | `source` | `'sms'`? | absent when typed in; `'sms'` when added from a bank message (D-029). Rules accept only `'sms'`. Edits leave it as it is |
+| `autoAdded` | bool? | `true` only when the phone saved the entry from a bank message without asking (rules, history, remembered payee; D-031); requires `source: 'sms'`. Absent for everything confirmed by a person. The owner clears it ("Looks right" or saving an edit removes the field; `false` is also accepted); an update can never set it to `true`. The live rules have no field allowlist and accept it; the stricter local rule is not deployed yet |
 | `createdAt` | Timestamp | set to "now" by the client on create (see note below) |
 | `updatedAt` | Timestamp | |
 

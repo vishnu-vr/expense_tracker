@@ -2,7 +2,7 @@ import {
   assertFails, assertSucceeds, initializeTestEnvironment, RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
-  addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, setDoc,
+  addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, orderBy, query, setDoc,
   Timestamp, updateDoc, where, writeBatch,
 } from "firebase/firestore";
 import { readFileSync } from "node:fs";
@@ -256,6 +256,11 @@ describe("transactions", () => {
     await assertSucceeds(setDoc(doc(db("alice"), "transactions/n13"), txDoc("alice", "h1", { source: "sms" })));
     await assertFails(setDoc(doc(db("alice"), "transactions/n14"), txDoc("alice", "h1", { source: "import" })));
     await assertFails(setDoc(doc(db("alice"), "transactions/n15"), txDoc("alice", "h1", { source: null })));
+    // Saved without asking (D-031): optional bool, only with source "sms".
+    await assertSucceeds(setDoc(doc(db("alice"), "transactions/n16"), txDoc("alice", "h1", { source: "sms", autoAdded: true })));
+    await assertSucceeds(setDoc(doc(db("alice"), "transactions/n17"), txDoc("alice", "h1", { source: "sms", autoAdded: false })));
+    await assertFails(setDoc(doc(db("alice"), "transactions/n18"), txDoc("alice", "h1", { source: "sms", autoAdded: "yes" })));
+    await assertFails(setDoc(doc(db("alice"), "transactions/n19"), txDoc("alice", "h1", { autoAdded: true }))); // typed in
   });
   it("only the owner of an entry updates it", async () => {
     await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tA"), { amount: 300, note: "Lunch + tea" }));
@@ -268,6 +273,18 @@ describe("transactions", () => {
     await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tA"), { source: "sms" }));
     await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tA"), { note: "Swiggy · HDFC XX1234" })); // keeps source
     await assertFails(updateDoc(doc(db("alice"), "transactions/tA"), { source: "manual" }));
+  });
+  it("only the owner clears the auto-added marker, and nobody sets it on an edit", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "transactions/tAuto"), txDoc("alice", "h1", { source: "sms", autoAdded: true }));
+    });
+    await assertFails(updateDoc(doc(db("bob"), "transactions/tAuto"), { autoAdded: deleteField() })); // housemate
+    await assertFails(updateDoc(doc(db("alice"), "transactions/tAuto"), { autoAdded: "no" }));
+    await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tAuto"), { note: "Swiggy · HDFC XX1234" })); // keeps it
+    await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tAuto"), { autoAdded: false }));
+    await assertFails(updateDoc(doc(db("alice"), "transactions/tAuto"), { autoAdded: true })); // cannot set it again
+    await assertSucceeds(updateDoc(doc(db("alice"), "transactions/tAuto"), { autoAdded: deleteField() }));
+    await assertFails(updateDoc(doc(db("alice"), "transactions/tA"), { source: "sms", autoAdded: true }));
   });
   it("only the owner of an entry deletes it", async () => {
     await assertFails(deleteDoc(doc(db("bob"), "transactions/tA")));

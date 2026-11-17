@@ -64,7 +64,7 @@ class SmsAutoAddWorker(context: Context, params: WorkerParameters) : CoroutineWo
                         // A remembered payee brings its last words too: "auto to office · Ramesh K".
                         val words = memory?.words?.takeIf { decision.placement.source == CategorySource.MEMORY }
                         val note = SmsNote.compose(words, sms.merchant, sms.account)
-                        val id = SmsEntryWriter.write(db, table, sms.amount!!, sms.type, decision.placement.categoryId, receivedAt, note)
+                        val id = SmsEntryWriter.write(db, table, sms.amount!!, sms.type, decision.placement.categoryId, receivedAt, note, SmsSave.AUTO_ADD)
                         if (id == null) {
                             toReview(context, table, sms, receivedAt, decision.placement)
                         } else {

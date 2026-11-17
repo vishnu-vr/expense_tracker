@@ -147,6 +147,8 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
       homeId: base?.homeId,
       tagIds: _tagIds.toList(),
       source: base?.source ?? widget.prefillSource,
+      // Saving means the owner checked it: an auto-added marker is cleared (D-031).
+      autoAdded: false,
     );
     try {
       final docId = await ref.read(householdRepositoryProvider).saveTransaction(tx);
@@ -172,6 +174,19 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       showToast(context, 'Could not save. Check your connection and try again.');
+    }
+  }
+
+  /// "Looks right" on an auto-added entry: clears the marker (D-031).
+  Future<void> _markChecked() async {
+    try {
+      await ref.read(householdRepositoryProvider).markChecked(widget.transactionId!);
+      if (!mounted) return;
+      HapticFeedback.selectionClick();
+      showToast(context, 'Marked as checked');
+      _close();
+    } catch (_) {
+      if (mounted) showToast(context, 'Could not save. Try again.');
     }
   }
 
@@ -294,7 +309,38 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
               ),
               const SizedBox(height: 16),
             ],
-            if (_original?.fromSms ?? widget.prefillSource == 'sms') ...[
+            if (_original?.autoAdded ?? false) ...[
+              // Saved by the phone without asking (D-031). Only the owner can
+              // clear the marker, so housemates see the note without the button.
+              LedgerCard(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.auto_awesome_outlined, size: 18, color: p.positive),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        readOnly
+                            ? 'Saved automatically from a bank message. Not checked yet.'
+                            : 'Saved automatically from a bank message. Check the category and note, then tap Looks right or update it.',
+                        style: LedgerText.body(size: 14, height: 1.4),
+                      ),
+                    ),
+                  ]),
+                  if (!readOnly) ...[
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: _saving ? null : _markChecked,
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('Looks right'),
+                      ),
+                    ),
+                  ],
+                ]),
+              ),
+              const SizedBox(height: 16),
+            ] else if (_original?.fromSms ?? widget.prefillSource == 'sms') ...[
               Row(children: [
                 Icon(Icons.sms_outlined, size: 16, color: p.muted),
                 const SizedBox(width: 8),
