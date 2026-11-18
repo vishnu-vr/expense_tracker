@@ -1,0 +1,12 @@
+{
+  // Compiles the eval to CommonJS, exactly like the deployed functions. Running
+  // it through tsx instead mixes ESM and CJS copies of Genkit and every model
+  // call fails with "Unknown action type returned from plugin".
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "lib-eval",
+    "sourceMap": false
+  },
+  "include": ["src", "eval"]
+}

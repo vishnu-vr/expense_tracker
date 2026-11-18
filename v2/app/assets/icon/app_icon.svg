@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#0B6E4F"/>
+  <!-- receipt: off-white page with a torn (zig-zag) bottom edge -->
+  <path d="M300 200 H724 A28 28 0 0 1 752 228 V812
+           L716 842 L680 812 L644 842 L608 812 L572 842 L536 812 L500 842 L464 812 L428 842 L392 812 L356 842 L320 812 L272 842
+           V228 A28 28 0 0 1 300 200 Z" fill="#F4F5F2"/>
+  <!-- rupee mark in ink -->
+  <g fill="none" stroke="#14171A" stroke-width="46" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M404 322 H620"/>
+    <path d="M404 404 H620"/>
+    <path d="M404 322 H478 C566 322 566 486 478 486 H422 L586 640"/>
+  </g>
+  <!-- ledger rules -->
+  <g stroke-linecap="round">
+    <path d="M362 718 H662" stroke="#14171A" stroke-width="20"/>
+    <path d="M362 770 H548" stroke="#0B6E4F" stroke-width="20"/>
+  </g>
+
+</svg>

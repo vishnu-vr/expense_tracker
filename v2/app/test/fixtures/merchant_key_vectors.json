@@ -1,0 +1,25 @@
+{
+  "_comment": "Shared test vectors for merchantKey(): Dart (sms_categories_test.dart) and Kotlin (MerchantKeyTest.kt) must agree. null means no key.",
+  "vectors": [
+    ["SWIGGY", "swiggy"],
+    ["Swiggy", "swiggy"],
+    ["swiggy@icici", "swiggy"],
+    ["Swiggy Instamart", "swiggy instamart"],
+    ["paytm-12345@ptybl", "paytm"],
+    ["AMAZON PAY IN", "amazon pay in"],
+    ["  Big   Basket!! ", "big basket"],
+    ["D-Mart", "d mart"],
+    ["9876543210@ybl", null],
+    ["1234", null],
+    ["", null],
+    ["   ", null],
+    ["Zomato Ltd.", "zomato ltd"],
+    ["UBER INDIA*TRIP", "uber india trip"],
+    ["Café Coffee Day", "caf coffee day"],
+    ["netflix.com", "netflix com"],
+    ["IRCTC 2 Wheeler 99", "irctc wheeler"],
+    ["ACME CORP-SALARY", "acme corp salary"],
+    ["Asha K", "asha k"],
+    ["Swiggy · HDFC XX1234", "swiggy hdfc xx1234"]
+  ]
+}

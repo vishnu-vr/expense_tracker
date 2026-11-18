@@ -1,0 +1,11 @@
+node_modules/
+functions/lib/
+functions/lib-eval/
+*.log
+.env
+.env.*
+!.env.example
+# Per-project function settings (no secrets) are committed so deploys are reproducible.
+!functions/.env.expense-tracker-v2-5c9fa
+functions/eval/results/
+*service-account*.json
