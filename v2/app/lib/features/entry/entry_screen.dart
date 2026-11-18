@@ -288,11 +288,13 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
                 ),
               ),
             ),
-      body: AbsorbPointer(
-        absorbing: readOnly,
-        child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      // The scroll view sits outside AbsorbPointer so a read-only entry
+      // (a housemate's) still scrolls; only taps on the form are blocked.
+      body: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        child: AbsorbPointer(
+          absorbing: readOnly,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             if (readOnly) ...[
               LedgerCard(

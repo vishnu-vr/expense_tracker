@@ -95,6 +95,13 @@ void main() {
     expect(find.textContaining('Added by Rohan'), findsOneWidget);
     expect(find.text('Update entry'), findsNothing);
     expect(find.byTooltip('Delete entry'), findsNothing);
+    // A read-only entry still scrolls (the form blocks taps, not drags).
+    final before = tester.getTopLeft(find.textContaining('Added by Rohan')).dy;
+    await tester.drag(find.byType(SingleChildScrollView).first, const Offset(0, -400));
+    await tester.pumpAndSettle();
+    final moved = find.textContaining('Added by Rohan').evaluate().isEmpty ||
+        tester.getTopLeft(find.textContaining('Added by Rohan')).dy < before;
+    expect(moved, isTrue, reason: 'View entry did not scroll');
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
