@@ -18,6 +18,7 @@ import '../features/ledger/ledger_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/shell/app_shell.dart';
+import '../features/sms/review_screen.dart';
 import '../features/sms/sms_screen.dart';
 import '../features/tags/tags_screen.dart';
 import 'providers.dart';
@@ -80,6 +81,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/add',
         builder: (_, state) {
           // Optional prefill, e.g. /add?type=income&amount=149&note=...
+          // A detected SMS entry also passes category, source=sms and review=<id>.
           final q = state.uri.queryParameters;
           return EntryScreen(
             prefillType: q['type'] == 'income'
@@ -88,6 +90,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             prefillAmount: double.tryParse(q['amount'] ?? ''),
             prefillNote: q['note'],
             prefillDate: DateTime.tryParse(q['date'] ?? ''),
+            prefillCategoryId: q['category'],
+            prefillSource: q['source'] == 'sms' ? 'sms' : null,
+            reviewId: q['review'],
           );
         },
       ),
@@ -115,6 +120,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/ask/history', builder: (_, _) => const AskHistoryScreen()),
       GoRoute(path: '/sms', builder: (_, _) => const SmsScreen()),
+      GoRoute(path: '/sms/review', builder: (_, _) => const ReviewScreen()),
       GoRoute(path: '/admin/billing', builder: (_, _) => const BillingScreen()),
     ],
   );

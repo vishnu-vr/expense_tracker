@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
+import '../../core/domain/auto_added.dart';
 import '../../core/domain/home_insights.dart';
 import '../../core/domain/insights_math.dart';
 import '../../core/domain/models.dart';
@@ -10,6 +11,35 @@ import '../../core/format/money.dart';
 import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/burn_sparkline_view.dart';
 import '../../core/widgets/common.dart';
+import '../ledger/ledger_screen.dart' show showAutoAddedInLedger;
+
+class _BannerRow extends StatelessWidget {
+  const _BannerRow({required this.icon, required this.text, required this.onTap});
+
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(children: [
+            Icon(icon, size: 18, color: p.accent),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: LedgerText.body(size: 14, weight: 500))),
+            Icon(Icons.chevron_right, color: p.muted),
+          ]),
+        ),
+      ),
+    );
+  }
+}
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -27,6 +57,13 @@ class HomeScreen extends ConsumerWidget {
     }
 
     final cards = ref.watch(insightCardsProvider).value ?? const <InsightCard>[];
+    final toReview = ref.watch(smsReviewQueueProvider).value?.length ?? 0;
+    // Your own entries saved from bank messages without asking, last 30 days (D-031).
+    final toCheck = autoAddedToCheck(
+      ref.watch(transactionsProvider).value ?? const <Transaction>[],
+      ref.watch(householdRepositoryProvider).currentUserId,
+      now: now,
+    );
     final headline = _headline(insights, money);
     final others = insights.smartInsights
         .where((c) => c.narrative != headline)
@@ -41,6 +78,31 @@ class HomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
             children: [
               _Header(homeName: home?.name ?? 'Your household', month: monthName(now.month)),
+              if (toReview > 0 || toCheck.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                // Bank messages SMS auto-add was not sure about (D-029) and
+                // entries it saved without asking (D-031), in one card.
+                LedgerCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(children: [
+                    if (toReview > 0)
+                      _BannerRow(
+                        icon: Icons.sms_outlined,
+                        text: toReview == 1
+                            ? '1 detected entry to review'
+                            : '$toReview detected entries to review',
+                        onTap: () => context.push('/sms/review'),
+                      ),
+                    if (toReview > 0 && toCheck.isNotEmpty) Divider(height: 1, color: p.line),
+                    if (toCheck.isNotEmpty)
+                      _BannerRow(
+                        icon: Icons.auto_awesome_outlined,
+                        text: autoAddedToCheckLabel(toCheck.length),
+                        onTap: () => showAutoAddedInLedger(context, ref, toCheck.first.date),
+                      ),
+                  ]),
+                ),
+              ],
               const SizedBox(height: 16),
               _NetSummary(health: insights.financialHealth, money: money),
               const SizedBox(height: 20),

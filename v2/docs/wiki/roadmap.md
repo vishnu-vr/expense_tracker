@@ -14,6 +14,10 @@ folder; this page is the working copy.
 - Eval on `gemini-3.8-flash`: 35/35, all figures exact (D-020).
 - v1 data migrated: 9 accounts, 6 households, 2,795 entries, totals match (D-023).
 - Admin billing & usage dashboard live: `getAdminDashboard` deployed, owner is admin, build 1.0.0 (3) distributed (D-024, 2026-11-14).
+- SMS category suggestions (D-032, experimental, build 1.0.0 (11)): default
+  Storage bucket (asia-south1) with `storage.rules`, `suggestSmsCategory`
+  deployed, live smoke 24/24 (2026-11-17). Gemma model file uploaded
+  2026-11-18; first on-phone run pending.
 - Google sign-in enabled and wired in the app; reaches Google's sign-in screen
   on Android.
 
@@ -23,9 +27,13 @@ folder; this page is the working copy.
 |---|---|
 | Request a Claude quota increase in Vertex AI (D-022) | Quota requests are made by the project owner in the console |
 | Finish installing Xcode + CocoaPods | iOS build |
-| Play Store SMS permission declaration | Your developer account |
+| Play Store SMS permission declaration (needed before any Play release; D-005, D-029) | Your developer account |
+| 10–20 real bank SMS samples (numbers and names changed) for the auto-add parser tests, your phone model for Gemini Nano, and the manual SMS auto-add checklist on your phone (testing.md, D-029, D-030) | Real messages and a real phone signed in to the live project |
+| Go-ahead to deploy the stricter Firestore rule for `source` (the live rules already accept it; D-029) | A production deploy |
 | Go-ahead for the Flash-Lite eval subset (billed, ~66k input tokens), then deploy `askAgent` and ship build 1.0.0 (6) (D-027) | Billed run and a production deploy |
 | Go-ahead for the voice/Malayalam eval subset on Flash and Flash-Lite (billed, 8 questions × 2 models), then deploy `askAgent`, run the manual voice checklist on a real phone, and ship build 1.0.0 (7) (D-028) | Billed run, a production deploy and a real microphone |
+| Go-ahead to deploy `getAdminDashboard` (shows SMS suggestion counts) and the Firestore rules for `aiRateLimits` (the live rules already deny it by default) (D-032) | Production deploys |
+| Try category suggestions on your S24 Ultra: Cloud vs Gemma on a few unfamiliar shops and replies, and Gemma's speed (testing.md steps 20–24) | A real phone and real payments |
 | Turn on the Cloud Billing export to BigQuery (dataset `billing_export`, US multi-region; D-024) | Only a billing account admin can, in the console; see operations.md › Billing dashboard |
 
 ## Next up (in order)
@@ -40,14 +48,15 @@ folder; this page is the working copy.
 
 ## Planned features
 
-- **SMS auto-add** with a toggle: see [sms.md](sms.md) for the open
-  questions. Separate plan.
-- **On-device AI spike.** Measure accuracy, latency, download size and device
-  coverage for parsing and categorising one bank SMS with (a) an OS model
-  (Gemini Nano via ML Kit GenAI on Android, Apple's on-device model on iOS)
-  and (b) a bundled small open model. Good fit: one message, short output,
-  private. Poor fit: the multi-step assistant, which stays in the cloud.
-  Package names and device support change fast; re-check docs first.
+- **SMS auto-add** is built and experimental on branch `exp/sms-auto-add`
+  (D-029, D-030, [sms.md](sms.md)), distributed as build 1.0.0 (9) with
+  notification questions, payee memory and the evening catch-up. Next: tune
+  the templates with real messages, then decide whether it leaves
+  "experimental".
+- **On-device AI.** Gemini Nano suggests categories in the SMS review list
+  (D-029, foreground only); the SMS screen says why it is unavailable
+  (D-030). Galaxy S24 phones are not on Google's Prompt API device list.
+  Still to measure: accuracy and device coverage on real phones; Apple's on-device model for iOS has no SMS use.
 - What-if tool for the assistant; category suggestions from embeddings.
 - Talk mode: speak the answer sentence by sentence as it streams (D-028 v1
   waits for the whole answer, about 10 s).

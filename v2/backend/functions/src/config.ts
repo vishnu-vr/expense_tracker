@@ -57,6 +57,45 @@ export function resolveAgentModel(key?: string): string {
 }
 
 /**
+ * SMS category suggestions (D-032). Users pick Cloud with a D-027 key; the
+ * cheaper Flash-Lite is the default here (unlike the assistant), so a
+ * missing or unknown key gives Flash-Lite.
+ */
+export const SMS_SUGGEST = {
+  defaultModelKey: "flash-lite",
+  /** Items per call (the review list asks for up to 5 at once). */
+  maxItems: 5,
+  /** Characters of one payee name or reply; the app trims to this too. */
+  maxTextChars: 80,
+  /** Calls per user per India-time day; more gives `resource-exhausted`. */
+  dailyCallsPerUser: 100,
+  /** Output cap per call: one short line per item. */
+  maxOutputTokens: 120,
+} as const;
+
+export function resolveSmsSuggestModel(key?: string): { key: string; id: string; label: string } {
+  const choice =
+    AGENT_MODEL_CHOICES.find((c) => c.key === key) ?? AGENT_MODEL_CHOICES.find((c) => c.key === SMS_SUGGEST.defaultModelKey)!;
+  return { key: choice.key, id: resolveAgentModel(choice.key), label: choice.label };
+}
+
+/**
+ * The on-device model the app can download (D-032), for reference: the app
+ * reads `models/gemma3-1b-it-int4.json` from the default Storage bucket
+ * (written by `scripts/upload-model.mjs`), so a new upload needs no release.
+ * Gemma is provided under and subject to the Gemma Terms of Use
+ * (https://ai.google.dev/gemma/terms).
+ */
+export const ON_DEVICE_MODEL = {
+  manifest: "models/gemma3-1b-it-int4.json",
+  file: "models/gemma3-1b-it-int4.litertlm",
+  source: "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.litertlm",
+  sizeBytes: 584_417_280,
+  /** Of the uploaded file (2026-11-18); the manifest carries the same value. */
+  sha256: "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",
+} as const;
+
+/**
  * How the app will present the answer (D-028). `voice` means the app reads
  * the first text block aloud, so the prompt asks for a short spoken answer
  * first. The first entry is the default.

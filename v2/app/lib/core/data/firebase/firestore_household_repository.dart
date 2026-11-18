@@ -140,10 +140,18 @@ class FirestoreHouseholdRepository implements HouseholdRepository {
     }
     unawaited(_transactions.doc(tx.id).update({
       ...data,
+      // Saving an edit means the owner checked it (D-031).
+      if (!tx.autoAdded) 'autoAdded': FieldValue.delete(),
       'updatedAt': FieldValue.serverTimestamp(),
     }));
     return tx.id;
   }
+
+  @override
+  Future<void> markChecked(String id) async => unawaited(_transactions.doc(id).update({
+        'autoAdded': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }));
 
   @override
   Future<void> deleteTransaction(String id) async => unawaited(_transactions.doc(id).delete());

@@ -77,6 +77,39 @@ void main() {
     expect(data['userId'], 'u1');
   });
 
+  test('auto-added marker: kept when untouched, cleared by an edit or Looks right (D-031)', () async {
+    Future<Map<String, dynamic>> read(String id) async =>
+        (await db.collection('transactions').doc(id).get()).data()!;
+    for (final id in ['a1', 'a2']) {
+      await db.collection('transactions').doc(id).set({
+        'amount': 1499, 'categoryId': 'shopping', 'type': 'expense', 'userId': 'u1', 'homeId': 'h1',
+        'tagIds': <String>[], 'date': Timestamp.fromDate(DateTime(2026, 11, 9)),
+        'source': 'sms', 'autoAdded': true,
+      });
+    }
+    final txs = await repo.watchTransactions().first;
+    final a1 = txs.firstWhere((t) => t.id == 'a1');
+    expect(a1.autoAdded, isTrue);
+
+    // A save that still carries the marker keeps it.
+    await repo.saveTransaction(a1.copyWith(note: 'Decathlon'));
+    await settle();
+    expect((await read('a1'))['autoAdded'], isTrue);
+
+    // Saving an edit clears it.
+    await repo.saveTransaction(a1.copyWith(autoAdded: false));
+    await settle();
+    final edited = await read('a1');
+    expect(edited.containsKey('autoAdded'), isFalse);
+    expect(edited['source'], 'sms');
+
+    await repo.markChecked('a2');
+    await settle();
+    final checked = await read('a2');
+    expect(checked.containsKey('autoAdded'), isFalse);
+    expect(checked['amount'], 1499);
+  });
+
   test('budgets: zero removes, legacy per-month docs are ignored', () async {
     await repo.setBudget('food', 12000);
     await db.collection('homes/h1/categoryBudgets').doc('old').set({'amount': 5, 'year': 2025, 'month': 1});

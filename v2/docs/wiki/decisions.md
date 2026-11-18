@@ -9,6 +9,270 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-032 · Category suggestions: Cloud or a downloaded on-device model, always approved by the owner
+**2026-11-17 · Accepted · owner request · experimental · refines D-029, D-030, D-031**
+
+SMS auto-add could not place unfamiliar shops or vague replies, and Gemini
+Nano is not supported on the owner's Galaxy S24 Ultra. SMS settings gain
+**Category suggestions**: **Off** (default), **Cloud**, **On-device: Gemma 3
+1B**, or **Gemini Nano** (listed only on phones that support it).
+- **What is asked.** Only payees that rules, history and payee memory cannot
+  place, and reply words whose guess was unclear. Only the payee name or the
+  reply words (at most 80 characters) are used; phone-number payees ("UPI
+  xxxxx1234") are never sent. Never the SMS, amount, account or date.
+- **AI never saves.** An entry whose category came from a model (Cloud, Gemma
+  or Nano) waits in Review detected entries as "Suggested by AI · <model>"
+  (`ReviewItem.categorySource = "ai"`, `aiModel`). Notification: "₹420 to BLUE
+  TOKAI — AI suggests Food" with **Approve**, **Change** (the form,
+  prefilled) and **Reply**. The review list has **Approve** on each AI row and
+  **Approve all AI suggestions (N)** with a confirmation naming the count.
+  Approve is a user-confirmed save (`SmsSave.NOTIFICATION_ANSWER` natively, the
+  app's own save in the list): no `autoAdded`, the entry shows **SMS**, and it
+  teaches payee memory, so that payee needs no AI next time. Rules, history
+  and payee-memory saves are unchanged (D-031). Totals, budgets, insights and
+  assistant tools are unchanged.
+- **Cloud.** New callable `suggestSmsCategory` (asia-south1, signed in,
+  member of a home): `{ items: [{ text ≤ 80, type, kind? }] ≤ 5, model? }` →
+  `{ suggestions: (id|null)[], model }`. The server loads the household's
+  categories, asks the model for one id per numbered line and keeps only ids
+  that exist for the item's direction; the phone checks again. D-027 keys,
+  but **Flash-Lite is the default** here (missing or unknown key →
+  Flash-Lite). The text is never logged (counts, model and tokens only).
+  Usage goes into `aiUsage` as `smsSuggestions`, `smsInputTokens`,
+  `smsOutputTokens` (apart from the assistant's counts; admin dashboard shows
+  them in the assistant section). At most 100 calls per user per India-time
+  day (`aiRateLimits/{day}_{uid}`, server only, counted before the model
+  runs) → `resource-exhausted`. The worker calls it with the native
+  `firebase-functions` SDK (same BoM).
+- **On-device Gemma.** Google's current on-device LLM runtime for Android is
+  **LiteRT-LM** (`com.google.ai.edge.litertlm:litertlm-android` 0.19.1; the
+  MediaPipe LLM Inference API is the older path). Model: Gemma 3 1B IT int4,
+  `gemma3-1b-it-int4.litertlm` from `litert-community/Gemma3-1B-IT` (584,417,280
+  bytes), hosted in the project's default Storage bucket
+  (`expense-tracker-v2-5c9fa.firebasestorage.app`, asia-south1) with a
+  manifest `models/gemma3-1b-it-int4.json` (`{file, size, sha256}`) so a new
+  upload needs no release. Uploaded 2026-11-18 by the owner's download
+  (official file, terms accepted), SHA-256
+  `1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be`. Download: a WorkManager job that runs only on an
+  unmetered network with storage not low, as a foreground `dataSync` job with
+  progress; Firebase Storage REST with the user's ID token (rules: signed-in
+  read of `models/**`, no client writes); resumes with HTTP Range; checks size
+  and SHA-256 before the file is used; app-private `files/models/`; Delete
+  removes it and turns the setting Off. Inference: CPU backend, loaded
+  lazily per batch (only with ≥ 4 GB RAM and ≥ 1 GB free), one model at a
+  time, freed after use, 45 s budget; same prompt and answer check as Nano
+  (`NanoPrompt`, which now also accepts the category's exact name).
+  Gemma is provided under and subject to the Gemma Terms of Use
+  (ai.google.dev/gemma/terms); the notice is on the download option.
+- **Where it runs.** Cloud and Gemma run in the background worker (and the
+  reply path via a small expedited `SmsSuggestWorker`, outside the
+  notification receiver's 10 s); Nano only while the review list is open
+  (AICore blocks background use). With Off, the review list no longer asks
+  Nano by itself (this replaces the always-on Nano suggestion of D-029). Any
+  failure, timeout, missing file, low memory, rate limit or no network means
+  no suggestion, and the old "what was this for?" question.
+- **Interface.** Kotlin `CategorySuggester` with `NoSuggester`,
+  `CloudSuggester`, `GemmaSuggester`, `NanoSuggester`; `Suggesters.effective`
+  picks what can run (pure, tested).
+- **Costs.** Flash-Lite at about 300 input and 10 output tokens per call is
+  well under a paisa. The model download is about 0.58 GB of Storage egress
+  per install (about ₹5–8 at Google's published Asia egress rates); Storage
+  at rest is a few rupees a month.
+- Rules out: sending SMS text or amounts to any model, saving AI-categorised
+  entries without approval, bundling the model in the APK, and ungated
+  third-party copies of the model.
+
+---
+
+## D-031 · Auto-added entries are marked until their owner checks them
+**2026-11-17 · Accepted · owner request · experimental · refines D-029, D-030**
+
+Entries the phone saved by itself must be findable later for review; until
+now every SMS entry had the same "SMS" badge.
+- **Field.** `transactions.autoAdded: true`, written only by a fully
+  automatic save (`SmsAutoAddWorker`: rules, history or payee memory; Kotlin
+  `SmsSave.AUTO_ADD`). Notification category buttons and Reply
+  (`SmsSave.NOTIFICATION_ANSWER`) and the review list are the user's own
+  answer and write no marker. Written only when true, so older entries and
+  typed ones need no migration. App model: `Transaction.autoAdded`.
+- **Clearing.** **Looks right** on the entry screen
+  (`HouseholdRepository.markChecked`, a fire-and-forget update that deletes
+  the field) or saving an edit (the update deletes it) clears it. Only the
+  entry's owner can (update is owner-only); housemates see the badge and
+  "Saved automatically from a bank message. Not checked yet." without the
+  button.
+- **UI.** Ledger badge **Auto** (accent green text and dot, the palette's one
+  accent; warning/danger stay reserved for budgets) for unchecked auto-added
+  entries, **SMS** for confirmed or checked ones. Ledger chip **Auto-added ·
+  N** (shown only when you have some, or while on) filters the period to your
+  own unchecked auto-added entries; empty state "No auto-added entries to
+  check in this period." with "Show <month>" (where the newest is) or "Show
+  all entries". Home: "N auto-added entries to check" / "1 auto-added entry to
+  check", in one card with "N detected entries to review" when both apply;
+  counts your own entries from the **last 30 days** (`autoAddedCheckDays`)
+  and opens the Ledger's filter at the newest one's month.
+- **Rules (local, not deployed).** `autoAdded` is an optional bool, `true`
+  only together with `source: 'sms'`; on update it may be removed or set to
+  false but never turned to `true`. The live rules have no field allowlist,
+  so they already accept the field.
+- Rules out: a separate review queue on the server, letting housemates clear
+  someone else's marker, and counting other members' entries on Home.
+
+---
+
+## D-030 · SMS auto-add asks a human: notification questions, payee memory, evening catch-up
+**2026-11-17 · Accepted · owner request · experimental · refines D-029**
+
+Many UPI payments go to people (an auto driver's phone-number UPI id), so
+neither rules nor AI can know what they were for. Auto-add now asks.
+- **Ask in the notification.** A payment that goes to the review list posts
+  "₹150 to Ramesh K — what was this for?" (lock screen: "A payment to
+  describe") with up to two category buttons and **Reply** (RemoteInput),
+  when the phone can save natively (signed in to the real project, an amount).
+  Otherwise the old "Review detected entry" link stays.
+  - **Buttons** come from quick suggestions Dart computes and exports in the
+    table (`buildQuickSuggestions`): for every amount band (<100, 100–300,
+    300–1k, 1k–3k, 3k–10k, 10k+) × day-part (5–11, 11–16, 16–21, 21–5) the
+    household's categories score 3 for the same band and part, 2 for the same
+    band, 1 for the neighbouring band at the same part; gaps are filled from
+    the most-used categories (starter list food/grocery/transportation for a
+    new household). The item's own guess (e.g. built-in, money not clearly
+    moved) goes first. One tap saves through the same native write as
+    auto-add (`SmsEntryWriter`, `source: "sms"`, note "Ramesh K · HDFC
+    XX1234"), removes the item and turns the notification into "Added … ·
+    Undo · Change".
+  - **Reply.** The words become the note, first: "auto to office · Ramesh
+    K" (payee, or the account when there is no payee; `smsNote` /
+    `SmsNote.compose`). The category is guessed from the words without Nano
+    (it cannot run in the background, D-029): each word votes through the
+    household's own note words (`buildWordCategories`: 2+ notes, 80% in one
+    category, stop words and digits skipped), else a built-in keyword list
+    (`builtinKeywordCategories`, expense only, only for categories the
+    household has); the whole text also votes through the merchant
+    dictionary. Saved only when all votes agree; otherwise the notification
+    becomes "Which category for 'gift for amma'?" with the voted (then
+    suggested) categories, and the item keeps the words so the review list
+    shows them prefilled. Ignoring it leaves the item in the list as before.
+- **Payee memory (on the phone only).** Labelling a payment (button, reply,
+  a chip or the form from the review list) stores `hash → {category, type,
+  last words, time, entry id}` in SharedPreferences `sms_detection`. The key
+  is the first 32 hex characters of SHA-256(salt | normalised payee): `tel:`
+  + the last 10 digits of a phone-number UPI handle, `vpa:` + a named UPI
+  address, or `name:` + the merchant key. The salt is 16 random bytes made
+  once per install. `SmsReceiver` hashes the payee before anything is
+  queued, so phone numbers never reach WorkManager, the review list or the
+  memory; they are shown as "UPI xxxxx1234" (the parser used to drop such
+  payees). The next payment to a remembered payee is saved with that
+  category and words when auto-add is on, ahead of history and built-ins
+  (still needs money moved, an amount, a valid category and a signed-in
+  phone). Editing an SMS entry in the app updates the memory (the phone keeps
+  entry id → payee hash for 90 days, at most 300); Undo drops the memory
+  that entry created; **Forget remembered payees** on the SMS screen clears
+  it. At most 500 payees.
+- **Evening catch-up.** A daily WorkManager job at about 20:30 local time
+  (one unique job per evening, rescheduled by itself and whenever the SMS
+  screen opens) posts "3 payments need a description", opening
+  `/sms/review`, when detection, auto-add and the reminder are on, it runs
+  between 20:00 and 23:00, nothing was shown that day, and the list has items
+  with an amount from the last 7 days. **Evening reminder** toggle on the SMS
+  screen, on by default.
+- **Review list.** Each item has a note field (prefilled with reply words)
+  and up to three category chips (its own guess, then the same quick
+  suggestions) plus "Other…" for the form: one tap or a few words.
+- **Gemini Nano status.** Profile shows why it is not available: available,
+  downloadable, waiting for Wi-Fi, downloading, not supported (with the
+  "Android AICore" version or "AICore not installed"), AICore needs an update
+  (`NEEDS_SYSTEM_UPDATE`, `AICORE_INCOMPATIBLE`, AICore 601), still setting up
+  (AICore 606), no space, busy (`BUSY`, quota, background), Android too old,
+  or error with a numeric code, never an exception message. "Check again"
+  re-checks. Per the ML Kit GenAI device list (checked 2026-11-17) the Prompt
+  API supports Samsung from the Galaxy S25 series on; the S24 series is not
+  listed, so "Not supported on this phone yet" is expected there.
+  `genai-prompt` 1.0.0-beta5 is still the latest.
+- **Privacy.** Unchanged for messages. The table now also carries single
+  note words the household uses consistently (not whole notes), on the phone
+  only. Typed reply words are kept only in the review item until saved, and
+  never logged.
+- Rules out: storing phone numbers or raw UPI ids, cloud or background AI for
+  replies, syncing payee memory between phones (each phone learns its own;
+  the household's history still syncs through entries).
+
+---
+
+## D-029 · SMS auto-add: native worker, rules + history first, Nano only suggests, review list
+**2026-11-17 · Accepted · owner request · experimental · refines D-005**
+
+Profile › Bank SMS detection gains **Auto-add confident entries** (off by
+default; needs detection on). With it off, D-005 is unchanged: "Add this
+entry?" and a prefilled form.
+- **Flow.** `SmsReceiver` parses the message on the phone
+  (`SmsParser.parseDetails`: amount, direction, payee, bank from the sender id,
+  account/card last digits, reference number) and drops promotions, reminders
+  ("is due", "will be debited"), payment requests, declined/failed messages and
+  OTPs. Repeats are dropped for 7 days by the SHA-256 of the UPI/reference
+  number or a fingerprint of bank, account, amount, direction and minute
+  (`SeenLog`). The parsed fields go to an expedited WorkManager job
+  (`SmsAutoAddWorker`); the receiver itself has about 10 s.
+- **Confidence rule.** An entry is saved on its own only when the message says
+  money moved (debited, spent, sent, credited…), it has an amount and a payee,
+  and the payee's category comes from (1) the household's history, where a
+  merchant is known when at least 2 entries of that direction carry it and at
+  least 80% of them share one category (counted for the note's merchant part
+  and for the dictionary merchant it names, `buildCategoryTable`), or (2) the
+  built-in map (`builtinMerchantCategories`, one default category per
+  `merchant_dictionary.dart` merchant; payment apps have none). The category
+  must exist and fit the direction, and the phone must be signed in to the
+  real project. Everything else goes to **Review detected entries**
+  (SharedPreferences, parsed fields only, at most 100 items, 30 days) with
+  any category it found preselected. Corrections improve the history because
+  the table is rebuilt from saved entries.
+- **Dart decides, Kotlin looks up.** The rule lives in pure Dart
+  (`core/domain/sms_categories.dart`). The app pushes the table (homeId, uid,
+  known merchants, built-in patterns, categories, Firebase client ids) over
+  `track_expense/sms` 2 s after entries change and clears it on sign-out.
+  `merchantKey()` is implemented on both sides and tested against one shared
+  fixture (`app/test/fixtures/merchant_key_vectors.json`).
+- **Native write.** The worker uses the native Firebase Auth and Firestore
+  SDKs (BoM 35.1.0, the version FlutterFire's plugins resolve to) on the same
+  default app: if the process was started by the SMS, the default app is
+  created from the pushed options, which FlutterFire then reuses. Firestore is
+  left on default settings, because FlutterFire's own (also default) settings
+  are only accepted after start when equal. Writes are queued offline like the
+  app's. Before writing it checks for the same user, direction and amount
+  within ±15 minutes (`homeId` + `date` range, the existing index). The entry
+  is the app's normal shape plus `source: "sms"`, note `Swiggy · HDFC XX1234`.
+  Demo and emulator builds push no Firebase ids, so they only use the review
+  list. If App Check is ever enforced on Firestore, the worker would need its
+  own App Check provider first.
+- **Notifications** are private on the lock screen ("Entry added from a bank
+  message" / "A bank message to review"). "Added ₹1,499 expense · Swiggy →
+  Food" has **Undo** (deletes the entry; owner delete is already allowed) and
+  **Change** (`trackexpense://app/edit/<id>`). Review opens `/sms/review`; Home
+  shows "N detected entries to review".
+- **Gemini Nano** (ML Kit GenAI Prompt API `com.google.mlkit:genai-prompt:1.0.0-beta5`)
+  is integrated, but AICore runs inference only for the top foreground app
+  (`BACKGROUND_USE_BLOCKED`), so it cannot run in the worker. Instead, when the
+  review list opens, Nano suggests a category for up to 5 entries the rules
+  could not place (prompt: payee, direction, category ids; answer accepted only
+  if it is one listed id of that direction; 5 s timeout). It never saves on its
+  own. The library needs Android 8.0 (the app's minSdk is 24): it is merged
+  with `tools:overrideLibrary` and only called on API 26+. The model downloads
+  only on an unmetered network. Profile shows its status (precise reasons
+  since D-030).
+- **Privacy (unchanged from D-005).** The message text is never stored,
+  logged, uploaded or passed to the worker; the reference number is kept only
+  as a hash. Nano runs on the phone.
+- **Rules.** `validTransaction` accepts an optional `source` that must be
+  `'sms'`. The live rules have no field allowlist, so they already accept it;
+  the stricter local rule is not deployed yet.
+- Parser templates are written from the common public formats of HDFC, ICICI,
+  SBI, Axis, Kotak and generic UPI wording; no real messages were available.
+- Rules out: a headless Flutter engine in the background (heavier, less
+  reliable), sending message text to the server or a cloud model, letting an
+  uncalibrated model save entries, and SMS on iOS.
+
+---
+
 ## D-028 · Voice mode uses on-device speech around askAgent
 **2026-11-15 · Accepted · owner request**
 
@@ -324,7 +588,7 @@ Mockups: https://claude.ai/artifact/6ADJAJmXeMjoDUKKuHWsqC (A is the chosen
 one). Details: [design-system.md](design-system.md).
 
 ## D-005 · Bank SMS detection stays a suggestion, on-device only
-**2026-11-10 · Accepted · auto-add is a separate, later decision**
+**2026-11-10 · Accepted · auto-add is a separate, later decision (now D-029)**
 
 A Kotlin `BroadcastReceiver` parses incoming bank messages on the phone and
 posts "Add this entry?". Tapping it opens the form prefilled. Message text is

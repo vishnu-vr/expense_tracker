@@ -1,6 +1,13 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- ML Kit GenAI needs Android 8.0+; NanoCategoriser checks the version at runtime (D-029). -->
+    <uses-sdk tools:overrideLibrary="com.google.mlkit.genai.prompt,com.google.mlkit.genai.common,com.google.mlkit.genai.schema" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- SMS auto-add (D-029): expedited work runs as a short foreground service on Android 11 and older. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- On-device model download (D-032): a user-started foreground download with progress. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Talk to the assistant (D-028): the phone's speech recogniser. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -30,7 +37,7 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Entry suggestions open trackexpense://app/add?... -->
+            <!-- SMS notifications open trackexpense://app/add?..., /edit/<id> and /sms/review -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -48,6 +55,15 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
+        <!-- Undo, category buttons and Reply on SMS notifications. Only this app's notifications send them. -->
+        <receiver
+            android:name=".SmsActionReceiver"
+            android:exported="false" />
+        <!-- WorkManager's foreground service runs the model download (D-032). -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -71,5 +87,7 @@
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <!-- Bank SMS (D-030): the "Android AICore" version, to explain why Gemini Nano is unavailable. -->
+        <package android:name="com.google.android.aicore" />
     </queries>
 </manifest>

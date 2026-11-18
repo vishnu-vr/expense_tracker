@@ -1,26 +1,24 @@
 package com.vapps.track_expense
 
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.provider.Telephony
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import java.text.NumberFormat
 import java.time.Instant
-import java.util.Locale
 
 /**
- * Turns an incoming bank message into a "tap to add" notification. The entry
- * form opens prefilled; nothing is saved without the user. Message text is
- * never logged or stored.
+ * Handles an incoming bank message. Message text is never logged or stored.
+ *
+ * - Auto-add off (default, D-005): a "tap to add" notification; the entry
+ *   form opens prefilled and nothing is saved without the user.
+ * - Auto-add on (D-029): the parsed fields (never the text) go to
+ *   [SmsAutoAddWorker], which saves confident entries and queues the rest
+ *   for review. Messages that are not completed transactions are dropped.
  */
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -34,6 +32,18 @@ class SmsReceiver : BroadcastReceiver() {
         val body = parts.joinToString("") { it.messageBody.orEmpty() }
         val receivedAt = parts[0].timestampMillis.takeIf { it > 0 } ?: System.currentTimeMillis()
 
+        if (SmsPrefs.isAutoAdd(context)) {
+            // The payee identity (it may be a phone number) is hashed with this
+            // install's salt here, before anything is queued or stored (D-030).
+            val sms = SmsParser.parseDetails(sender, body)?.withHashedPayee(PayeeMemory.salt(context)) ?: return
+            if (sms.amount != null) {
+                if (SmsPrefs.seenBefore(context, sms, receivedAt, System.currentTimeMillis())) return
+                SmsAutoAddWorker.enqueue(context, sms, receivedAt)
+                return
+            }
+            // No amount to save: fall back to the plain suggestion below.
+        }
+
         val suggestion = SmsParser.parse(body) ?: return
         if (SmsPrefs.isDuplicate(context, sender, body, System.currentTimeMillis())) return
         notify(context, suggestion, receivedAt)
@@ -43,42 +53,27 @@ class SmsReceiver : BroadcastReceiver() {
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
     private fun notify(context: Context, suggestion: SmsSuggestion, receivedAt: Long) {
-        if (Build.VERSION.SDK_INT >= 33 && !granted(context, Manifest.permission.POST_NOTIFICATIONS)) return
-
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Entry suggestions", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Suggestions to add an entry when a bank message arrives"
-                },
-            )
-        }
+        if (!SmsNotifications.canNotify(context)) return
+        val manager = SmsNotifications.manager(context)
 
         // Opens /add in the Flutter app with the detected values.
-        val link = Uri.Builder()
-            .scheme("trackexpense").authority("app").path("/add")
-            .appendQueryParameter("type", suggestion.type)
-            .appendQueryParameter("date", Instant.ofEpochMilli(receivedAt).toString())
-            .apply { suggestion.amount?.let { appendQueryParameter("amount", it.toString()) } }
-            .build()
-        val open = Intent(Intent.ACTION_VIEW, link, context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val id = (receivedAt % Int.MAX_VALUE).toInt()
-        val pending = PendingIntent.getActivity(
-            context, id, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        val id = SmsNotifications.notificationId(receivedAt)
+        val pending: PendingIntent = SmsNotifications.link(
+            context, "/add", id,
+            buildMap {
+                put("type", suggestion.type)
+                put("date", Instant.ofEpochMilli(receivedAt).toString())
+                suggestion.amount?.let { put("amount", it.toString()) }
+            },
         )
 
         val kind = if (suggestion.type == "income") "income" else "expense"
-        val text = suggestion.amount?.let {
-            val money = NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("en").setRegion("IN").build())
-                .apply { maximumFractionDigits = if (it % 1.0 == 0.0) 0 else 2 }
-                .format(it)
-            "Looks like $money $kind. Tap to add it."
-        } ?: "Looks like a bank transaction. Tap to add it."
+        val text = suggestion.amount?.let { "Looks like ${SmsNotifications.money(it)} $kind. Tap to add it." }
+            ?: "Looks like a bank transaction. Tap to add it."
 
         manager.notify(
             id,
-            NotificationCompat.Builder(context, CHANNEL)
+            NotificationCompat.Builder(context, SmsNotifications.SUGGESTIONS)
                 .setSmallIcon(R.drawable.ic_stat_entry)
                 .setContentTitle("Add this entry?")
                 .setContentText(text)
@@ -88,9 +83,5 @@ class SmsReceiver : BroadcastReceiver() {
                 .setContentIntent(pending)
                 .build(),
         )
-    }
-
-    private companion object {
-        const val CHANNEL = "entry_suggestions"
     }
 }

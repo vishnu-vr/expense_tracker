@@ -142,6 +142,7 @@ describe("getAdminDashboard", () => {
         { homeId: "h2", homeName: "Iyer", questions: 1, inputTokens: 5000, outputTokens: 50 },
         { homeId: "h1", homeName: "Sharma", questions: 3, inputTokens: 1000, outputTokens: 100 },
       ],
+      sms: { suggestions: 0, inputTokens: 0, outputTokens: 0 },
     });
   });
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
+import '../../core/domain/auto_added.dart';
 import '../../core/domain/budget_alert.dart';
 import '../../core/domain/models.dart';
 import '../../core/domain/transaction_search.dart';
@@ -45,6 +46,25 @@ class LedgerPeriodNotifier extends Notifier<LedgerPeriod> {
 
 final ledgerPeriodProvider =
     NotifierProvider<LedgerPeriodNotifier, LedgerPeriod>(LedgerPeriodNotifier.new);
+
+/// The Ledger's "Auto-added" filter (D-031): only your entries the phone
+/// saved from bank messages without asking and you have not checked yet.
+class LedgerAutoOnlyNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool v) => state = v;
+}
+
+final ledgerAutoOnlyProvider =
+    NotifierProvider<LedgerAutoOnlyNotifier, bool>(LedgerAutoOnlyNotifier.new);
+
+/// Opens the Ledger on the Auto-added filter, at the month of [newest].
+void showAutoAddedInLedger(BuildContext context, WidgetRef ref, DateTime newest) {
+  ref.read(ledgerAutoOnlyProvider.notifier).set(true);
+  ref.read(ledgerPeriodProvider.notifier).set(LedgerPeriod(LedgerMode.month, newest));
+  context.go('/ledger');
+}
 
 class BudgetAlertRow {
   const BudgetAlertRow(this.category, this.spent, this.budget);
@@ -117,6 +137,10 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
     final tags = ref.watch(tagByIdProvider);
     final me = ref.watch(householdRepositoryProvider).currentUserId;
     final setPeriod = ref.read(ledgerPeriodProvider.notifier).set;
+    final autoOnly = ref.watch(ledgerAutoOnlyProvider);
+    final toCheck = autoAddedToCheck(all ?? const <Transaction>[], me);
+    final toCheckInPeriod = toCheck.where((t) => period.contains(t.date)).toList();
+    final toCheckElsewhere = toCheck.where((t) => !period.contains(t.date)).firstOrNull;
 
     final inPeriod = (all ?? const <Transaction>[])
         .where((t) => period.contains(t.date))
@@ -128,9 +152,10 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
     }
 
     final query = _search.text.trim();
+    final filtered = autoOnly ? toCheckInPeriod : inPeriod;
     final shown = query.isEmpty
-        ? inPeriod
-        : inPeriod
+        ? filtered
+        : filtered
             .where((t) => transactionMatchesQuery(
                   t,
                   query,
@@ -221,6 +246,26 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
                         ),
                 ),
               ),
+              if (autoOnly || toCheck.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Pill(
+                    toCheck.isEmpty ? 'Auto-added' : 'Auto-added · ${toCheck.length}',
+                    selected: autoOnly,
+                    color: autoOnly ? null : p.positive,
+                    onTap: () => ref.read(ledgerAutoOnlyProvider.notifier).set(!autoOnly),
+                  ),
+                ),
+              ],
+              if (autoOnly)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Saved from bank messages without asking you. Open one to check it.',
+                    style: LedgerText.body(size: 12, color: p.muted),
+                  ),
+                ),
               if (query.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -249,9 +294,19 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               sliver: SliverToBoxAdapter(
-                child: EmptyState(query.isEmpty
-                    ? 'No entries in this period.'
-                    : 'No entries match "$query".'),
+                child: query.isEmpty && autoOnly
+                    ? EmptyState(
+                        'No auto-added entries to check in this period.',
+                        action: toCheckElsewhere != null
+                            ? 'Show ${monthYear(toCheckElsewhere.date)}'
+                            : 'Show all entries',
+                        onAction: () => toCheckElsewhere != null
+                            ? setPeriod(LedgerPeriod(LedgerMode.month, toCheckElsewhere.date))
+                            : ref.read(ledgerAutoOnlyProvider.notifier).set(false),
+                      )
+                    : EmptyState(query.isEmpty
+                        ? 'No entries in this period.'
+                        : 'No entries match "$query".'),
               ),
             )
           else
@@ -392,9 +447,15 @@ class _LedgerRow extends ConsumerWidget {
       leading: CategoryIcon(category: category),
       title: category?.name ?? 'Uncategorized',
       subtitle: note.isEmpty ? timeOfDay(tx.date) : '${timeOfDay(tx.date)} · $note',
-      below: tags.isEmpty
+      below: tags.isEmpty && !tx.fromSms && !tx.autoAdded
           ? null
           : Wrap(spacing: 6, runSpacing: 4, children: [
+              // Saved by the phone without asking, not checked yet (D-031),
+              // else added from a bank message (D-029).
+              if (tx.autoAdded)
+                Pill('Auto', color: p.positive, dot: p.positive)
+              else if (tx.fromSms)
+                Pill('SMS', color: p.muted),
               for (final t in tags) Pill(t.name, dot: colorFromHex(t.color)),
             ]),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [

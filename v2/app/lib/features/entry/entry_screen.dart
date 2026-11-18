@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +23,9 @@ class EntryScreen extends ConsumerStatefulWidget {
     this.prefillAmount,
     this.prefillNote,
     this.prefillDate,
+    this.prefillCategoryId,
+    this.prefillSource,
+    this.reviewId,
   });
 
   final String? transactionId;
@@ -30,6 +35,13 @@ class EntryScreen extends ConsumerStatefulWidget {
   final double? prefillAmount;
   final String? prefillNote;
   final DateTime? prefillDate;
+  final String? prefillCategoryId;
+
+  /// `sms` for an entry from a detected bank message (D-029).
+  final String? prefillSource;
+
+  /// The review-list item this form came from; removed once saved.
+  final String? reviewId;
 
   @override
   ConsumerState<EntryScreen> createState() => _EntryScreenState();
@@ -58,6 +70,7 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
       _type = widget.prefillType ?? TransactionType.expense;
       if (widget.prefillAmount != null) _amount.text = _plain(widget.prefillAmount!);
       _note.text = widget.prefillNote ?? '';
+      _categoryId = widget.prefillCategoryId;
       _loaded = true;
     }
   }
@@ -133,9 +146,26 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
       userEmail: base?.userEmail,
       homeId: base?.homeId,
       tagIds: _tagIds.toList(),
+      source: base?.source ?? widget.prefillSource,
+      // Saving means the owner checked it: an auto-added marker is cleared (D-031).
+      autoAdded: false,
     );
     try {
-      await ref.read(householdRepositoryProvider).saveTransaction(tx);
+      final docId = await ref.read(householdRepositoryProvider).saveTransaction(tx);
+      final reviewId = widget.reviewId;
+      final sms = ref.read(smsDetectionProvider);
+      // Local calls on the phone, not server round trips. The phone remembers
+      // the payee's category (D-030).
+      if (reviewId != null) {
+        try {
+          await sms.labelReviewItem(reviewId, categoryId: tx.categoryId, note: tx.note, docId: docId);
+        } catch (_) {}
+        ref.invalidate(smsReviewQueueProvider);
+      } else if (_isEdit && tx.fromSms) {
+        unawaited(sms
+            .entryEdited(docId, categoryId: tx.categoryId, type: tx.type.name, note: tx.note)
+            .catchError((_) {}));
+      }
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       showToast(context, _isEdit ? 'Entry updated' : 'Entry added');
@@ -144,6 +174,19 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       showToast(context, 'Could not save. Check your connection and try again.');
+    }
+  }
+
+  /// "Looks right" on an auto-added entry: clears the marker (D-031).
+  Future<void> _markChecked() async {
+    try {
+      await ref.read(householdRepositoryProvider).markChecked(widget.transactionId!);
+      if (!mounted) return;
+      HapticFeedback.selectionClick();
+      showToast(context, 'Marked as checked');
+      _close();
+    } catch (_) {
+      if (mounted) showToast(context, 'Could not save. Try again.');
     }
   }
 
@@ -265,6 +308,48 @@ class _EntryScreenState extends ConsumerState<EntryScreen> {
                 ]),
               ),
               const SizedBox(height: 16),
+            ],
+            if (_original?.autoAdded ?? false) ...[
+              // Saved by the phone without asking (D-031). Only the owner can
+              // clear the marker, so housemates see the note without the button.
+              LedgerCard(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.auto_awesome_outlined, size: 18, color: p.positive),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        readOnly
+                            ? 'Saved automatically from a bank message. Not checked yet.'
+                            : 'Saved automatically from a bank message. Check the category and note, then tap Looks right or update it.',
+                        style: LedgerText.body(size: 14, height: 1.4),
+                      ),
+                    ),
+                  ]),
+                  if (!readOnly) ...[
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: _saving ? null : _markChecked,
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('Looks right'),
+                      ),
+                    ),
+                  ],
+                ]),
+              ),
+              const SizedBox(height: 16),
+            ] else if (_original?.fromSms ?? widget.prefillSource == 'sms') ...[
+              Row(children: [
+                Icon(Icons.sms_outlined, size: 16, color: p.muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Added from a bank message',
+                      style: LedgerText.body(size: 13, color: p.muted)),
+                ),
+              ]),
+              const SizedBox(height: 12),
             ],
             Segmented<TransactionType>(
               options: const {

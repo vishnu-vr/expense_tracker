@@ -82,6 +82,10 @@ export interface HouseholdUsageRow {
   inputTokens: number;
   outputTokens: number;
   modelCalls: number;
+  /** SMS category suggestions (D-032): items asked about and their tokens. */
+  smsSuggestions?: number;
+  smsInputTokens?: number;
+  smsOutputTokens?: number;
 }
 
 export interface AssistantUsageSummary {
@@ -95,6 +99,8 @@ export interface AssistantUsageSummary {
   activeHouseholds: number;
   /** Sorted by total tokens (input + output), highest first. */
   byHousehold: { homeId: string; homeName: string; questions: number; inputTokens: number; outputTokens: number }[];
+  /** SMS category suggestions this month (D-032), separate from the assistant's counts above. */
+  sms: { suggestions: number; inputTokens: number; outputTokens: number };
 }
 
 export const EMPTY_ASSISTANT_USAGE: AssistantUsageSummary = {
@@ -105,6 +111,7 @@ export const EMPTY_ASSISTANT_USAGE: AssistantUsageSummary = {
   modelCalls: 0,
   activeHouseholds: 0,
   byHousehold: [],
+  sms: { suggestions: 0, inputTokens: 0, outputTokens: 0 },
 };
 
 export function shapeAssistantUsage(rows: HouseholdUsageRow[]): AssistantUsageSummary {
@@ -134,5 +141,10 @@ export function shapeAssistantUsage(rows: HouseholdUsageRow[]): AssistantUsageSu
     modelCalls: sum("modelCalls"),
     activeHouseholds: clean.filter((r) => r.questions > 0).length,
     byHousehold,
+    sms: {
+      suggestions: rows.reduce((s, r) => s + countOf(r.smsSuggestions), 0),
+      inputTokens: rows.reduce((s, r) => s + countOf(r.smsInputTokens), 0),
+      outputTokens: rows.reduce((s, r) => s + countOf(r.smsOutputTokens), 0),
+    },
   };
 }

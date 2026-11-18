@@ -29,6 +29,47 @@ void main() {
     expect(back.userId, 'u1');
   });
 
+  test('source "sms" round trips; other values and typed entries have none', () {
+    final tx = Transaction(
+      id: '',
+      amount: 1499,
+      categoryId: 'food',
+      date: DateTime(2026, 11, 10, 20, 15),
+      type: TransactionType.expense,
+      note: 'Swiggy · HDFC XX1234',
+      source: 'sms',
+    );
+    final doc = transactionToDoc(tx);
+    expect(doc['source'], 'sms');
+    expect(transactionFromDoc('t', doc)!.fromSms, isTrue);
+    // Without a source the key is left out, so an update keeps the stored marker.
+    final typed = Transaction(
+        id: 't', amount: 1, categoryId: 'food', date: tx.date, type: TransactionType.expense);
+    expect(transactionToDoc(typed).containsKey('source'), isFalse);
+    expect(transactionFromDoc('t', {...doc, 'source': 'other'})!.source, isNull);
+  });
+
+  test('autoAdded round trips; written only when true, anything else reads false (D-031)', () {
+    final tx = Transaction(
+      id: '',
+      amount: 1499,
+      categoryId: 'shopping',
+      date: DateTime(2026, 11, 9, 18),
+      type: TransactionType.expense,
+      source: 'sms',
+      autoAdded: true,
+    );
+    final doc = transactionToDoc(tx);
+    expect(doc['autoAdded'], isTrue);
+    final back = transactionFromDoc('t', doc)!;
+    expect(back.autoAdded, isTrue);
+    expect(back.fromSms, isTrue);
+    final checked = transactionToDoc(back.copyWith(autoAdded: false));
+    expect(checked.containsKey('autoAdded'), isFalse);
+    expect(transactionFromDoc('t', {...doc, 'autoAdded': 'yes'})!.autoAdded, isFalse);
+    expect(transactionFromDoc('t', {...doc}..remove('autoAdded'))!.autoAdded, isFalse);
+  });
+
   test('reads v1 ISO-string dates and rejects broken documents', () {
     final t = transactionFromDoc('a', {
       'amount': 12.5,

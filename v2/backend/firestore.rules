@@ -154,7 +154,14 @@ service cloud.firestore {
           && data.homeId is string
           && data.tagIds is list
           && !('accountId' in data)
-          && !('embedding' in data);
+          && !('embedding' in data)
+          // How the entry was made: absent when typed in, 'sms' when added
+          // from a bank message (D-029).
+          && (!('source' in data) || data.source in ['sms'])
+          // Saved by the phone without asking (D-031): optional bool, only
+          // on entries from a bank message.
+          && (!('autoAdded' in data) || data.autoAdded is bool)
+          && (data.get('autoAdded', false) != true || data.get('source', null) == 'sms');
       }
 
       allow read: if isHomeMember(resource.data.homeId);
@@ -169,7 +176,11 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid
         && unchanged('homeId')
         && unchanged('userId')
-        && validTransaction(request.resource.data);
+        && validTransaction(request.resource.data)
+        // The owner may clear `autoAdded` (remove it or set false) but never
+        // turn an entry into an auto-added one.
+        && (request.resource.data.get('autoAdded', false) != true
+            || resource.data.get('autoAdded', false) == true);
 
       allow delete: if isHomeMember(resource.data.homeId)
         && resource.data.userId == request.auth.uid;
@@ -185,6 +196,13 @@ service cloud.firestore {
     // Monthly assistant usage per household, `{YYYY-MM}_{homeId}`. Written by
     // askAgent, read by getAdminDashboard. Server-only.
     match /aiUsage/{docId} {
+      allow read, write: if false;
+    }
+
+    // ------------------------------------------------------- aiRateLimits
+    // Daily per-user call counters, `{YYYY-MM-DD}_{uid}` (D-032). Written by
+    // suggestSmsCategory. Server-only (also denied without this match).
+    match /aiRateLimits/{docId} {
       allow read, write: if false;
     }
 

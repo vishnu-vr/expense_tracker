@@ -15,6 +15,8 @@ class Transaction {
     this.userEmail,
     this.homeId,
     this.tagIds = const [],
+    this.source,
+    this.autoAdded = false,
   });
 
   final String id;
@@ -27,6 +29,18 @@ class Transaction {
   final String? userEmail;
   final String? homeId;
   final List<String> tagIds;
+
+  /// How the entry was made: null when typed in, `sms` when added from a
+  /// bank message (D-029).
+  final String? source;
+
+  bool get fromSms => source == 'sms';
+
+  /// Saved by the phone from a bank message without asking anyone (rules,
+  /// history or a remembered payee; D-031) and not yet checked by its owner.
+  /// Cleared by "Looks right" or by editing the entry. Firestore field
+  /// `autoAdded`.
+  final bool autoAdded;
 
   bool get isExpense => type == TransactionType.expense;
   bool get isIncome => type == TransactionType.income;
@@ -42,6 +56,8 @@ class Transaction {
     String? userEmail,
     String? homeId,
     List<String>? tagIds,
+    String? source,
+    bool? autoAdded,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -54,6 +70,8 @@ class Transaction {
       userEmail: userEmail ?? this.userEmail,
       homeId: homeId ?? this.homeId,
       tagIds: tagIds ?? this.tagIds,
+      source: source ?? this.source,
+      autoAdded: autoAdded ?? this.autoAdded,
     );
   }
 }

@@ -165,6 +165,11 @@ class DemoHouseholdRepository implements HouseholdRepository {
   }
 
   @override
+  Future<void> markChecked(String id) async => _transactions.set([
+        for (final t in _transactions.value) t.id == id ? t.copyWith(autoAdded: false) : t,
+      ]);
+
+  @override
   Future<void> deleteTransaction(String id) async =>
       _transactions.set(_transactions.value.where((t) => t.id != id).toList());
 
@@ -210,7 +215,9 @@ class DemoHouseholdRepository implements HouseholdRepository {
     void add(DateTime date, double amount, String cat, String note,
         {String user = 'u1',
         TransactionType type = TransactionType.expense,
-        List<String> tags = const []}) {
+        List<String> tags = const [],
+        bool sms = false,
+        bool auto = false}) {
       if (date.isAfter(now)) return;
       txs.add(Transaction(
         id: 'demo${n++}',
@@ -223,6 +230,8 @@ class DemoHouseholdRepository implements HouseholdRepository {
         userEmail: user == 'u1' ? 'asha@example.com' : 'rohan@example.com',
         homeId: 'demo',
         tagIds: tags,
+        source: sms || auto ? 'sms' : null,
+        autoAdded: auto,
       ));
     }
 
@@ -247,6 +256,15 @@ class DemoHouseholdRepository implements HouseholdRepository {
         add(day(14), 8200, 'transportation', 'Flight to Goa', tags: const ['goa']);
         add(day(15), 5400, 'entertainment', 'Scuba booking',
             user: 'u2', tags: const ['goa']);
+      }
+      if (back == 0) {
+        // From bank messages: two saved by the phone on its own and not yet
+        // checked (D-031), one Rohan's, one confirmed from a notification.
+        add(day(8, 13), 186, 'food', 'Chaayos · HDFC XX1234', sms: true);
+        add(day(9, 18), 1499, 'shopping', 'Decathlon · HDFC XX1234', auto: true);
+        add(day(10, 8), 150, 'transportation', 'auto to office · Ramesh K', auto: true);
+        add(day(10, 10), 320, 'grocery', 'Ramesh Stores · Kotak X5678',
+            user: 'u2', auto: true);
       }
     }
     return txs;

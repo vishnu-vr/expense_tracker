@@ -75,6 +75,7 @@ cd v2/backend
 firebase deploy --only firestore --project prod             # rules + indexes
 firebase deploy --only functions --project prod --force     # all functions
 firebase deploy --only functions:askAgent --project prod    # one function
+firebase deploy --only storage --project prod               # storage.rules (D-032)
 ```
 Before deploying functions: `npm run build && npm test` in `functions/`.
 Then run the live smoke test.
@@ -88,8 +89,9 @@ node scripts/smoke-live.mjs
 Signs up a throwaway user, checks rules (allow and deny), the transaction
 trigger (notification + embedding), that clients cannot read embeddings, and
 one real assistant answer, then deletes everything it created. Expect all
-`PASS`. Last result (2026-11-14): all 11 pass; the assistant answered
-"₹1,439 over the last 7 days" correctly in about 12 s.
+`PASS`. Last result (2026-11-17): all 24 pass; the assistant answered in
+about 12 s, and `suggestSmsCategory` filed "BLUE TOKAI COFFEE" as food and
+"auto to office" as transportation in about 1.5 s on Flash-Lite.
 
 If a run is interrupted, `node scripts/smoke-live.mjs --cleanup` removes
 every leftover (homes named "Smoke test", their data, and auth users ending in
@@ -100,7 +102,10 @@ every leftover (homes named "Smoke test", their data, and auth users ending in
 ### Callables return 401
 Cloud Run needs `allUsers` → `roles/run.invoker` on each callable's service
 (`askagent`, `joinhome`, `leavehome`, `confirmproposal`,
-`exporttransactionscsv`, region asia-south1). Sign-in is still enforced inside
+`exporttransactionscsv`, `suggestsmscategory`, region asia-south1). A newly
+created callable gets it on create, but it can take a minute or two to
+apply: `suggestSmsCategory` answered 401 right after its first deploy and
+200 a few minutes later (2026-11-17). Sign-in is still enforced inside
 each function. Set on 2026-11-14 (D-019). If it is ever missing again, fix it
 one of these ways:
 - Google Cloud console › Cloud Run › each service › Security › "Allow public
@@ -232,10 +237,41 @@ from `v2/backend`. A newly created callable gets the public invoker binding
 - *Admin section missing:* the claim is not set, or the token has not
   refreshed; sign out and in.
 
+## On-device model (D-032)
+
+Cloud Storage for Firebase: default bucket
+`expense-tracker-v2-5c9fa.firebasestorage.app`, asia-south1, STANDARD,
+created 2026-11-17 (the Cloud Storage for Firebase API was enabled for it).
+Rules: `backend/storage.rules` (signed-in users read `models/**`, no client
+writes). The app downloads `models/gemma3-1b-it-int4.json` (the manifest),
+then the file it names, and checks size and SHA-256.
+
+```
+cd v2/backend
+node scripts/model-storage.mjs status                    # bucket and model files
+node scripts/model-storage.mjs upload ~/Downloads/gemma3-1b-it-int4.litertlm
+```
+`upload` hashes the file, uploads it in 32 MiB chunks (resumable) to
+`models/gemma3-1b-it-int4.litertlm`, checks the stored size, then writes the
+manifest `{file, size, sha256, license}`. Apps pick it up on the next
+"Download on Wi-Fi"; no release is needed. Record the size and SHA-256 in
+`ON_DEVICE_MODEL` in `functions/src/config.ts` and in D-032.
+
+Only upload the official file: Hugging Face `litert-community/Gemma3-1B-IT`,
+`gemma3-1b-it-int4.litertlm` (584,417,280 bytes), downloaded after accepting
+the Gemma terms (gated; there is no ungated official copy). Gemma is
+provided under and subject to the Gemma Terms of Use found at
+ai.google.dev/gemma/terms. `create-bucket` exists for a fresh project only.
+
 ## Costs to watch
 
 - Cloud Functions min instances are 0; idle cost is near zero.
 - Each saved entry with a note makes one embedding call.
 - Each assistant question makes several model calls (one per tool round).
+- SMS category suggestions on Cloud (D-032): about 300 input + 10 output
+  Flash-Lite tokens per call, at most 100 calls per user per day.
+- The on-device model download: about 0.58 GB of Storage egress per install
+  (roughly ₹5–8), plus a few rupees a month to store it. asia-south1 has no
+  free Storage tier.
 - Artifact Registry cleanup policy deletes images older than 1 day (set by
   the first deploy).
