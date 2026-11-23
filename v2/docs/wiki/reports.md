@@ -110,8 +110,19 @@ builds.
 `npm run eval:reports -- --model vertexai/gemini-3.8-flash,vertexai/gemini-3.5-flash-lite`
 runs ten fixture reports (`eval/report-cases.ts`) through the writer and
 records how often the guard passes first time, after the retry, or falls back
-to the template, with latency and tokens. Billed (about 20–40 calls); not run
-yet. The narratives go to the local results file for reading.
+to the template, with latency and tokens. Billed (about 20–40 calls). The
+narratives go to the local results file for reading.
+
+| Date | Model | Guard first try | Template | Latency mean | Tokens per report (in / out) |
+|---|---|---|---|---|---|
+| 2026-11-23 | `vertexai/gemini-3.8-flash` (cap 1200) | 1/10 | 9/10 | 8.2 s | — |
+| 2026-11-23 | `vertexai/gemini-3.8-flash` (cap 4000) | 10/10 | 0/10 | 13.4 s (max 20.6 s) | ~2,000 / ~395 |
+| 2026-11-23 | `vertexai/gemini-3.5-flash-lite` | 10/10 | 0/10 | 2.0 s | ~2,000 / ~330 |
+
+With a 1200-token output cap, Flash's thinking used the budget and the JSON
+was cut off after the headline, so the template was used; the cap is now
+4000. Flash explains causes better ("driven by an ₹18,500 expense on
+18 Oct"); Flash-Lite is six times faster but mostly restates the figures.
 
 ## Cost
 

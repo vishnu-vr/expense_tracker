@@ -95,8 +95,13 @@ export const REPORTS = {
   customRetentionDays: 180,
   /** Monthly job: 07:00 on the 1st, India time. */
   monthlySchedule: "0 7 1 * *",
-  /** Output cap per narrative call. */
-  maxOutputTokens: 1200,
+  /**
+   * Output cap per narrative call. Gemini Flash's thinking counts against it:
+   * at 1200 the JSON was cut off after the headline on 9 of 10 eval reports
+   * (2026-11-23). A full answer is about 450 tokens, so the cap is a ceiling
+   * on runaway cost, not a size target.
+   */
+  maxOutputTokens: 4000,
   narrativeLimits: { headline: 120, summary: 600, changes: 4, suggestions: 3, item: 240 },
 } as const;
 
