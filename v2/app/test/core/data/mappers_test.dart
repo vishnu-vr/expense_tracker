@@ -4,6 +4,8 @@ import 'package:track_expense/core/data/agent.dart';
 import 'package:track_expense/core/data/firebase/firestore_household_repository.dart';
 import 'package:track_expense/core/data/firebase/mappers.dart';
 import 'package:track_expense/core/domain/models.dart';
+import 'package:track_expense/core/data/firebase/firebase_reports_repository.dart';
+import 'package:track_expense/core/domain/report.dart';
 
 void main() {
   test('transaction round trip uses a Timestamp and trims the note', () {
@@ -157,5 +159,63 @@ void main() {
       (i) => Stream.value('v$i'),
     ).toList();
     expect(out.last, 'v2');
+  });
+
+  group('reports (D-033)', () {
+    test('a report document with Timestamps', () {
+      final r = reportFromDoc('monthly_2026-10', {
+        'kind': 'monthly',
+        'period': {'from': '2026-10-01', 'to': '2026-10-31', 'label': 'October 2026', 'days': 31},
+        'compare': {'mode': 'previous', 'label': 'September 2026', 'from': '2026-09-01', 'to': '2026-09-30'},
+        'narrative': {'headline': 'h', 'summary': 's', 'changes': [], 'suggestions': []},
+        'narrativeSource': 'model',
+        'modelLabel': 'Gemini Flash-Lite',
+        'createdAt': Timestamp.fromDate(DateTime(2026, 11, 1, 7)),
+        'generatedAt': Timestamp.fromDate(DateTime(2026, 11, 3, 9)),
+        'sections': {'headline': {'metrics': []}},
+      })!;
+      expect(r.summary.generatedAt, DateTime(2026, 11, 3, 9));
+      expect(r.summary.compareLabel, 'September 2026');
+      expect(r.writtenBy, 'Written by Gemini Flash-Lite');
+      expect(reportFromDoc('bad', {'period': {'from': '2026-10-01', 'to': '2026-10-31'}}), isNull);
+    });
+
+    test('report_ready notifications and month review cards carry the report id', () {
+      final n = notificationFromDoc('n1', {
+        'type': 'report_ready', 'message': 'Your October 2026 report is ready.', 'reportId': 'monthly_2026-10',
+        'recipientId': 'u2', 'homeId': 'h1', 'createdBy': 'system', 'createdAt': Timestamp.fromDate(DateTime(2026, 11, 1, 7)),
+      })!;
+      expect(n.type, HouseholdNotificationType.reportReady);
+      expect(n.reportId, 'monthly_2026-10');
+      expect(n.isFor('u2'), isTrue);
+      expect(n.isFor('u1'), isFalse);
+      final tx = notificationFromDoc('n2', {'type': 'transaction_added', 'createdAt': Timestamp.now()})!;
+      expect(tx.isFor('anyone'), isTrue);
+      expect(tx.reportId, isNull);
+
+      final card = insightFromDoc('month_review_2026-10', {
+        'kind': 'month_review', 'title': 'October 2026 in review', 'body': 'b',
+        'data': {'month': '2026-10', 'reportId': 'monthly_2026-10'}, 'createdAt': Timestamp.now(),
+      }, 'u1')!;
+      expect(card.reportId, 'monthly_2026-10');
+      expect(insightFromDoc('i', {'title': 't', 'data': {'month': '2026-10'}, 'createdAt': Timestamp.now()}, 'u1')!.reportId, isNull);
+    });
+
+    test('generateReport request body', () {
+      final oct = DayRange(DateTime(2026, 10, 1), DateTime(2026, 10, 31));
+      expect(
+        FirebaseReportsRepository.generatePayload(period: oct, compare: CompareMode.lastYear, timeZone: 'Asia/Kolkata', model: 'flash-lite'),
+        {'from': '2026-10-01', 'to': '2026-10-31', 'compare': {'mode': 'last_year'}, 'timeZone': 'Asia/Kolkata', 'model': 'flash-lite'},
+      );
+      expect(
+        FirebaseReportsRepository.generatePayload(
+          period: oct,
+          compare: CompareMode.custom,
+          customCompare: DayRange(DateTime(2026, 8, 1), DateTime(2026, 8, 15)),
+          timeZone: 'Asia/Kolkata',
+        ),
+        {'from': '2026-10-01', 'to': '2026-10-31', 'compare': {'mode': 'custom', 'from': '2026-08-01', 'to': '2026-08-15'}, 'timeZone': 'Asia/Kolkata'},
+      );
+    });
   });
 }

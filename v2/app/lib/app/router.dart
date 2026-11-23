@@ -17,6 +17,8 @@ import '../features/insights/insights_screen.dart';
 import '../features/ledger/ledger_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/reports/report_screen.dart';
+import '../features/reports/reports_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/sms/review_screen.dart';
 import '../features/sms/sms_screen.dart';
@@ -119,6 +121,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/ask/history', builder: (_, _) => const AskHistoryScreen()),
+      // Expense reports (D-033); a monthly report's push opens /reports/monthly_YYYY-MM.
+      GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),
+      GoRoute(
+        path: '/reports/:id',
+        builder: (_, state) => ReportScreen(reportId: state.pathParameters['id']!),
+      ),
       GoRoute(path: '/sms', builder: (_, _) => const SmsScreen()),
       GoRoute(path: '/sms/review', builder: (_, _) => const ReviewScreen()),
       GoRoute(path: '/admin/billing', builder: (_, _) => const BillingScreen()),

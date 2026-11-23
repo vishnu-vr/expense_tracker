@@ -62,6 +62,9 @@ class PushService {
   }
 
   static String _routeFor(RemoteMessage m) {
+    // A report is ready (D-033).
+    final report = m.data['reportId'];
+    if (report is String && report.isNotEmpty) return '/reports/$report';
     final id = m.data['transactionId'];
     if (id is String && id.isNotEmpty && m.data['type'] != 'transaction_deleted') {
       return '/edit/$id';

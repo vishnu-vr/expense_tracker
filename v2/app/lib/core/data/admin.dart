@@ -16,6 +16,9 @@ int _int(Object? v) => _num(v).round();
 /// The `sms` map of the assistant section (D-032); empty from older backends.
 Map<Object?, Object?> _sms(Map<String, dynamic> json) => json['sms'] is Map ? json['sms'] as Map : const {};
 
+/// The `reports` map of the assistant section (D-033); empty from older backends.
+Map<Object?, Object?> _reports(Map<String, dynamic> json) => json['reports'] is Map ? json['reports'] as Map : const {};
+
 String _str(Object? v, [String fallback = '']) => v is String && v.isNotEmpty ? v : fallback;
 
 List<T> _list<T>(Object? raw, T? Function(Map<String, dynamic>) parse) => [
@@ -222,6 +225,9 @@ class AssistantUsageSummary {
     this.smsSuggestions = 0,
     this.smsInputTokens = 0,
     this.smsOutputTokens = 0,
+    this.reports = 0,
+    this.reportInputTokens = 0,
+    this.reportOutputTokens = 0,
   });
 
   /// False when the rollup could not be read (or an older backend sent none).
@@ -241,6 +247,12 @@ class AssistantUsageSummary {
   final int smsInputTokens;
   final int smsOutputTokens;
 
+  /// Expense reports written this month (D-033) and their narrative tokens,
+  /// separate from the assistant's numbers above.
+  final int reports;
+  final int reportInputTokens;
+  final int reportOutputTokens;
+
   factory AssistantUsageSummary.fromJson(Map<String, dynamic> json) => AssistantUsageSummary(
         available: json['available'] == true,
         questions: _int(json['questions']),
@@ -251,6 +263,9 @@ class AssistantUsageSummary {
         smsSuggestions: _int(_sms(json)['suggestions']),
         smsInputTokens: _int(_sms(json)['inputTokens']),
         smsOutputTokens: _int(_sms(json)['outputTokens']),
+        reports: _int(_reports(json)['reports']),
+        reportInputTokens: _int(_reports(json)['inputTokens']),
+        reportOutputTokens: _int(_reports(json)['outputTokens']),
         byHousehold: _list(json['byHousehold'], (m) {
           final id = _str(m['homeId']);
           if (id.isEmpty) return null;

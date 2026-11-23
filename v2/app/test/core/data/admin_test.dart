@@ -135,6 +135,13 @@ void main() {
       },
     }).assistant;
     expect([sms.smsSuggestions, sms.smsInputTokens, sms.smsOutputTokens], [12, 2400, 60]);
+    // Expense reports (D-033), absent from older backends.
+    expect(a.reports, 0);
+    final withReports = AssistantUsageSummary.fromJson({
+      'available': true,
+      'reports': {'reports': 6, 'inputTokens': 18000, 'outputTokens': 2400},
+    });
+    expect([withReports.reports, withReports.reportInputTokens, withReports.reportOutputTokens], [6, 18000, 2400]);
   });
 
   test('parses the households section and tolerates a missing one', () {
