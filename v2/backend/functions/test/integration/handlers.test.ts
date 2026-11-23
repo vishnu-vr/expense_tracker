@@ -17,6 +17,8 @@ import { joinHomeHandler } from "../../src/handlers/join-home";
 import { leaveHomeHandler } from "../../src/handlers/leave-home";
 import { sendNotificationPush } from "../../src/handlers/notifications";
 import { suggestSmsCategoryHandler } from "../../src/handlers/suggest-sms-category";
+import { generateMonthlyReports, generateReportHandler, refreshReportHandler, ReportDeps } from "../../src/handlers/reports";
+import { REPORTS, resolveAgentModel } from "../../src/config";
 import { SMS_SUGGEST } from "../../src/config";
 import { syncTransactionEmbedding, writeTransactionNotification } from "../../src/handlers/transactions";
 
@@ -647,6 +649,7 @@ describe("getAdminDashboard: assistant usage from the aiUsage rollup", () => {
         { homeId: "h1", homeName: "Alice & Bob", questions: 3, inputTokens: 900, outputTokens: 60 },
       ],
       sms: { suggestions: 0, inputTokens: 0, outputTokens: 0 },
+      reports: { reports: 0, inputTokens: 0, outputTokens: 0 },
     });
   });
 });
@@ -831,5 +834,180 @@ describe("proactive insights", () => {
     expect(data.categories.find((c) => c.id === "food")?.name).toBe("Food");
     expect(data.members).toEqual([{ id: "alice", name: "Alice", email: "alice@example.com" }, { id: "bob", name: "Bob", email: "bob@example.com" }]);
     expect(data.budgets).toEqual([{ categoryId: "food", amount: 8000 }]);
+  });
+});
+
+describe("expense reports (D-033)", () => {
+  const NOW_R = new Date("2026-11-01T01:30:00Z"); // 1 Nov, 07:00 IST
+  const good = (headline = "October 2026 in short") => ({ headline, summary: "Spent ₹2,000.5 in October 2026.", changes: [], suggestions: [] });
+  function reportDeps(answers: unknown[] = [], extra: Partial<ReportDeps> = {}) {
+    const calls: { modelId: string; prompt: string }[] = [];
+    const deps: ReportDeps = {
+      db,
+      resolveModel: (key) => resolveAgentModel(key),
+      narrator: async (modelId) => async (prompt) => {
+        calls.push({ modelId, prompt });
+        const a = answers.length ? answers.shift() : good();
+        if (a instanceof Error) throw a;
+        return { output: a, inputTokens: 3000, outputTokens: 400 };
+      },
+      now: () => NOW_R,
+      ...extra,
+    };
+    return { deps, calls };
+  }
+  async function seed() {
+    await db.doc("transactions/r1").set(txDoc("alice", "h1", { amount: 1200, note: "Swiggy", date: at("2026-10-05T06:30:00Z") }));
+    await db.doc("transactions/r2").set(txDoc("bob", "h1", { amount: 800.5, note: "secret note", categoryId: "grocery", date: at("2026-10-09T06:30:00Z") }));
+    await db.doc("transactions/r3").set(txDoc("alice", "h1", { amount: 1000, note: "Swiggy", date: at("2026-09-05T06:30:00Z") }));
+    await db.doc("transactions/r4").set(txDoc("carol", "h2", { amount: 99, date: at("2026-10-05T06:30:00Z") }));
+  }
+  const october = { from: "2026-10-01", to: "2026-10-31", compare: { mode: "previous" }, timeZone: "Asia/Kolkata" };
+
+  it("generateReport writes a custom report for the caller's household with the caller's model, and counts usage", async () => {
+    await seed();
+    const { deps, calls } = reportDeps();
+    const { reportId } = await generateReportHandler(deps, "alice", { ...october, model: "flash-lite" });
+    const doc = (await db.doc(`homes/h1/reports/${reportId}`).get()).data()!;
+    expect(doc).toMatchObject({
+      kind: "custom",
+      period: { from: "2026-10-01", to: "2026-10-31", label: "October 2026", days: 31 },
+      compare: { mode: "previous", label: "September 2026" },
+      narrative: good(),
+      narrativeSource: "model",
+      model: "vertexai/gemini-3.5-flash-lite",
+      modelLabel: "Gemini Flash-Lite",
+      createdBy: "alice",
+      generatedBy: "alice",
+      schemaVersion: 1,
+    });
+    expect(doc.sections.headline.metrics[0]).toMatchObject({ key: "spent", display: "₹2,000.50", compare: { baseDisplay: "₹1,000" } });
+    expect(doc.sections.members.rows.map((m: any) => m.name)).toEqual(["Alice", "Bob"]);
+    expect(calls.map((c) => c.modelId)).toEqual(["vertexai/gemini-3.5-flash-lite"]);
+    // The model never sees another household's entries or note text.
+    expect(calls[0].prompt).not.toContain("secret note");
+    expect(calls[0].prompt).not.toContain("₹99");
+    expect((await db.doc("aiUsage/2026-11_h1").get()).data()).toMatchObject({ reports: 1, reportInputTokens: 3000, reportOutputTokens: 400 });
+    // Default and unknown keys give the default model.
+    await generateReportHandler(reportDeps().deps, "bob", { ...october, model: "retired-model" });
+    await generateReportHandler(reportDeps().deps, "bob", october);
+    const models = (await db.collection("homes/h1/reports").get()).docs.map((d) => d.get("model")).sort();
+    expect(models).toEqual(["vertexai/gemini-3.5-flash-lite", "vertexai/gemini-3.8-flash", "vertexai/gemini-3.8-flash"]);
+  });
+
+  it("falls back to the template when the model invents numbers twice or is down", async () => {
+    await seed();
+    const bad = { ...good(), summary: "Spent about ₹2,001." };
+    const { reportId } = await generateReportHandler(reportDeps([bad, bad]).deps, "alice", october);
+    const doc = (await db.doc(`homes/h1/reports/${reportId}`).get()).data()!;
+    expect(doc).toMatchObject({ narrativeSource: "template", model: null, modelLabel: null });
+    expect(doc.narrative.headline).toBe("Spent ₹2,000.50 in October 2026, +100.1% on September 2026");
+    const down = await generateReportHandler(reportDeps([], { narrator: async () => { throw new Error("no credentials"); } }).deps, "alice", october);
+    expect((await db.doc(`homes/h1/reports/${down.reportId}`).get()).get("narrativeSource")).toBe("template");
+  });
+
+  it("validates input, the caller's household and the daily limit before the model runs", async () => {
+    await seed();
+    const { deps, calls } = reportDeps();
+    const ask = (uid: string, data: unknown) => code(generateReportHandler(deps, uid, data));
+    expect(await ask("alice", { ...october, timeZone: "Mars/Base" })).toBe("invalid-argument");
+    expect(await ask("alice", { ...october, model: "vertexai/x" })).toBe("invalid-argument");
+    expect(await ask("alice", { ...october, from: "2025-01-01" })).toBe("invalid-argument"); // > 366 days
+    expect(await ask("alice", { ...october, to: "2026-11-02" })).toBe("invalid-argument"); // future (1 Nov IST)
+    expect(await ask("alice", { ...october, compare: { mode: "custom" } })).toBe("invalid-argument");
+    expect(await ask("dave", october)).toBe("failed-precondition");
+    await db.doc("users/carol").update({ homeId: "h1" });
+    expect(await ask("carol", october)).toBe("permission-denied");
+    expect(calls).toHaveLength(0);
+
+    await db.doc("aiRateLimits/2026-11-01_alice").set({ day: "2026-11-01", uid: "alice", smsSuggestCalls: 3, reportCalls: REPORTS.dailyCallsPerUser - 1 });
+    expect(await ask("alice", october)).toBe("ok");
+    expect(await ask("alice", october)).toBe("resource-exhausted");
+    expect((await db.doc("aiRateLimits/2026-11-01_alice").get()).data()).toMatchObject({ smsSuggestCalls: 3, reportCalls: REPORTS.dailyCallsPerUser });
+    expect(calls).toHaveLength(1);
+    expect(await ask("bob", october)).toBe("ok");
+  });
+
+  it("refreshReport rebuilds in place for members of the same home only", async () => {
+    await seed();
+    const { reportId } = await generateReportHandler(reportDeps().deps, "alice", { ...october, compare: { mode: "custom", from: "2026-09-01", to: "2026-09-15" } });
+    const before = (await db.doc(`homes/h1/reports/${reportId}`).get()).data()!;
+    await db.doc("transactions/r5").set(txDoc("bob", "h1", { amount: 500, date: at("2026-10-20T06:30:00Z") }));
+    const { deps, calls } = reportDeps([good("Refreshed")]);
+    expect(await refreshReportHandler(deps, "bob", { reportId, timeZone: "Asia/Kolkata", model: "flash-lite" })).toEqual({ reportId });
+    const after = (await db.doc(`homes/h1/reports/${reportId}`).get()).data()!;
+    expect(after).toMatchObject({ createdBy: "alice", generatedBy: "bob", kind: "custom", narrative: { headline: "Refreshed" }, compare: { mode: "custom", from: "2026-09-01", to: "2026-09-15" } });
+    expect(after.createdAt.isEqual(before.createdAt)).toBe(true);
+    expect(after.sections.headline.metrics[0].display).toBe("₹2,500.50");
+    expect(calls[0].modelId).toBe("vertexai/gemini-3.5-flash-lite");
+
+    expect(await code(refreshReportHandler(deps, "carol", { reportId, timeZone: "Asia/Kolkata" }))).toBe("not-found");
+    expect(await code(refreshReportHandler(deps, "alice", { reportId: "nope", timeZone: "Asia/Kolkata" }))).toBe("not-found");
+    expect(await code(refreshReportHandler(deps, "alice", { reportId: "../x", timeZone: "Asia/Kolkata" }))).toBe("invalid-argument");
+  });
+
+  it("the monthly job writes one report per home with entries, notifies each member once, and is idempotent", async () => {
+    await seed();
+    await db.doc("homes/h3").set({ name: "Quiet", displayId: "QQQ111", ownerId: "erin", memberIds: ["erin"], createdAt: at("2026-01-01T00:00:00Z") });
+    await db.doc("homes/h1/insights/month_review_2026-10").set({ kind: "month_review", title: "t", body: "b", data: { month: "2026-10" }, periodKey: "2026-10", createdAt: at("2026-11-01T00:30:00Z"), dismissedBy: [] });
+    const old = at("2026-04-01T00:00:00Z");
+    await db.doc("homes/h1/reports/oldCustom").set({ kind: "custom", createdAt: old });
+    await db.doc("homes/h1/reports/monthly_2026-03").set({ kind: "monthly", createdAt: old });
+    const { deps, calls } = reportDeps();
+    const first = await generateMonthlyReports(deps, "Asia/Kolkata", NOW_R);
+    expect(first).toEqual({ homes: 3, written: 2, skipped: 1, failed: 0, notifications: 3, deleted: 1 });
+    expect(calls.every((c) => c.modelId === "vertexai/gemini-3.8-flash")).toBe(true);
+    const report = (await db.doc("homes/h1/reports/monthly_2026-10").get()).data()!;
+    expect(report).toMatchObject({ kind: "monthly", createdBy: "system", period: { label: "October 2026" }, compare: { label: "September 2026" }, modelLabel: "Gemini Flash" });
+    expect((await db.doc("homes/h1/reports/oldCustom").get()).exists).toBe(false);
+    expect((await db.doc("homes/h1/reports/monthly_2026-03").get()).exists).toBe(true);
+    expect((await db.doc("homes/h1/insights/month_review_2026-10").get()).get("data")).toEqual({ month: "2026-10", reportId: "monthly_2026-10" });
+    const notes = await db.collection("notifications").where("type", "==", "report_ready").get();
+    expect(notes.docs.map((d) => [d.get("homeId"), d.get("recipientId")]).sort()).toEqual([["h1", "alice"], ["h1", "bob"], ["h2", "carol"]]);
+    expect(notes.docs.find((d) => d.get("recipientId") === "alice")!.data()).toMatchObject({
+      title: "Your October report is ready", reportId: "monthly_2026-10", createdBy: "system", readBy: [],
+    });
+
+    const second = await generateMonthlyReports(reportDeps([good("Again")]).deps, "Asia/Kolkata", NOW_R);
+    expect(second).toMatchObject({ written: 2, notifications: 0, failed: 0 });
+    expect((await db.collection("homes/h1/reports").get()).docs.map((d) => d.id).sort()).toEqual(["monthly_2026-03", "monthly_2026-10"]);
+    expect((await db.collection("notifications").where("type", "==", "report_ready").get()).size).toBe(3);
+    const again = (await db.doc("homes/h1/reports/monthly_2026-10").get()).data()!;
+    expect(again.narrative.headline).toBe("Again");
+    expect(again.createdAt.isEqual(report.createdAt)).toBe(true);
+  });
+
+  it("one failing home does not stop the others", async () => {
+    await seed();
+    const errors: string[] = [];
+    const { deps } = reportDeps([], {
+      onMetrics: (m) => {
+        if (m.reportId.startsWith("h1/")) throw new Error("boom");
+      },
+    });
+    const r = await generateMonthlyReports(deps, "Asia/Kolkata", NOW_R, (homeId) => errors.push(homeId));
+    expect(r).toMatchObject({ homes: 2, failed: 1, written: 2 });
+    expect(errors).toEqual(["h1"]);
+    expect((await db.doc("homes/h2/reports/monthly_2026-10").get()).exists).toBe(true);
+  });
+
+  it("a report notification is pushed only to its recipient, opening the report", async () => {
+    await db.doc("users/alice/fcmTokens/a").set({ token: "a" });
+    await db.doc("users/bob/fcmTokens/b").set({ token: "b" });
+    const sent: any[] = [];
+    const messaging = { sendEach: async (m: any[]) => (sent.push(...m), { responses: m.map(() => ({ success: true })), successCount: m.length, failureCount: 0 }) };
+    const r = await sendNotificationPush(db, messaging as any, "n", {
+      type: "report_ready", title: "Your October report is ready", message: "Your October 2026 report is ready. See what changed.",
+      reportId: "monthly_2026-10", recipientId: "bob", homeId: "h1", createdBy: "system",
+    });
+    expect(r).toMatchObject({ recipientCount: 1, tokenCount: 1 });
+    expect(sent).toMatchObject([{ token: "b", notification: { title: "Your October report is ready" }, data: { route: "/reports/monthly_2026-10", reportId: "monthly_2026-10" } }]);
+  });
+
+  it("the insights job links the month's review card to an existing report", async () => {
+    await seed();
+    await db.doc("homes/h1/reports/monthly_2026-10").set({ kind: "monthly", createdAt: at("2026-11-01T01:30:00Z") });
+    await generateInsightsForHome(db, { homeId: "h1", memberIds: ["alice", "bob"] }, "Asia/Kolkata", new Date("2026-11-02T01:30:00Z"));
+    expect((await db.doc("homes/h1/insights/month_review_2026-10").get()).get("data.reportId")).toBe("monthly_2026-10");
   });
 });

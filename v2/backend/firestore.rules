@@ -130,6 +130,13 @@ service cloud.firestore {
         }
       }
 
+      // Expense reports (D-033): written only by the server (generateReport,
+      // refreshReport, the monthly job). Every member of the home reads them.
+      match /reports/{reportId} {
+        allow read: if isHomeMember(homeId);
+        allow write: if false;
+      }
+
       // Proactive insight cards: written by the scheduled function. A member may
       // only add or remove THEIR OWN uid in `dismissedBy`.
       match /insights/{insightId} {
@@ -207,8 +214,9 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------- notifications
-    // Created by the onTransactionWritten trigger. A member may only add
-    // their own uid to `readBy`.
+    // Created by the onTransactionWritten trigger, and by the monthly report
+    // job (`report_ready`, one per member with `recipientId`; the app hides
+    // other members' ones). A member may only add their own uid to `readBy`.
     match /notifications/{notificationId} {
       allow read: if isHomeMember(resource.data.homeId);
       allow create, delete: if false;

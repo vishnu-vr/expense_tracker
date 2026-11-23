@@ -62,6 +62,7 @@ describe("assistant usage helpers", () => {
         { homeId: "h1", homeName: "Sharma", questions: 4, inputTokens: 20000, outputTokens: 800 },
       ],
       sms: { suggestions: 0, inputTokens: 0, outputTokens: 0 },
+      reports: { reports: 0, inputTokens: 0, outputTokens: 0 },
     });
     // SMS category suggestions (D-032) are summed apart; the assistant's counts do not change.
     const withSms = shapeAssistantUsage([
@@ -70,6 +71,11 @@ describe("assistant usage helpers", () => {
     ]);
     expect(withSms).toMatchObject({ questions: 4, inputTokens: 20000, outputTokens: 800, activeHouseholds: 1, sms: { suggestions: 5, inputTokens: 1000, outputTokens: 12 } });
     expect(withSms.byHousehold.map((h) => h.homeId)).toEqual(["h1"]);
+    // Expense reports (D-033) are summed apart too.
+    const withReports = shapeAssistantUsage([
+      { homeId: "h1", homeName: "Sharma", questions: 1, inputTokens: 100, outputTokens: 10, modelCalls: 1, reports: 2, reportInputTokens: 6000, reportOutputTokens: 800 },
+    ]);
+    expect(withReports).toMatchObject({ inputTokens: 100, reports: { reports: 2, inputTokens: 6000, outputTokens: 800 } });
     expect(shapeAssistantUsage([])).toMatchObject({ available: true, questions: 0, activeHouseholds: 0, byHousehold: [] });
   });
 });

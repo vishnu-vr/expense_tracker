@@ -31,7 +31,11 @@ export async function sendNotificationPush(
   const homeSnap = await db.collection("homes").doc(homeId).get();
   if (!homeSnap.exists) return null;
   const memberIds = ((homeSnap.data()?.memberIds ?? []) as unknown[]).map(String);
-  const recipients = memberIds.filter((uid) => uid && uid !== createdBy);
+  // A notification for one member (a report is ready, D-033) goes only to them.
+  const recipientId = typeof data.recipientId === "string" ? data.recipientId : "";
+  const recipients = recipientId
+    ? memberIds.filter((uid) => uid === recipientId)
+    : memberIds.filter((uid) => uid && uid !== createdBy);
   const empty = { recipientCount: recipients.length, tokenCount: 0, successCount: 0, failureCount: 0, staleTokenDeleteCount: 0 };
   if (recipients.length === 0) return empty;
 
@@ -49,14 +53,20 @@ export async function sendNotificationPush(
 
   const type = typeof data.type === "string" ? data.type : "notification";
   const transactionId = typeof data.transactionId === "string" ? data.transactionId : "";
-  const route = transactionId && type !== "transaction_deleted" ? `/edit-transaction/${transactionId}` : "/dashboard";
+  const reportId = typeof data.reportId === "string" ? data.reportId : "";
+  const route = reportId
+    ? `/reports/${reportId}`
+    : transactionId && type !== "transaction_deleted"
+      ? `/edit-transaction/${transactionId}`
+      : "/dashboard";
   const body = typeof data.message === "string" && data.message ? data.message : "New activity in your home";
+  const title = typeof data.title === "string" && data.title ? data.title : "Track Expense";
 
   const response = await messaging.sendEach(
     targets.map((t) => ({
       token: t.token,
-      notification: { title: "Track Expense", body },
-      data: { notificationId, type, transactionId, route, homeId },
+      notification: { title, body },
+      data: { notificationId, type, transactionId, reportId, route, homeId },
     })),
   );
 

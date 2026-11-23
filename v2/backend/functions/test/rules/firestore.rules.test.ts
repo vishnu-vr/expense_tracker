@@ -55,6 +55,7 @@ beforeEach(async () => {
       await setDoc(doc(f, `homes/${h}/aiThreads/th1/proposals/p1`), { action: "set_budget", status: "pending", params: {}, summary: "s", createdBy: owner, createdAt: when });
       await setDoc(doc(f, `aiUsage/2026-10_${h}`), { month: "2026-10", homeId: h, questions: 1, inputTokens: 10, outputTokens: 5, modelCalls: 1, updatedAt: when });
       await setDoc(doc(f, `homes/${h}/insights/i1`), { kind: "month_review", title: "t", body: "b", data: {}, periodKey: "2026-10", createdAt: when, dismissedBy: [] });
+      await setDoc(doc(f, `homes/${h}/reports/monthly_2026-10`), { kind: "monthly", period: { from: "2026-10-01", to: "2026-10-31", label: "October 2026" }, compare: null, sections: {}, narrative: { headline: "h", summary: "s", changes: [], suggestions: [] }, narrativeSource: "template", model: null, createdBy: "system", createdAt: when, generatedAt: when, schemaVersion: 1 });
     }
     await setDoc(doc(f, "homes/h1/aiThreads/thBob"), { title: "Bob's", createdBy: "bob", createdAt: when, updatedAt: when });
     await setDoc(doc(f, "homes/h1/aiThreads/thBob/messages/m1"), { role: "user", blocks: [{ type: "text", text: "private" }], createdAt: when });
@@ -224,6 +225,25 @@ describe("insights", () => {
     await assertFails(updateDoc(ref("alice"), { title: "edited" }));
     await assertFails(updateDoc(ref("alice"), { dismissedBy: arrayUnion("alice"), body: "edited" }));
     await assertFails(updateDoc(doc(db("carol"), "homes/h1/insights/i1"), { dismissedBy: arrayUnion("carol") }));
+  });
+});
+
+describe("reports (D-033)", () => {
+  it("every member of the home reads its reports; other households and signed-out users do not", async () => {
+    await assertSucceeds(getDoc(doc(db("alice"), "homes/h1/reports/monthly_2026-10")));
+    await assertSucceeds(getDoc(doc(db("bob"), "homes/h1/reports/monthly_2026-10")));
+    await assertSucceeds(getDocs(query(collection(db("bob"), "homes/h1/reports"), orderBy("createdAt", "desc"))));
+    await assertFails(getDoc(doc(db("carol"), "homes/h1/reports/monthly_2026-10")));
+    await assertFails(getDocs(collection(db("carol"), "homes/h1/reports")));
+    await assertFails(getDoc(doc(db("dave"), "homes/h1/reports/monthly_2026-10")));
+    await assertFails(getDoc(doc(db(), "homes/h1/reports/monthly_2026-10")));
+  });
+  it("clients cannot create, edit or delete reports", async () => {
+    const report = { kind: "custom", period: { from: "2026-10-01", to: "2026-10-31" }, sections: {}, narrative: {}, createdBy: "alice", createdAt: when };
+    await assertFails(setDoc(doc(db("alice"), "homes/h1/reports/r2"), report));
+    await assertFails(addDoc(collection(db("alice"), "homes/h1/reports"), report));
+    await assertFails(updateDoc(doc(db("alice"), "homes/h1/reports/monthly_2026-10"), { narrative: { headline: "forged" } }));
+    await assertFails(deleteDoc(doc(db("alice"), "homes/h1/reports/monthly_2026-10")));
   });
 });
 
