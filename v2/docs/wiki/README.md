@@ -10,6 +10,7 @@ true: when you change behaviour, update the page in the same change.
 | [architecture.md](architecture.md) | You need the map: pieces, run modes, folders, data flows |
 | [ai-agent.md](ai-agent.md) | Touching the assistant, its tools, models or eval |
 | [sms.md](sms.md) | Touching bank SMS detection or planning auto-add |
+| [reports.md](reports.md) | Touching expense reports, their comparisons or the monthly job (D-033) |
 | [design-system.md](design-system.md) | Building or changing UI |
 | [testing.md](testing.md) | Adding tests or checking a change |
 | [operations.md](operations.md) | Running, deploying, migrating, or something is broken |

@@ -263,6 +263,37 @@ the Gemma terms (gated; there is no ungated official copy). Gemma is
 provided under and subject to the Gemma Terms of Use found at
 ai.google.dev/gemma/terms. `create-bucket` exists for a fresh project only.
 
+## Expense reports (D-033)
+
+**Deploy** (from `v2/backend`, with the owner's go-ahead):
+```
+firebase deploy --only firestore:rules --project prod
+firebase deploy --only functions:generateReport,functions:refreshReport,functions:generateMonthlyReports,functions:onNotificationCreated,functions:generateInsights,functions:getAdminDashboard --project prod
+```
+`firestore:rules` adds `homes/{homeId}/reports` (members read, no client
+writes); no new index is needed. `onNotificationCreated` gains per-recipient
+report pushes, `generateInsights` links the month review card, and
+`getAdminDashboard` returns report usage. New callables get the public
+invoker binding (D-019); if they return 401 see Troubleshooting.
+
+**Run the monthly job by hand for one home** (after a failed run, or to try
+it before the 1st). Same code as the schedule; a rerun updates the same
+`monthly_YYYY-MM` report and never notifies twice. Token as in
+[Run the model eval](#run-the-model-eval):
+```
+cd v2/backend/functions
+EVAL_ACCESS_TOKEN=<token> npm run monthly-report -- --project expense-tracker-v2-5c9fa --home <homeId>                    # preview
+EVAL_ACCESS_TOKEN=<token> npm run monthly-report -- --project expense-tracker-v2-5c9fa --home <homeId> --month 2026-10 --execute
+```
+Preview reads the household and lists the report's sections (no model call,
+no writes). `--execute` makes one billed model call and writes the report and
+the members' notifications. For every home at once, run the Cloud Scheduler
+job: `gcloud scheduler jobs run firebase-schedule-generateMonthlyReports-asia-south1 --location=asia-south1 --project=expense-tracker-v2-5c9fa`.
+
+**Narrative eval** (billed, 10 reports × 1–2 calls per model):
+`npm run eval:reports -- --model vertexai/gemini-3.8-flash,vertexai/gemini-3.5-flash-lite`
+with the same token setup as the model eval.
+
 ## Costs to watch
 
 - Cloud Functions min instances are 0; idle cost is near zero.
@@ -273,5 +304,8 @@ ai.google.dev/gemma/terms. `create-bucket` exists for a fresh project only.
 - The on-device model download: about 0.58 GB of Storage egress per install
   (roughly ₹5–8), plus a few rupees a month to store it. asia-south1 has no
   free Storage tier.
+- Expense reports (D-033): one Flash call per report (about 3k in / 400 out
+  tokens, two calls on a retry), at most 10 on-demand per user per day, plus
+  one per household on the 1st.
 - Artifact Registry cleanup policy deletes images older than 1 day (set by
   the first deploy).

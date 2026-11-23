@@ -178,6 +178,13 @@ It reports numeric accuracy, latency and token use per model. Without
   run (`RunAgentResult.usage`). They are counts only; no prompt or answer text
   is copied anywhere new.
 
+## Reports (D-033)
+
+Expense reports reuse the same core figures and the assistant's model choice
+(D-027) for a narrative written under a number guard, with a template
+fallback. See [reports.md](reports.md). "Ask about this report" opens Ask
+with a question for the same two periods.
+
 ## Ideas not built yet
 
 - What-if answers ("if dining drops 20%…") as a dedicated tool.

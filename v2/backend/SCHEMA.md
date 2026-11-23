@@ -37,7 +37,23 @@ Subcollections (all read/write by home members unless stated):
 - `aiThreads/{threadId}` — `{ title, createdBy, createdAt, updatedAt, usage?: { questions, inputTokens, outputTokens, modelCalls }, lastModel?, lastMessagePreview? }`. **Personal and read-only for clients** (D-025): only the member whose uid is `createdBy` can read the thread, its messages and its proposals; list queries must filter `where('createdBy','==', uid)` (index: `createdBy` ASC, `updatedAt` DESC). Created/updated by `askAgent`, which also rejects continuing someone else's thread (`not-found`). `usage` is incremented (`FieldValue.increment`) after each successful answer; `lastModel` is the model id (e.g. `vertexai/gemini-3.8-flash`); `lastMessagePreview` is the first ~80 characters of the latest answer's first text block (or its first stat). Threads created before D-025 have no `usage`/preview until their next answer.
   - `messages/{id}` — `{ role: 'user'|'assistant', blocks: Block[], createdAt, usage? }`. Read-only for clients. Order by `createdAt`. Assistant messages carry `usage: { inputTokens, outputTokens, modelCalls, model, latencyMs }` (that one answer).
   - `proposals/{id}` — `{ action, params, summary, status: 'pending'|'applied'|'rejected', createdBy, createdAt, resolvedBy?, resolvedAt?, result? }`. Read-only for clients; resolved through `confirmProposal` (by `createdBy` only).
-- `insights/{id}` — `{ kind, title, body, data, periodKey, createdAt, dismissedBy: string[] }`. Read by members; the only client write is adding/removing **your own uid** in `dismissedBy`. Doc id is stable: `<kind>_<periodKey>[_<subject>]`.
+- `insights/{id}` — `{ kind, title, body, data, periodKey, createdAt, dismissedBy: string[] }`. Read by members; the only client write is adding/removing **your own uid** in `dismissedBy`. Doc id is stable: `<kind>_<periodKey>[_<subject>]`. A `month_review` card's `data.reportId` points at that month's report once it exists (D-033).
+- `reports/{reportId}` — expense reports (D-033). **Read by every member of the home; clients never write** (only `generateReport`, `refreshReport` and the monthly job). Monthly ids are stable, `monthly_YYYY-MM`; on-demand reports have auto ids.
+  ```
+  { kind: 'monthly' | 'custom',
+    period: { from, to /* YYYY-MM-DD */, label, days, shape: 'month' | 'month_to_date' | 'range' },
+    compare: { mode: 'previous' | 'last_year' | 'average' | 'custom', label, from, to, days,
+               periods /* baseline periods asked for */, periodsUsed /* with entries */ } | null,
+    sections: { headline: { metrics: Metric[], baselineNote: string | null },
+                categories?, members?, rhythm?, merchants?, notable?, bills?, budgets?, tags? },
+    narrative: { headline, summary, changes: string[] /* ≤ 4 */, suggestions: string[] /* ≤ 3 */ },
+    narrativeSource: 'model' | 'template',
+    model: string | null /* e.g. vertexai/gemini-3.8-flash; null for the template */,
+    modelLabel: string | null /* "Gemini Flash" */,
+    timeZone, schemaVersion: 1,
+    createdBy: uid | 'system', createdAt, generatedBy: uid | 'system', generatedAt }
+  ```
+  `Metric` = `{ key: 'spent'|'income'|'net'|'savingsRate'|'entries'|'dailyAverage', label, value: number | null, display: string | null, compare: FigureCompare | null }`; `FigureCompare` = `{ base, baseDisplay, delta, deltaDisplay, deltaPct: number | null, deltaPctDisplay: string | null }` (this − baseline; `deltaPct` null when the baseline is 0). Section shapes are the `ReportSections` type in `functions/src/core/report.ts`; every figure has a `…Display` string. Sections with nothing to show are absent, and clients must skip sections and fields they do not know. Entries are referenced by `id` with display fields (date, label, category, amount, member). `generatedAt` is the "Made on" time (changes on Refresh); `createdAt` stays. Custom reports are deleted by the monthly job after 180 days; monthly reports are kept. List query: `orderBy('createdAt','desc')` (single-field index).
 
 ### `transactions/{id}`
 | field | type | notes |
@@ -66,10 +82,10 @@ Note: a transaction created with a `createdAt` more than 24 h in the past is tre
 `{ homeId, vector: Vector(768), text, model, updatedAt }`. No client access at all. Maintained by the `onTransactionWritten` trigger. Only entries with a note have one. `text` is `"<note> | <category name> | <matched merchant> | <tag names>"` — amount, date and type are never embedded.
 
 ### `aiUsage/{YYYY-MM}_{homeId}` — server only
-`{ month: 'YYYY-MM', homeId, questions, inputTokens, outputTokens, modelCalls, smsSuggestions?, smsInputTokens?, smsOutputTokens?, updatedAt }`. Monthly assistant usage per household (month in Asia/Kolkata), incremented by `askAgent` after each successful answer and read by `getAdminDashboard`. `smsSuggestions` (items asked about) and `smsInputTokens` / `smsOutputTokens` are incremented by `suggestSmsCategory` (D-032) and are not part of the assistant's counts. Counts only, no text. No client access at all (D-025).
+`{ month: 'YYYY-MM', homeId, questions, inputTokens, outputTokens, modelCalls, smsSuggestions?, smsInputTokens?, smsOutputTokens?, reports?, reportInputTokens?, reportOutputTokens?, updatedAt }`. Monthly assistant usage per household (month in Asia/Kolkata), incremented by `askAgent` after each successful answer and read by `getAdminDashboard`. `smsSuggestions` (items asked about) and `smsInputTokens` / `smsOutputTokens` are incremented by `suggestSmsCategory` (D-032) and are not part of the assistant's counts. `reports` (reports written) and `reportInputTokens` / `reportOutputTokens` are incremented by `generateReport`, `refreshReport` and the monthly job (D-033), also apart. Counts only, no text. No client access at all (D-025).
 
 ### `aiRateLimits/{YYYY-MM-DD}_{uid}` — server only
-`{ day: 'YYYY-MM-DD', uid, smsSuggestCalls, updatedAt }`. Daily per-user call counter for `suggestSmsCategory` (India-time day; limit `SMS_SUGGEST.dailyCallsPerUser`, 100). Counted before the model runs. No client access at all (D-032).
+`{ day: 'YYYY-MM-DD', uid, smsSuggestCalls?, reportCalls?, updatedAt }`. Daily per-user call counters (India-time day): `smsSuggestCalls` for `suggestSmsCategory` (limit `SMS_SUGGEST.dailyCallsPerUser`, 100); `reportCalls` for `generateReport` + `refreshReport` together (limit `REPORTS.dailyCallsPerUser`, 10; D-033). Counted before the model runs. No client access at all (D-032).
 
 ## Cloud Storage (default bucket `expense-tracker-v2-5c9fa.firebasestorage.app`, asia-south1)
 
@@ -85,7 +101,9 @@ Uploaded with `node scripts/model-storage.mjs upload <file>` (admin API, as the 
 ### `notifications/{id}`
 `{ type: 'transaction_added'|'transaction_updated'|'transaction_deleted', message, transactionId, homeId, createdBy, createdByName, createdAt: Timestamp, readBy: string[] }`
 
-Created by the server trigger on transaction create/update/delete (clients no longer create them). Clients may read (`where('homeId','==', myHomeId)`, `orderBy('createdAt','desc')`) and add **their own uid** to `readBy`; nothing else.
+or, for a monthly report (D-033): `{ type: 'report_ready', title: 'Your October report is ready', message, reportId, recipientId: uid, homeId, createdBy: 'system', createdByName: 'Track Expense', createdAt, readBy: [] }`, doc id `report_<homeId>_<YYYY-MM>_<uid>` (created once, so a rerun never notifies twice). The push goes only to `recipientId`, with `title`, and `data.route = /reports/<reportId>`; the app hides other members' `report_ready` docs from Activity (the rules still let any member read them; the text has no figures).
+
+Created by the server trigger on transaction create/update/delete and by the monthly report job (clients never create them). Clients may read (`where('homeId','==', myHomeId)`, `orderBy('createdAt','desc')`) and add **their own uid** to `readBy`; nothing else.
 
 ## Block (AI response blocks)
 
@@ -118,6 +136,8 @@ Source of truth: `functions/src/core/blocks.ts` (`BlockSchema`). At most 12 bloc
 | `exportTransactionsCsv` | `{ from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', timeZone }` | `{ csv, filename, count }` |
 | `askAgent` (streaming) | `{ threadId?, message, timeZone, model?, reply?, language? }` — `model` is a choice key (`flash`, `flash-lite`; `[a-z0-9-]{1,32}`, else `invalid-argument`); missing or unknown means the server default (D-027). `reply`: `'text'` (default) or `'voice'` (a short spoken answer comes first); `language`: `'en'` (default) or `'ml'` (Malayalam, amounts as digits) (D-028); any other value of either is `invalid-argument` | `{ threadId, messageId, blocks: Block[] }`; stream chunks `{ type:'status', text }` \| `{ type:'text', delta }` |
 | `suggestSmsCategory` | `{ items: [{ text, type: 'expense'\|'income', kind?: 'payee'\|'words' }], model? }` — 1–5 items; `text` is a payee name or the user's reply words, whitespace collapsed, 1–80 characters (never SMS text); `model` is a D-027 key, default and unknown → `flash-lite`; anything else is `invalid-argument` (D-032) | `{ suggestions: (categoryId \| null)[], model }` — one per item, only ids of the household's categories of that item's direction; `model` is the display name ("Gemini Flash-Lite"). `resource-exhausted` after 100 calls per user per India-time day; `unavailable` (generic message) when the model fails. Logs counts only |
+| `generateReport` | `{ from: 'YYYY-MM-DD', to, compare?: { mode: 'previous'\|'last_year'\|'average'\|'custom'\|'none', from?, to? }, timeZone, model? }` — period at most 366 days, `from ≤ to`, not after today in `timeZone`; `custom` needs `from`/`to` with the same rules; `compare` missing means `previous`; `model` is a D-027 key (missing/unknown → default; malformed → `invalid-argument`) (D-033) | `{ reportId }` once `homes/{homeId}/reports/{reportId}` is written (about 5–10 s). `resource-exhausted` after 10 generate + refresh calls per user per India-time day; the narrative falls back to a template when the model fails, so there is no `unavailable` for the model |
+| `refreshReport` | `{ reportId, timeZone, model? }` (D-033) | `{ reportId }`; rebuilds the caller's household's report in place (same period and comparison); `not-found` for another household's or a missing report; same daily limit |
 | `confirmProposal` | `{ threadId, proposalId, accept: boolean }` | `{ proposalId, status: 'applied'|'rejected', appliedCount, skippedTransactionIds }`; `not-found` unless the caller created the proposal |
 | `getAdminDashboard` (admin only) | `{ month: 'YYYY-MM' }` | `{ month, billing, usage, assistant, households }`, see below |
 
