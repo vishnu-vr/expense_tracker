@@ -49,6 +49,8 @@ export interface EntryRow {
   dateLabel: string;
   /** Merchant, else note, else category name. */
   label: string;
+  /** The matched merchant (the only part of a note the narrative model may see). */
+  merchant: string | null;
   categoryName: string;
   amount: number;
   amountDisplay: string;
@@ -164,7 +166,16 @@ export interface ReportSections {
   notable?: {
     largest: EntryRow[];
     anomalies: { entry: EntryRow; basisLabel: string; typicalAmountDisplay: string; timesTypical: number; timesTypicalDisplay: string }[];
-    duplicates: { date: string; dateLabel: string; amountDisplay: string; categoryName: string; label: string; count: number; transactionIds: string[] }[];
+    duplicates: {
+      date: string;
+      dateLabel: string;
+      amountDisplay: string;
+      categoryName: string;
+      label: string;
+      merchant: string | null;
+      count: number;
+      transactionIds: string[];
+    }[];
   };
   bills?: { paid: BillRow[]; missed: BillRow[]; priceChanges: PriceChangeRow[] };
   budgets?: {
@@ -322,6 +333,7 @@ export function buildReport(data: HomeData, period: DayRange, compare: ResolvedC
       date: r.date,
       dateLabel: dayLabel(r.date),
       label: r.merchant ?? (r.note.trim() || r.categoryName),
+      merchant: r.merchant,
       categoryName: r.categoryName,
       amount: r.amount,
       amountDisplay: r.amountDisplay,
@@ -524,6 +536,7 @@ export function buildReport(data: HomeData, period: DayRange, compare: ResolvedC
       amountDisplay: g.amountDisplay,
       categoryName: g.categoryName,
       label: g.transactions[0]?.merchant ?? (g.note.trim() || g.categoryName),
+      merchant: g.transactions[0]?.merchant ?? null,
       count: g.transactions.length,
       transactionIds: g.transactions.map((t) => t.id),
     }));

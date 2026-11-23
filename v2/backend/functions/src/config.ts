@@ -80,6 +80,32 @@ export function resolveSmsSuggestModel(key?: string): { key: string; id: string;
 }
 
 /**
+ * Expense reports (D-033). On-demand reports use the caller's assistant
+ * model key (D-027, default for missing or unknown keys); the monthly job
+ * uses the default `AGENT_MODEL`.
+ */
+export const REPORTS = {
+  /** Longest report period and custom comparison, in days. */
+  maxDays: 366,
+  /** Baseline periods averaged by the "average" comparison. */
+  averagePeriods: 3,
+  /** generateReport + refreshReport calls per user per India-time day (`aiRateLimits`, `reportCalls`). */
+  dailyCallsPerUser: 10,
+  /** Custom reports older than this are deleted by the monthly job; monthly reports are kept. */
+  customRetentionDays: 180,
+  /** Monthly job: 07:00 on the 1st, India time. */
+  monthlySchedule: "0 7 1 * *",
+  /** Output cap per narrative call. */
+  maxOutputTokens: 1200,
+  narrativeLimits: { headline: 120, summary: 600, changes: 4, suggestions: 3, item: 240 },
+} as const;
+
+/** Display name of a model id ("Gemini Flash"), or the id itself when it is not a listed choice. */
+export function agentModelLabel(modelId: string): string {
+  return AGENT_MODEL_CHOICES.find((c) => c.id === modelId)?.label ?? modelId.replace(/^[a-z-]+\//, "");
+}
+
+/**
  * The on-device model the app can download (D-032), for reference: the app
  * reads `models/gemma3-1b-it-int4.json` from the default Storage bucket
  * (written by `scripts/upload-model.mjs`), so a new upload needs no release.
