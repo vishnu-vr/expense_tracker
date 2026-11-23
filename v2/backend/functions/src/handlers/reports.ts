@@ -259,6 +259,8 @@ export async function generateMonthlyReports(
   timeZone: string,
   now: Date,
   onHomeError?: (homeId: string, error: unknown) => void,
+  /** Only these homes (running the job by hand for one household). */
+  homeIds?: string[],
 ): Promise<MonthlyRunResult> {
   const { db } = deps;
   const today = toLocalDay(now, timeZone);
@@ -269,6 +271,7 @@ export async function generateMonthlyReports(
   const total: MonthlyRunResult = { homes: 0, written: 0, skipped: 0, failed: 0, notifications: 0, deleted: 0 };
   const homes = await db.collection("homes").select("memberIds").get();
   for (const doc of homes.docs) {
+    if (homeIds && !homeIds.includes(doc.id)) continue;
     total.homes++;
     try {
       const reports = doc.ref.collection("reports");

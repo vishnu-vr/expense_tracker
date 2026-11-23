@@ -989,6 +989,9 @@ describe("expense reports (D-033)", () => {
     expect(r).toMatchObject({ homes: 2, failed: 1, written: 2 });
     expect(errors).toEqual(["h1"]);
     expect((await db.doc("homes/h2/reports/monthly_2026-10").get()).exists).toBe(true);
+    // By hand for one household (npm run monthly-report).
+    const one = await generateMonthlyReports(reportDeps().deps, "Asia/Kolkata", NOW_R, undefined, ["h1"]);
+    expect(one).toMatchObject({ homes: 1, written: 1, failed: 0, notifications: 0 }); // already notified above
   });
 
   it("a report notification is pushed only to its recipient, opening the report", async () => {

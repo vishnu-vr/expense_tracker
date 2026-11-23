@@ -16,6 +16,7 @@
     "eval:reports": "tsc -p tsconfig.eval.json && node lib-eval/eval/reports.js",
     "migrate": "tsx src/scripts/migrate-v1-to-v2.ts",
     "set-admin": "tsx src/scripts/set-admin.ts",
+    "monthly-report": "tsc -p tsconfig.eval.json && node lib-eval/src/scripts/monthly-report.js",
     "backfill": "tsc -p tsconfig.eval.json && node lib-eval/src/scripts/backfill-embeddings.js"
   },
   "dependencies": {
