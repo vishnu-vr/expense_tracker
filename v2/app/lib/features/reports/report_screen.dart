@@ -8,6 +8,7 @@ import '../../core/domain/report.dart';
 import '../../core/format/money.dart';
 import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/common.dart';
+import 'report_progress.dart';
 
 const _moneyMetrics = {'spent', 'income', 'net', 'dailyAverage'};
 
@@ -57,7 +58,15 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: async.isLoading && report == null
+      body: _refreshing && report != null
+          ? Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                child: ReportProgress(modelKey: ref.watch(agentModelProvider), refreshing: true),
+              ),
+              Expanded(child: _ReportBody(report: report)),
+            ])
+          : async.isLoading && report == null
           ? const Center(child: CircularProgressIndicator())
           : report == null
               ? ListView(

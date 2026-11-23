@@ -112,6 +112,8 @@ void main() {
     await _open(tester, '/reports/monthly_2026-10');
 
     await tester.tap(find.byTooltip('Refresh'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Updating this report. This usually takes under 15 seconds.'), findsOneWidget);
     await tester.pumpAndSettle();
     expect(reports.refreshed.single, (id: 'monthly_2026-10', model: 'flash-lite'));
     expect(find.text('Report updated'), findsOneWidget);
@@ -173,7 +175,8 @@ void main() {
     await tester.ensureVisible(find.text('Generate'));
     await tester.tap(find.text('Generate'));
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('Writing your report. This takes about 10 seconds.'), findsOneWidget);
+    expect(find.text('Writing your report. This usually takes 10–30 seconds.'), findsOneWidget);
+    expect(find.text('0 s'), findsOneWidget);
     await tester.pumpAndSettle();
     expect(_location(tester), startsWith('/reports/demo-'));
   });

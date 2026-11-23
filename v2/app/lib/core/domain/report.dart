@@ -758,3 +758,23 @@ String? periodProblem(DayRange? period, DateTime today, {int maxDays = 366}) {
   if (period.days > maxDays) return 'A report can cover at most $maxDays days.';
   return null;
 }
+
+// ---------------------------------------------------------------- waiting
+
+/// What to show while a report is being written or refreshed, so a slow
+/// model does not look stuck. Estimates come from the narrative eval on
+/// 2026-11-23 plus a few seconds for loading the household and a cold start:
+/// Gemini Flash took 4–21 s (mean 13 s), Flash-Lite about 2 s.
+String reportWaitMessage(String? modelKey, Duration elapsed, {bool refreshing = false}) {
+  final lite = modelKey == 'flash-lite';
+  final usual = lite ? 15 : 30;
+  final s = elapsed.inSeconds;
+  if (s < usual) {
+    final what = refreshing ? 'Updating this report' : 'Writing your report';
+    return lite
+        ? '$what. This usually takes under 15 seconds.'
+        : '$what. This usually takes 10–30 seconds.';
+  }
+  if (s < 60) return 'Still writing. Busy periods can take up to a minute.';
+  return 'Taking longer than usual. It will finish or stop within 2 minutes.';
+}

@@ -8,6 +8,7 @@ import '../../core/domain/report.dart';
 import '../../core/format/money.dart';
 import '../../core/theme/ledger_theme.dart';
 import '../../core/widgets/common.dart';
+import 'report_progress.dart';
 
 /// Opens the New report sheet; when a report is made, opens it.
 Future<void> showNewReportSheet(BuildContext context) async {
@@ -153,14 +154,7 @@ class _NewReportSheetState extends ConsumerState<NewReportSheet> {
               ),
             const SizedBox(height: 16),
             if (_busy)
-              Row(children: [
-                const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text('Writing your report. This takes about 10 seconds.',
-                      style: LedgerText.body(size: 13, color: p.muted)),
-                ),
-              ])
+              ReportProgress(modelKey: ref.watch(agentModelProvider))
             else ...[
               if (problem != null)
                 Padding(

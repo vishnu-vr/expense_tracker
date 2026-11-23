@@ -19,10 +19,12 @@ folder; this page is the working copy.
   deployed, live smoke 24/24 (2026-11-17). Gemma model file uploaded
   2026-11-18; first on-phone run pending.
 - AI expense reports (D-033, experimental, branch `exp/ai-reports`, build
-  1.0.0 (13) on App Distribution 2026-11-23): Reports screen from Insights,
+  1.0.0 (14) on App Distribution 2026-11-23): Reports screen from Insights,
   monthly report on the 1st with a push, on-demand reports with comparisons,
-  AI narrative under a number guard. Backend not deployed yet, so the build
-  cannot generate reports until it is ([reports.md](reports.md)).
+  AI narrative under a number guard, wait times per model while a report is
+  written. Rules and functions deployed and the narrative eval run
+  2026-11-23 (Flash and Flash-Lite 10/10 after raising the output cap;
+  [reports.md](reports.md)).
 - Google sign-in enabled and wired in the app; reaches Google's sign-in screen
   on Android.
 
@@ -39,8 +41,7 @@ folder; this page is the working copy.
 | Go-ahead for the voice/Malayalam eval subset on Flash and Flash-Lite (billed, 8 questions × 2 models), then deploy `askAgent`, run the manual voice checklist on a real phone, and ship build 1.0.0 (7) (D-028) | Billed run, a production deploy and a real microphone |
 | Go-ahead to deploy `getAdminDashboard` (shows SMS suggestion counts) and the Firestore rules for `aiRateLimits` (the live rules already deny it by default) (D-032) | Production deploys |
 | Try category suggestions on your S24 Ultra: Cloud vs Gemma on a few unfamiliar shops and replies, and Gemma's speed (testing.md steps 20–24) | A real phone and real payments |
-| Go-ahead for the report narrative eval (billed; `npm run eval:reports` on Flash and Flash-Lite, 10 reports each), then deploy `firestore:rules` and the functions `generateReport`, `refreshReport`, `generateMonthlyReports`, `onNotificationCreated`, `generateInsights`, `getAdminDashboard` (D-033; commands in operations.md › Expense reports) | Billed run and production deploys |
-| Run the manual reports checklist on your phone with build 1.0.0 (13) after the deploy: last month vs the month before against the Ledger, open from the push on the 1st (testing.md, D-033) | Real data and a real phone |
+| Run the manual reports checklist on your phone with build 1.0.0 (14): last month vs the month before against the Ledger, open from the push on the 1st (testing.md, D-033) | Real data and a real phone |
 | Turn on the Cloud Billing export to BigQuery (dataset `billing_export`, US multi-region; D-024) | Only a billing account admin can, in the console; see operations.md › Billing dashboard |
 
 ## Next up (in order)

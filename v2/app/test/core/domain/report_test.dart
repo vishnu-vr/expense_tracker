@@ -110,4 +110,20 @@ void main() {
       expect(sorted.map((r) => r.id), ['m-oct', 'm-sep', 'c-new', 'c-old']);
     });
   });
+
+  group('wait message while a report is written', () {
+    test('Flash: 10–30 s, then still writing, then the 2-minute limit', () {
+      expect(reportWaitMessage('flash', Duration.zero), 'Writing your report. This usually takes 10–30 seconds.');
+      expect(reportWaitMessage(null, const Duration(seconds: 29)), 'Writing your report. This usually takes 10–30 seconds.');
+      expect(reportWaitMessage('flash', const Duration(seconds: 30)), 'Still writing. Busy periods can take up to a minute.');
+      expect(reportWaitMessage('flash', const Duration(seconds: 61)),
+          'Taking longer than usual. It will finish or stop within 2 minutes.');
+    });
+
+    test('Flash-Lite is quicker; refreshing says updating', () {
+      expect(reportWaitMessage('flash-lite', const Duration(seconds: 3), refreshing: true),
+          'Updating this report. This usually takes under 15 seconds.');
+      expect(reportWaitMessage('flash-lite', const Duration(seconds: 15)), 'Still writing. Busy periods can take up to a minute.');
+    });
+  });
 }
