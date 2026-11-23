@@ -8,9 +8,24 @@ export interface Phrasing {
 /** Optional model-backed rewriter. Returns null (or throws) to keep the template. */
 export type Phraser = (card: InsightCard) => Promise<Phrasing | null>;
 
-/** Every number that appears in a text, with grouping commas removed. */
+/**
+ * Every number that appears in a text, normalised: grouping commas removed
+ * and trailing decimal zeros dropped ("₹1,71,518.40" -> "171518.4", "12.0%" -> "12").
+ */
 export function numbersIn(text: string): string[] {
-  return (text.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/,/g, "").replace(/\.0+$/, ""));
+  return (text.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) =>
+    n.replace(/,/g, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""),
+  );
+}
+
+/** Numbers in `text` that are not in `allowed` (an empty list means the text is safe). */
+export function disallowedNumbers(text: string, allowed: ReadonlySet<string>): string[] {
+  return numbersIn(text).filter((n) => !allowed.has(n));
+}
+
+/** True when every number in `text` is in `allowed` (built with `numbersIn`). */
+export function numbersAllowed(text: string, allowed: ReadonlySet<string>): boolean {
+  return disallowedNumbers(text, allowed).length === 0;
 }
 
 /**
@@ -23,8 +38,7 @@ export function isSafePhrasing(card: InsightCard, phrasing: Phrasing | null | un
   const title = phrasing.title?.trim();
   const body = phrasing.body?.trim();
   if (!title || !body || title.length > 90 || body.length > 420) return false;
-  const allowed = new Set(numbersIn(`${card.title} ${card.body}`));
-  return numbersIn(`${title} ${body}`).every((n) => allowed.has(n));
+  return numbersAllowed(`${title} ${body}`, new Set(numbersIn(`${card.title} ${card.body}`)));
 }
 
 /**

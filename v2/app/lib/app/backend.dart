@@ -11,11 +11,13 @@ import '../core/data/firebase/firebase_session_repository.dart';
 import '../core/data/firebase/functions_admin_repository.dart';
 import '../core/data/agent.dart';
 import '../core/data/firebase/firestore_agent_history_repository.dart';
+import '../core/data/firebase/firebase_reports_repository.dart';
 import '../core/data/firebase/firestore_household_repository.dart';
 import '../core/data/firebase/functions_agent_repository.dart';
 import '../core/data/firebase/push_service.dart';
 import '../core/data/device_voice_service.dart';
 import '../core/data/repositories.dart';
+import '../core/domain/report.dart';
 import '../firebase_options.dart';
 import 'providers.dart';
 
@@ -48,6 +50,28 @@ class _NoHistory implements AgentHistoryRepository {
 
   @override
   Future<AgentThread?> loadThread(String threadId) async => null;
+}
+
+/// No reports before sign-in.
+class _NoReports implements ReportsRepository {
+  @override
+  Stream<List<ReportSummary>> watchReports() => Stream.value(const []);
+
+  @override
+  Stream<Report?> watchReport(String id) => Stream.value(null);
+
+  @override
+  Future<String> generate({
+    required DayRange period,
+    required CompareMode compare,
+    DayRange? customCompare,
+    String? model,
+  }) =>
+      throw const ReportException('Sign in to make a report.');
+
+  @override
+  Future<void> refresh(String id, {String? model}) =>
+      throw const ReportException('Sign in to make a report.');
 }
 
 /// Initialises Firebase when needed and returns the provider overrides for
@@ -120,6 +144,17 @@ Future<List<Override>> backendOverrides({required String timeZone}) async {
         firestore: db,
         homeId: homeId,
         currentUserId: user.id,
+      );
+    }),
+    reportsRepositoryProvider.overrideWith((ref) {
+      final session = ref.watch(sessionProvider).value;
+      final homeId = session?.homeId;
+      if (session?.user == null || homeId == null) return _NoReports();
+      return FirebaseReportsRepository(
+        firestore: db,
+        functions: functions,
+        homeId: homeId,
+        timeZone: timeZone,
       );
     }),
     agentRepositoryProvider.overrideWithValue(

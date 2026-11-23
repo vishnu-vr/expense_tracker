@@ -2,6 +2,7 @@ import { FieldValue, Firestore, Timestamp } from "firebase-admin/firestore";
 import { toLocalDay } from "../core/dates";
 import { InsightCard, runDetectors } from "../core/insights/detectors";
 import { phraseCards, Phraser } from "../core/insights/phrasing";
+import { monthlyReportId } from "../core/report";
 import { loadHomeData } from "../data/home";
 
 export interface InsightsRunResult {
@@ -67,7 +68,16 @@ export async function generateInsightsForHome(
 ): Promise<InsightsRunResult> {
   const data = await loadHomeData(db, home, timeZone);
   const cards = await phraseCards(runDetectors(data, toLocalDay(now, timeZone)), phraser);
-  return writeInsightCards(db, home.homeId, cards);
+  // A month's review card links to that month's report when there is one (D-033).
+  const linked = await Promise.all(
+    cards.map(async (c) => {
+      if (c.kind !== "month_review") return c;
+      const reportId = monthlyReportId(c.periodKey);
+      const report = await db.collection("homes").doc(home.homeId).collection("reports").doc(reportId).get();
+      return report.exists ? { ...c, data: { ...c.data, reportId } } : c;
+    }),
+  );
+  return writeInsightCards(db, home.homeId, linked);
 }
 
 const RETENTION_DAYS = 180;

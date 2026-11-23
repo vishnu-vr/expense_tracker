@@ -14,6 +14,7 @@ import '../core/domain/agent_models.dart';
 import '../core/domain/default_categories.dart';
 import '../core/domain/home_insights.dart';
 import '../core/domain/models.dart';
+import '../core/domain/report.dart';
 import '../core/domain/sms_categories.dart';
 import '../core/domain/voice.dart';
 import '../core/format/money.dart';
@@ -211,9 +212,13 @@ final homeInsightsProvider = Provider<HomeInsights?>((ref) {
   );
 });
 
-final notificationsProvider = StreamProvider<List<HouseholdNotification>>(
-  (ref) => ref.watch(householdRepositoryProvider).watchNotifications(),
-);
+/// Household activity for the signed-in user: notifications addressed to
+/// another member (a report is ready, D-033) are left out.
+final notificationsProvider = StreamProvider<List<HouseholdNotification>>((ref) {
+  final repo = ref.watch(householdRepositoryProvider);
+  final me = repo.currentUserId;
+  return repo.watchNotifications().map((list) => [for (final n in list) if (n.isFor(me)) n]);
+});
 
 /// Notifications from other members that the current user has not read.
 final unreadNotificationsProvider = Provider<List<HouseholdNotification>>((ref) {
@@ -249,6 +254,22 @@ final pushServiceProvider = Provider<PushService?>((ref) => null);
 
 final insightCardsProvider = StreamProvider<List<InsightCard>>(
   (ref) => ref.watch(householdRepositoryProvider).watchInsights(),
+);
+
+// ------------------------------------------------------------ reports
+
+/// Saved expense reports (D-033). Demo data until `backend.dart` swaps in Firestore.
+final reportsRepositoryProvider = Provider<ReportsRepository>(
+  (ref) => DemoReportsRepository(ref.read(nowProvider)),
+);
+
+/// Monthly reports first, then custom ones, newest first.
+final reportsProvider = StreamProvider.autoDispose<List<ReportSummary>>(
+  (ref) => ref.watch(reportsRepositoryProvider).watchReports(),
+);
+
+final reportProvider = StreamProvider.autoDispose.family<Report?, String>(
+  (ref, id) => ref.watch(reportsRepositoryProvider).watchReport(id),
 );
 
 // ------------------------------------------------------------ bank SMS

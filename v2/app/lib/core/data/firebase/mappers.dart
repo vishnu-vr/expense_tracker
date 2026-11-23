@@ -5,6 +5,7 @@ library;
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 
 import '../../domain/models.dart';
+import '../../domain/report.dart';
 import '../agent.dart';
 import '../repositories.dart';
 
@@ -110,6 +111,7 @@ HouseholdNotification? notificationFromDoc(String id, Map<String, dynamic> d) {
     type: switch (d['type']) {
       'transaction_updated' => HouseholdNotificationType.transactionUpdated,
       'transaction_deleted' => HouseholdNotificationType.transactionDeleted,
+      'report_ready' => HouseholdNotificationType.reportReady,
       _ => HouseholdNotificationType.transactionAdded,
     },
     message: (d['message'] as String?) ?? '',
@@ -119,6 +121,8 @@ HouseholdNotification? notificationFromDoc(String id, Map<String, dynamic> d) {
     transactionId: d['transactionId'] as String?,
     homeId: d['homeId'] as String?,
     readBy: stringList(d['readBy']),
+    reportId: d['reportId'] is String && (d['reportId'] as String).isNotEmpty ? d['reportId'] as String : null,
+    recipientId: d['recipientId'] is String && (d['recipientId'] as String).isNotEmpty ? d['recipientId'] as String : null,
   );
 }
 
@@ -134,8 +138,20 @@ InsightCard? insightFromDoc(String id, Map<String, dynamic> d, String userId) {
     title: title,
     body: (d['body'] as String?) ?? '',
     createdAt: at,
+    reportId: switch (d['data']) {
+      {'reportId': final String r} when r.isNotEmpty => r,
+      _ => null,
+    },
   );
 }
+
+/// `homes/{homeId}/reports/{id}` (D-033). Timestamps become [DateTime];
+/// everything else is parsed leniently by [Report.fromJson].
+Report? reportFromDoc(String id, Map<String, dynamic> d) => Report.fromJson(id, {
+      ...d,
+      'createdAt': dateFrom(d['createdAt']),
+      'generatedAt': dateFrom(d['generatedAt']),
+    });
 
 int _count(Object? v) => v is num && v.isFinite && v > 0 ? v.round() : 0;
 

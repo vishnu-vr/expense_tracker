@@ -86,6 +86,10 @@ export interface HouseholdUsageRow {
   smsSuggestions?: number;
   smsInputTokens?: number;
   smsOutputTokens?: number;
+  /** Expense reports (D-033): reports written and their narrative tokens. */
+  reports?: number;
+  reportInputTokens?: number;
+  reportOutputTokens?: number;
 }
 
 export interface AssistantUsageSummary {
@@ -101,6 +105,8 @@ export interface AssistantUsageSummary {
   byHousehold: { homeId: string; homeName: string; questions: number; inputTokens: number; outputTokens: number }[];
   /** SMS category suggestions this month (D-032), separate from the assistant's counts above. */
   sms: { suggestions: number; inputTokens: number; outputTokens: number };
+  /** Expense reports this month (D-033), separate from the assistant's counts above. */
+  reports: { reports: number; inputTokens: number; outputTokens: number };
 }
 
 export const EMPTY_ASSISTANT_USAGE: AssistantUsageSummary = {
@@ -112,6 +118,7 @@ export const EMPTY_ASSISTANT_USAGE: AssistantUsageSummary = {
   activeHouseholds: 0,
   byHousehold: [],
   sms: { suggestions: 0, inputTokens: 0, outputTokens: 0 },
+  reports: { reports: 0, inputTokens: 0, outputTokens: 0 },
 };
 
 export function shapeAssistantUsage(rows: HouseholdUsageRow[]): AssistantUsageSummary {
@@ -145,6 +152,11 @@ export function shapeAssistantUsage(rows: HouseholdUsageRow[]): AssistantUsageSu
       suggestions: rows.reduce((s, r) => s + countOf(r.smsSuggestions), 0),
       inputTokens: rows.reduce((s, r) => s + countOf(r.smsInputTokens), 0),
       outputTokens: rows.reduce((s, r) => s + countOf(r.smsOutputTokens), 0),
+    },
+    reports: {
+      reports: rows.reduce((s, r) => s + countOf(r.reports), 0),
+      inputTokens: rows.reduce((s, r) => s + countOf(r.reportInputTokens), 0),
+      outputTokens: rows.reduce((s, r) => s + countOf(r.reportOutputTokens), 0),
     },
   };
 }

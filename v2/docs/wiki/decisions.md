@@ -9,6 +9,50 @@ entry), **Proposed** (not yet agreed).
 
 ---
 
+## D-033 · AI expense reports: monthly and on demand, with comparisons
+**2026-11-23 · Accepted · owner request · experimental**
+
+The assistant answers one question at a time and the daily insight cards are
+short; nothing gave a full picture of a month or set one period against
+another. The household gets **reports** (details in [reports.md](reports.md)):
+- **Screen.** Insights › Reports lists saved reports (monthly first); a
+  report is a snapshot ("Made on 1 Nov, 07:00") with **Refresh** and **Ask
+  about this report**. Household scope with a per-member section.
+- **Figures in code (D-011).** `core/report.ts` (`buildReport`) computes
+  every section with display strings: headline (spent, income, net, savings
+  rate, entries, spent per day), categories, members, weekly rhythm,
+  merchants, notable entries, bills, budgets, tags. Comparison modes
+  `previous` (month → month before; month to date → same days of last month;
+  other ranges → same length just before), `last_year`, `average` (3 previous
+  periods of the same shape, empty ones left out), `custom`, `none`; per-day
+  deltas so different lengths compare fairly; no "+∞%" against an empty
+  baseline. Periods: at most 366 days, not in the future.
+- **AI narrative under a number guard.** One call writes `{ headline,
+  summary, changes ≤ 4, suggestions ≤ 3 }` from the report's labels and
+  display strings only (merchant names, never note text). Every number must
+  appear in those strings (`numbersAllowed`, generalised from D-007's
+  phrasing guard); one retry with the error, then a template built in code,
+  so a report always appears. Prompt, facts and narrative are never logged.
+- **Model.** On-demand Generate and Refresh use the caller's Profile ›
+  Assistant key (D-027), sent by the app like `askAgent`; the scheduled job
+  uses the default `AGENT_MODEL`. The report records `narrativeSource`,
+  `model` and `modelLabel` and shows "Written by <label>".
+- **Monthly.** `generateMonthlyReports` at 07:00 on the 1st (Asia/Kolkata):
+  every home with entries last month, `monthly_YYYY-MM` (a rerun updates it),
+  one `report_ready` notification per member, pushed only to that member
+  (`recipientId`), opening the report; the month's review card links to it.
+- **Storage and access.** `homes/{homeId}/reports/{id}`: members read,
+  clients never write. Custom reports are deleted after 180 days; monthly
+  ones are kept. Generate + Refresh: 10 per user per India-time day
+  (`aiRateLimits.reportCalls`). Tokens go to `aiUsage` as `reports`,
+  `reportInputTokens`, `reportOutputTokens` (admin dashboard "Reports").
+- **Cost.** About 3k in / 400 out tokens on Flash per report: under ₹1.
+- Rules out: numbers computed or rounded by the model, note text sent to the
+  model, client-written reports, and a second push for the same month.
+  English only for now (Malayalam later under D-028).
+
+---
+
 ## D-032 · Category suggestions: Cloud or a downloaded on-device model, always approved by the owner
 **2026-11-17 · Accepted · owner request · experimental · refines D-029, D-030, D-031**
 

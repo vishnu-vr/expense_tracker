@@ -148,6 +148,9 @@ enum HouseholdNotificationType {
   transactionAdded,
   transactionUpdated,
   transactionDeleted,
+
+  /// A monthly report is ready (D-033); addressed to one member.
+  reportReady,
 }
 
 class HouseholdNotification {
@@ -161,6 +164,8 @@ class HouseholdNotification {
     this.transactionId,
     this.homeId,
     this.readBy = const [],
+    this.reportId,
+    this.recipientId,
   });
 
   final String id;
@@ -172,6 +177,13 @@ class HouseholdNotification {
   final String? transactionId;
   final String? homeId;
   final List<String> readBy;
+  final String? reportId;
+
+  /// Set when the notification is for one member only.
+  final String? recipientId;
+
+  /// Whether [userId] should see it in their activity list.
+  bool isFor(String userId) => recipientId == null || recipientId == userId;
 }
 
 /// A finding written by the server's scheduled insight job
@@ -183,6 +195,7 @@ class InsightCard {
     required this.title,
     required this.body,
     required this.createdAt,
+    this.reportId,
   });
 
   final String id;
@@ -190,4 +203,7 @@ class InsightCard {
   final String title;
   final String body;
   final DateTime createdAt;
+
+  /// The month's report, on a `month_review` card (D-033).
+  final String? reportId;
 }

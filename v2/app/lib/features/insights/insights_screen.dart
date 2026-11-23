@@ -75,6 +75,16 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
               children: [
+                // Saved reports with comparisons (D-033).
+                ListRow(
+                  topBorder: false,
+                  leading: Icon(Icons.summarize_outlined, color: context.palette.ink),
+                  title: 'Reports',
+                  subtitle: 'Monthly reports and comparisons',
+                  trailing: Icon(Icons.chevron_right, color: context.palette.muted),
+                  onTap: () => context.push('/reports'),
+                ),
+                const SizedBox(height: 8),
                 Segmented<_View>(
                   options: const {_View.breakdown: 'Breakdown', _View.trends: 'Trends'},
                   selected: _view,

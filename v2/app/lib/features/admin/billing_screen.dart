@@ -546,6 +546,13 @@ class _AssistantUsage extends StatelessWidget {
           style: LedgerText.body(size: 12, color: p.muted, tabular: true),
         ),
       ],
+      if (a.reports > 0) ...[
+        const SizedBox(height: 4),
+        Text(
+          'Reports: ${_count.format(a.reports)} · in\u00a0${_count.format(a.reportInputTokens)} · out\u00a0${_count.format(a.reportOutputTokens)} tokens',
+          style: LedgerText.body(size: 12, color: p.muted, tabular: true),
+        ),
+      ],
       const SizedBox(height: 16),
       Text('BY HOUSEHOLD', style: LedgerText.eyebrow(p.muted)),
       if (a.byHousehold.isEmpty)

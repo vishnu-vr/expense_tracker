@@ -55,6 +55,10 @@ class NotificationsScreen extends ConsumerWidget {
                         topBorder: n != all.first,
                         onTap: () {
                           repo.markNotificationsRead([n.id]);
+                          if (n.reportId != null) {
+                            context.push('/reports/${n.reportId}');
+                            return;
+                          }
                           final id = n.transactionId;
                           if (id != null && txIds.contains(id)) context.push('/edit/$id');
                         },

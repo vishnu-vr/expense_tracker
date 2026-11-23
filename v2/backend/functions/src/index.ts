@@ -13,6 +13,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { embedText, getAgentRuntime } from "./agent/models";
 import { createModelPhraser } from "./agent/phraser";
+import { genkitNarrativeGenerate } from "./agent/report-writer";
 import {
   billingDataset,
   billingLocation,
@@ -21,6 +22,7 @@ import {
   enforceAppCheck,
   insightsPhrasingModelId,
   REGION,
+  REPORTS,
   resolveAgentModel,
 } from "./config";
 import { readAssistantUsage } from "./data/ai-usage";
@@ -31,6 +33,7 @@ import { askAgentHandler, AskAgentChunk, AskAgentResult } from "./handlers/ask-a
 import { confirmProposalHandler } from "./handlers/confirm-proposal";
 import { exportTransactionsCsvHandler } from "./handlers/export-csv";
 import { generateAllInsights } from "./handlers/insights";
+import { generateMonthlyReports as runMonthlyReports, generateReportHandler, refreshReportHandler, ReportDeps } from "./handlers/reports";
 import { joinHomeHandler } from "./handlers/join-home";
 import { leaveHomeHandler } from "./handlers/leave-home";
 import { suggestSmsCategoryHandler } from "./handlers/suggest-sms-category";
@@ -173,5 +176,37 @@ export const generateInsights = onSchedule(
       (homeId, error) => logger.error("Insights failed for home", { homeId, name: (error as Error)?.name }),
     );
     logger.info("Insights run complete", summary);
+  },
+);
+
+/** Expense reports (D-033). Counts, ids and outcomes are logged; never the prompt or the narrative. */
+const reportDeps = (): ReportDeps => ({
+  db: getFirestore(),
+  resolveModel: (key) => resolveAgentModel(key),
+  narrator: async (modelId) => {
+    const { ai, model } = await getAgentRuntime(modelId);
+    return genkitNarrativeGenerate(ai, model);
+  },
+  onMetrics: (m) => logger.info("Report written", m),
+});
+
+/** generateReport({from, to, compare: {mode, from?, to?}, timeZone, model?}) -> {reportId} */
+export const generateReport = onCall({ ...callable, timeoutSeconds: 120, memory: "1GiB" }, (request) =>
+  generateReportHandler(reportDeps(), requireUid(request), request.data),
+);
+
+/** refreshReport({reportId, timeZone, model?}) -> {reportId}: rebuilds the report in place. */
+export const refreshReport = onCall({ ...callable, timeoutSeconds: 120, memory: "1GiB" }, (request) =>
+  refreshReportHandler(reportDeps(), requireUid(request), request.data),
+);
+
+/** Last month's report for every home, 07:00 on the 1st (India time), with a push per member. */
+export const generateMonthlyReports = onSchedule(
+  { schedule: REPORTS.monthlySchedule, timeZone: defaultTimeZone(), timeoutSeconds: 540, memory: "1GiB" },
+  async () => {
+    const summary = await runMonthlyReports(reportDeps(), defaultTimeZone(), new Date(), (homeId, error) =>
+      logger.error("Monthly report failed for home", { homeId, name: (error as Error)?.name }),
+    );
+    logger.info("Monthly reports run complete", summary);
   },
 );

@@ -1,4 +1,5 @@
 import '../domain/models.dart';
+import '../domain/report.dart';
 
 class Member {
   const Member({required this.id, required this.name, this.email, this.photoUrl});
@@ -48,4 +49,38 @@ abstract class HouseholdRepository {
 
   /// An [amount] of zero or less removes the budget.
   Future<void> setBudget(String categoryId, double amount);
+}
+
+/// A report could not be made; [message] is fit to show the user.
+class ReportException implements Exception {
+  const ReportException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Saved expense reports of the household (D-033). Reports are written only
+/// by the server; the app reads them and asks for new ones.
+abstract class ReportsRepository {
+  /// Monthly reports first, then custom ones, newest first.
+  Stream<List<ReportSummary>> watchReports();
+
+  /// Null while missing (or not readable).
+  Stream<Report?> watchReport(String id);
+
+  /// Asks the server for a report and returns its id once written (about
+  /// 5–10 s). [model] is the assistant model key from Profile (D-027).
+  /// Throws [ReportException].
+  Future<String> generate({
+    required DayRange period,
+    required CompareMode compare,
+    DayRange? customCompare,
+    String? model,
+  });
+
+  /// Rebuilds a report in place with the entries as they are now.
+  /// Throws [ReportException].
+  Future<void> refresh(String id, {String? model});
 }

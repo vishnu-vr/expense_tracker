@@ -9,9 +9,10 @@ on every change; run the slow ones before a deploy or release.
 | Widget / flow | `cd v2/app && flutter test test/features test/app` | Every screen's main flows on the demo household, routing by session, privacy masking, SMS screen and deep link | seconds |
 | Kotlin | `cd v2/app/android && ./gradlew :app:testDebugUnitTest` | SMS parser cases (OTP ignored, amounts, credit/debit), per-bank auto-add templates, promo/reminder rejection, merchant key vectors shared with Dart, confidence decision, 7-day dedupe, duplicate check, review queue limits, Nano answer validation; category suggestions (D-032): setting and choice, what is sent, answers checked, AI never saves, download with resume and hash against a local server, download states, memory gate | ~1 min |
 | On-device | `cd v2/app && flutter test integration_test` (emulator or phone connected) | The real app boots, adds an entry, finds it, opens each tab | ~2 min |
-| Backend unit | `cd v2/backend/functions && npm test` | Agent tools, insight detectors, golden answers, proposals, migration transform, agent loop with a scripted model | seconds |
-| Rules + handlers | `cd v2/backend/functions && npm run test:rules:emulator` | Firestore and Storage rules allow/deny (Firestore + Storage emulators), every handler against the Firestore emulator (incl. `suggestSmsCategory`: validation, category check, usage, rate limit, no text in logs) | ~1 min |
+| Backend unit | `cd v2/backend/functions && npm test` | Agent tools, insight detectors, golden answers, proposals, migration transform, agent loop with a scripted model; reports (D-033): every section on fixtures (empty and income-only months, a member with no spend, refunds, different lengths, month to date, average with a missing month, the 366-day limit), the number guard, retry and template | seconds |
+| Rules + handlers | `cd v2/backend/functions && npm run test:rules:emulator` | Firestore and Storage rules allow/deny (Firestore + Storage emulators), every handler against the Firestore emulator (incl. `suggestSmsCategory`: validation, category check, usage, rate limit, no text in logs; reports: callable auth and validation, another household cannot read or refresh, rate limit, caller's model, template fallback, monthly job run twice → one report and one notification per member, push to the recipient only) | ~1 min |
 | Live smoke | `cd v2/backend && node scripts/smoke-live.mjs` | The deployed project: rules, triggers, embeddings, one real assistant answer, one SMS category suggestion for made-up text, Storage rules; cleans up after itself, including `aiRateLimits` (`--cleanup` sweeps leftovers) | ~1 min, tiny cost |
+| Report narrative eval | `cd v2/backend/functions && npm run eval:reports -- --model <id>[,<id>]` (same token setup) | Ten fixture reports through the writer: number-guard pass rate (first try / after retry / template), latency, tokens; read the narratives in the results file (D-033). Not run yet | ~2 min, billed |
 | Model eval | `cd v2/backend/functions && npm run eval -- --model <id>` (token setup: [operations.md](operations.md#run-the-model-eval)) | Assistant accuracy on 43 golden questions (35 typed English + 8 voice/Malayalam, D-028); last: gemini-3.8-flash 35/35 on the original 35 | ~6 min, billed |
 
 CI (`.github/workflows/v2-app.yml`) runs `flutter analyze` and `flutter test`
@@ -65,6 +66,23 @@ emulator's microphone is unreliable; demo mode uses a scripted fake voice).
    Malayalam (and one mixed with English names). Answers are in Malayalam
    with amounts as digits. On a phone without Malayalam speech, the row and
    the Talk panel say English is used.
+
+## Manual reports checklist (D-033)
+
+On the phone, against the live project, after the backend deploy:
+1. Insights › Reports › New report: Last month vs the month before. It opens
+   in about 10 s; "Written by" names your Profile › Assistant model.
+2. Check the headline Spent, Income and the category totals against the
+   Ledger and Insights › Breakdown for the same month.
+3. Tap a notable entry: it opens the entry. Ask about this report: Ask
+   answers for the same periods.
+4. This month so far vs previous: the comparison is the same days of last
+   month. Try Same time last year and Typical (3-period average).
+5. Add an entry in the period, tap Refresh: the totals change and "Made on"
+   moves.
+6. On the 1st (or with `npm run monthly-report … --execute` for your home):
+   the push "Your … report is ready" opens the report, only on your own
+   phone(s) per member, and Home › For you's month review opens it too.
 
 ## Manual SMS auto-add checklist (D-029, D-030, D-031)
 
@@ -149,6 +167,9 @@ an emulator signed in to the live project (see [sms.md](sms.md)).
 - `DeviceVoiceService` (the speech plugins) has no automated tests; the Talk
   flow is covered with `FakeVoiceService` and the manual checklist above.
 - Push delivery and the daily insights schedule have not been observed live.
+- Reports (D-033): the callables, the monthly schedule and its push have only
+  run against the emulator with a fake model; the narrative eval on real
+  models has not been run.
 - SMS auto-add's native Firestore write, Undo and the duplicate check against
   saved entries have only been tested with unit tests and fakes: the emulator
   run (receiver → worker → review list, dedupe, promo/OTP rejection, deep

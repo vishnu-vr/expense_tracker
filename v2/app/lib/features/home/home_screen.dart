@@ -136,7 +136,10 @@ class HomeScreen extends ConsumerWidget {
                     title: money.text(c.title),
                     below: Text(money.text(c.body),
                         style: LedgerText.body(size: 13, color: p.muted, height: 1.4)),
-                    onTap: () => context.push('/ask', extra: '${c.title}. ${c.body} Tell me more.'),
+                    // A month's review opens that month's report when there is one (D-033).
+                    onTap: () => c.reportId != null
+                        ? context.push('/reports/${c.reportId}')
+                        : context.push('/ask', extra: '${c.title}. ${c.body} Tell me more.'),
                     trailing: IconButton(
                       tooltip: 'Dismiss',
                       onPressed: () =>
